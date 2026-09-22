@@ -63,6 +63,7 @@
 }
 
 .mobile__body {
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -203,6 +204,7 @@
 }
 
 .mobile__sheet-body {
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   overflow-y: auto;

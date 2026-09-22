@@ -88,6 +88,7 @@
 
 /* 右侧舞台：内容区自己滚，标题栏和侧栏不动 */
 .content {
+  overflow-x: hidden;
   flex: 1;
   min-width: 0;
   overflow: auto;

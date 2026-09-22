@@ -1,5 +1,6 @@
 @layer components {
 .scene-notice {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: var(--fv-space-2);

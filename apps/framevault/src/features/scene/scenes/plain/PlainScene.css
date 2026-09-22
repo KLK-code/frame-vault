@@ -6,6 +6,7 @@
 }
 
 .plain-scene__compose {
+  flex-wrap: wrap;
   display: flex;
   gap: var(--fv-space-2);
 }
@@ -97,6 +98,7 @@
 
 /* 每条记录自己的操作：加照片 / 改文字 —— 不用回到顶部那个输入框 */
 .entry__actions {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: var(--fv-space-2);
@@ -168,6 +170,7 @@
 }
 
 .entry__edit-actions {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: var(--fv-space-2);

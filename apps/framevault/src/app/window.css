@@ -9,6 +9,7 @@
 }
 
 .window__body {
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   padding: var(--fv-space-5) var(--fv-space-6);

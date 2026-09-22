@@ -38,6 +38,7 @@
 }
 
 .scene-tree__scroll {
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   overflow-y: auto;

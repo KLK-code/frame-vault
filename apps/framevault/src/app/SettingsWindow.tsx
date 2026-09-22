@@ -16,7 +16,7 @@ export default function SettingsWindow() {
   return (
     <main className="window">
       <TitleBar title="设置" />
-      <div className="window__body">
+      <div className="window__body window__body--flush">
         <SettingsPanel />
       </div>
     </main>

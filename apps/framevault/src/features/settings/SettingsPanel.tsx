@@ -22,20 +22,22 @@ export default function SettingsPanel() {
           onChange={(e) => setQuery(e.target.value)}
         />
 
-        {visible.length === 0 ? (
-          <span className="settings__nav-empty">没有匹配的设置</span>
-        ) : (
-          visible.map((section) => (
-            <button
-              key={section.id}
-              className={"settings__nav-item" + (section.id === activeId ? " is-active" : "")}
-              onClick={() => setActiveId(section.id)}
-            >
-              <span className="settings__nav-icon">{section.icon}</span>
-              {section.label}
-            </button>
-          ))
-        )}
+        <div className="settings__list">
+          {visible.length === 0 ? (
+            <span className="settings__nav-empty">没有匹配的设置</span>
+          ) : (
+            visible.map((section) => (
+              <button
+                key={section.id}
+                className={"settings__nav-item" + (section.id === activeId ? " is-active" : "")}
+                onClick={() => setActiveId(section.id)}
+              >
+                <span className="settings__nav-icon">{section.icon}</span>
+                {section.label}
+              </button>
+            ))
+          )}
+        </div>
       </nav>
 
       <section className="settings__content">

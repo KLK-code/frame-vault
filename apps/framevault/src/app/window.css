@@ -14,4 +14,10 @@
   padding: var(--fv-space-5) var(--fv-space-6);
   overflow: auto;
 }
+
+/* 左右分栏的窗口（比如设置）：外层不滚动、不加内边距，两栏各自滚 */
+.window__body--flush {
+  padding: 0;
+  overflow: hidden;
+}
 }

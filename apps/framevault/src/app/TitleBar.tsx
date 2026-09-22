@@ -2,10 +2,16 @@ import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./TitleBar.css";
 
+/* 画法约定：viewBox 10×10、描边 1.4，且**描边必须完整落在画布内**。
+   之前正方形画在 x=0.5 处，1.4 的描边有一半超出了画布被裁掉，
+   结果四边看起来粗细不一。现在统一按 0.7 起、跨度 8.6 来画：
+   0.7 ± 0.7 = 0 到 1.4，9.3 ± 0.7 = 8.6 到 10 —— 四边各 1.4，且都不越界。 */
+const STROKE = 1.4;
+
 function IconMinimize() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="M0 5h10" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M1 5h8" stroke="currentColor" strokeWidth={STROKE} />
     </svg>
   );
 }
@@ -13,7 +19,15 @@ function IconMinimize() {
 function IconMaximize() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <rect
+        x="0.7"
+        y="0.7"
+        width="8.6"
+        height="8.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+      />
     </svg>
   );
 }
@@ -21,8 +35,17 @@ function IconMaximize() {
 function IconRestore() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      {/* 后面那个方块只画上边和右边，避免和前面的方块叠线 */}
+      <path d="M2.1 1.8H9.3V8.6" fill="none" stroke="currentColor" strokeWidth={STROKE} />
+      <rect
+        x="0.7"
+        y="2.5"
+        width="6.6"
+        height="6.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+      />
     </svg>
   );
 }
@@ -30,7 +53,7 @@ function IconRestore() {
 function IconClose() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M0.7 0.7l8.6 8.6M9.3 0.7L0.7 9.3" stroke="currentColor" strokeWidth={STROKE} />
     </svg>
   );
 }

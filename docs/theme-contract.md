@@ -15,7 +15,7 @@
 
 ## 1. 公开 token 表（可安全覆盖）
 
-共 **38** 个变量，其中 **17** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
+共 **41** 个变量，其中 **18** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
 
 | 变量 | 默认值 | 用途 | 深色主题覆盖 |
 |---|---|---|---|
@@ -38,6 +38,7 @@
 | `--fv-color-selection` | `#d7e6fb` | 文本选中底色 | ✅ |
 | `--fv-color-scrim` | `rgba(0, 0, 0, 0.62)` | 大图 / 对话框背后的遮罩 | ✅ |
 | `--fv-titlebar-height` | `32px` | — | — |
+| `--fv-titlebar-inset-mac` | `80px` | 仅 macOS：顶栏左侧让给红黄绿的位置（与 `commands/window.rs` 的 `TRAFFIC_LIGHT` 必须同时改） | — |
 | `--fv-radius-sm` | `4px` | — | — |
 | `--fv-radius-md` | `6px` | — | — |
 | `--fv-radius-lg` | `10px` | — | — |
@@ -48,6 +49,7 @@
 | `--fv-space-5` | `24px` | — | — |
 | `--fv-space-6` | `32px` | — | — |
 | `--fv-space-7` | `48px` | — | — |
+| `--fv-font-sans` | `"MiSans", "HarmonyOS Sans SC", system-ui, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif` | — | — |
 | `--fv-font-mono` | `ui-monospace, "Cascadia Mono", Consolas, monospace` | — | — |
 | `--fv-text-xs` | `12px` | — | — |
 | `--fv-text-sm` | `13px` | — | — |
@@ -89,6 +91,10 @@
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
 | 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
+
+**没写进上表的都不承诺。** 尤其是网格的**列宽数值**（`.entry__media` / `.wall` / `.photo-grid` 用的 `minmax(最小, 上限)`）属于实现细节：
+它跟着「拖窗口别抖」这个目标调过几轮，以后还会调。主题要改网格密度就自己写 `grid-template-columns`，
+但**别把上限换成 `1fr`** —— 那会让每掉一列所有格子一起膨胀一次（见 `ARCHITECTURE_IMPL §4.6`）；也别删滚动容器的 `scrollbar-gutter: stable;`，删了滚动条一出现整页就会横跳。
 
 命名约定：`.block__element--modifier`。**内部类名不加 `fv-` 前缀**，加了就意味着对外承诺。
 

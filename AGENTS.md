@@ -128,7 +128,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   否则一百个主题会发明一百种格式，Vault 就不再是开放格式；
   不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
-- 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
+- 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
+  **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
+  只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
 - **窄屏横切调整放 `styles/compact.css`**：只放“没有哪个组件该独自负责”的调整（触摸目标下限、安全区、设置面板堆叠），
   而且**全部包在窄屏媒体查询里** —— 桌面端一点不受影响。组件自己的样式仍旧留在组件目录。
 - 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。
@@ -182,7 +184,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 想自己写 `onDoubleClick` 做"双击顶栏最大化" | 不用写：Tauri 注入的 `drag.js` 已经带了，而且 macOS 上专门走 `mouseup`（鼠标移开还能取消），比自写更贴系统习惯 |
 | 给骨架做分支时漏了"窗口外壳" | 窗口**拖不动、关不掉**，只能强杀进程 —— 而且只在"窄窗口 + 桌面平台"同时成立时才出现 | 自绘标题栏（`TitleBar`）属于**窗口外壳**，不属于任何一套骨架：Windows 的窗口是 `decorations: false`，没它就等于没边框。规则：**除真移动端（系统自己管窗口）外，每套骨架都必须在最上面渲染 TitleBar**；整屏弹层要用 `position: absolute` 盖在骨架内，别用 `fixed; inset: 0` 把标题栏一起盖掉 |
 | 改了窗口尺寸 / 最小尺寸只改了一份配置 | 两个平台行为不一致（比如 Windows 能缩到 360、mac 还是 640） | 窗口块在 `tauri.conf.json` 与 `tauri.macos.conf.json` 里各有一份（平台配置是整体替换，不是逐字段合并）：**改尺寸要同时改两处**，改完 `grep -n minWidth` 对一眼 |
-| 滚动条引起的内容抖动（两种机制，都要治） | 拖动窗口时缩略图**反复变大变小**（网格列数在 2↔3 之间横跳） | ①**纵向**：布局“宽度决定列数、列数决定高度”时，滚动条出现/消失会让容器宽度跳 15px → 滚动容器加 `scrollbar-gutter: stable;`；②**横向↔纵向互相触发**：一点点横向溢出 → 出现横向滚动条（吃掉高度）→ 内容变高 → 出现纵向滚动条（吃掉宽度）→ 横向不再溢出 → 横向滚动条消失 → 宽度回来 → 又溢出……**无限循环**。所以纵向滚动容器还要 `overflow-x: hidden;`（结构上禁止横向滚动），并让可能超宽的按钮行 `flex-wrap: wrap;`；③**想让换列更平滑**：格子别用 `minmax(112px, 1fr)` 无限拉伸——给它一个具体上限（`minmax(112px, 176px)`），格子到上限就不再长大，换列时的跳变才有上界（`1fr` 时每次掉一列、所有格子一起膨胀一次，那才是"抖"的观感来源） |
+| 滚动条引起的内容抖动（两种机制，都要治） | 拖动窗口时缩略图**反复变大变小**（网格列数在 2↔3 之间横跳） | ①**纵向**：布局“宽度决定列数、列数决定高度”时，滚动条出现/消失会让容器宽度跳 15px → 滚动容器加 `scrollbar-gutter: stable;`；②**横向↔纵向互相触发**：一点点横向溢出 → 出现横向滚动条（吃掉高度）→ 内容变高 → 出现纵向滚动条（吃掉宽度）→ 横向不再溢出 → 横向滚动条消失 → 宽度回来 → 又溢出……**无限循环**。所以纵向滚动容器还要 `overflow-x: hidden;`（结构上禁止横向滚动），并让可能超宽的按钮行 `flex-wrap: wrap;`；③**想让换列更平滑**：网格列宽一律 `repeat(auto-fill, minmax(最小, 上限))`，**别写 `1fr`** —— `1fr` 是「把余量全给我」，每掉一列所有格子一起膨胀一次，那才是「抖」的观感来源；给了具体像素上限（现在三处：`.entry__media` 112~176 / `.wall` 148~220 / `.photo-grid` 104~168）格子到上限就不再长大，跳变才有上界，代价是宽窗口右侧留一点白。改任何一处网格都照这个写法 |
 | 用 `overflow: auto` 简写又想单独控制一个轴 | 写了 `overflow-x: hidden` 却毫无效果（简写把它重置回 auto）；修复“看起来改了但没生效” | 简写会重置**两个**轴，跟书写顺序无关的错觉最坑人。要单独控制就**全用长写**：`overflow-x: hidden; overflow-y: auto;`；插在简写**之前**必被覆盖 |
 | 在移动端调 `open_vault_manager` / `open_settings` | 第二个窗口开不出来，调用失败或毫无反应 | **Android / iOS 只有一个 WebView 窗口**：这两样在移动端必须做成**内嵌页面**（见 `app/MobileShell.tsx`） |
 | 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |

@@ -801,7 +801,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / 两个独立窗口）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 26 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 288 KB / CSS 36 KB）。
 

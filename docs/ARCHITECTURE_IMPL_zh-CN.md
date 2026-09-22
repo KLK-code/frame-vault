@@ -430,7 +430,8 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 
 | 场景 | 放哪 | 例子 |
 |---|---|---|
-| 全局变量 / 主题 | 根目录 `tokens.css` | `--fv-color-text` |
+| 设计令牌**默认值** | 根目录 `tokens.css` | `--fv-color-text` |
+| **外观预设**（一整套值） | 根目录 `skins.css`（`:root[data-appearance="preset.*"]`） | `preset.paper` / `preset.tide` / `preset.ember` |
 | 浏览器默认样式归零 | `styles/reset.css` | `box-sizing`、`margin: 0` |
 | 层顺序 | `styles/layers.css` | `@layer reset, base, components, theme, user;` |
 | 外壳布局 | `App.css` / `app/window.css` | `.app`、`.sidebar`、`.content` |
@@ -686,16 +687,22 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 
 ## 13. 功能主题（Workspace Type）
 
-### 13.1 两种"主题"要分清
+### 13.1 外观主题 / 功能主题：两件事，靠 CSS 作用域分开
 
 | | 外观主题（Theme） | 功能主题（Workspace Type） |
 |---|---|---|
-| 改变什么 | 颜色、字体、圆角、间距、阴影 | **记录结构、内容区界面、操作流程、业务规则** |
-| 技术形态 | 一组 CSS 变量（`--fv-*`） | 一份 manifest + 若干视图组件 + 校验规则 |
-| 换掉之后 | 界面只是变好看，操作方式不变 | 用户像进入"另一个小应用"（普通记录 / 旅行 / 挑战） |
-| 归属 | `packages/theme-sdk`（M3） | `workspace/`（后端）+ `workspaces/`（前端），M3 之后开放给插件 |
+| 决定什么 | **整个软件的风格**：配色、字体、圆角、间距、阴影 | 某个场景里的**玩法**：字段、编辑方式、视图、流程 |
+| 形态 | 一整套 `--fv-*` 的值 = 一个**预设**（`preset.*`）；外加「组件规则」这种手段（改密度 / 边框 / 布局细节，稳定性较弱） | 一份 manifest + 视图组件（`features/scene/scenes/<id>/`） |
+| 挂在哪 | `:root[data-appearance="preset.x"]` —— **所有窗口、所有区域** | **舞台容器**（`data-scene`）—— 作用域碰不到外壳 |
+| 代码落点 | `src/tokens.css`（默认值）、`src/skins.css`（预设）、`features/theme/`（选择与实时覆盖） | `features/scene/scenes/*` + `vault/scene.rs` 登记同一个 id |
 
-**一句判定法**：**把这个主题换掉，用户的操作流程会变吗？** 会 → 功能主题；只是"好看了" → 外观主题。
+**功能主题的「巧思」白名单**（只挂舞台容器）：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、`--fv-scene-accent`、主题视图自己的排版。
+**不许**改底色 / 文字色 / 字号 / 间距 / 圆角尺度（那是“整个软件”的骨架），**不许**给外壳（标题栏 / 侧栏 / 设置窗口）着色。
+
+**优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪套预设：用户选过 > 主题的 `suggestedSkin` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
+
+**一句判定法**：换掉它，用户的**操作流程**会变吗？会 → 功能主题；只是“整个软件换个样子” → 外观主题。
+**第二条判定法**：这条样式会影响**别的区域**（标题栏 / 侧栏 / 设置窗口）吗？会 → 它属于外观，**不许**写在主题里。
 
 ### 13.2 数据落点（都在 Vault 内，开放格式）
 
@@ -808,7 +815,7 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 
 README 工程约定最后一条要求：**功能主题绑定、用户排序、置顶与主题业务进度保存为开放元数据；当前选择、视图和面板开关分别管理，不混成单一 `page` 状态。**
 
-落地成四类状态：
+落地成五类状态：
 
 | 状态种类 | 例子 | 谁拥有 | 存哪 | 变更方式 |
 |---|---|---|---|---|
@@ -816,6 +823,9 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | **当前选择** | 选中的文件夹、当前工作区视图 | 前端（展示用），可请求 Rust 恢复 | 内存（可选写 localStorage） | `useState` |
 | **视图与面板开关** | 图库 / 列表切换、侧栏折叠、编辑面板显隐 | 前端 | 内存（需要记住的写 localStorage） | `useState` |
 | **派生数据** | SQLite 索引、缩略图、搜索缓存 | Rust | 应用数据目录 | 命令；**可随时重建** |
+| **外观选择** | 选中的预设、用户手调的单值、`themeSync` 记的明暗模式 | 前端 | **localStorage（本机偏好，不进 Vault）** | 本机立即生效 + 存盘 + 广播给其它窗口 |
+
+**为什么外观选择归前端、不进 Vault**：外观是**本机偏好**（屏幕不同、喜好不同），同一份 Vault 在两台机器上可以长得不一样；而「这个文件夹绑定哪个功能主题」是**用户数据**，必须经 Rust 落盘。两者的边界不要混。
 
 **三条纪律**：
 
@@ -837,7 +847,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
-**验证状态**：`cargo test` 26 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 288 KB / CSS 36 KB）。
+**验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
@@ -861,4 +871,6 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
+| 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏 / 侧栏 / 设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的视觉只走巧思白名单（图标 / 文案 / banner / scene-accent） |
+| 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式 | 共享组件里不许出现主题 id；要区分的观感做成 token（如 `--fv-nav-active-bg`），由**外观预设**给值 |
 | 用一次整文件写回改文档 | 读到一半就写回，会把文件尾部**整段截断**（本文件就栽过一次） | 改文档用定位替换（`edit` / 按行 splice），别用"读全文再写回"；写完 `tail` 看一眼尾部 |

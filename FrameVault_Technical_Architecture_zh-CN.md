@@ -45,7 +45,7 @@
 | Framework | React | 页面、组件、交互状态 |
 | Bundler | Vite | 开发服务器、构建 |
 | Styling | CSS Modules / scoped CSS + CSS Variables | UI 样式 |
-| Theme | Design Tokens + CSS Custom Properties | 主题/皮肤扩展基础 |
+| Theme | Design Tokens + CSS Custom Properties | 外观主题扩展基础（预设 + 用户覆盖） |
 | Package Manager | pnpm | JS/TS 依赖与 monorepo |
 
 选择 React 的原因：生态成熟、TypeScript 支持完善、开源贡献者容易上手、第三方组件和测试工具丰富。React 不应渗透到 Core 协议层，因此未来更换 UI 框架不会破坏 Vault 或 Plugin API。
@@ -684,7 +684,7 @@ clipboard.write
 
 ### 11.6 功能主题扩展（Workspace Type）
 
-功能主题是文件夹级的完整体验，不是单个 Entry 的标签、模板或 CSS 皮肤。目标是允许插件为旅行、挑战等用途提供专门界面和流程，进入文件夹后呈现具有独立用途的工作空间。
+功能主题是文件夹级的完整体验，不是单个 Entry 的标签、模板，也不是换一套配色（换配色是外观主题的事）。目标是允许插件为旅行、挑战等用途提供专门界面和流程，进入文件夹后呈现具有独立用途的工作空间。
 
 宿主应逐步提供的扩展面：
 
@@ -702,7 +702,7 @@ clipboard.write
 
 ## 12. 外观主题系统（Theme）
 
-本节只定义颜色、字体、样式与皮肤。文件夹级功能主题使用 §11.6 的插件能力，不通过开放外观 CSS 的权限实现业务逻辑。
+本节只定义外观主题：颜色、字体、样式与组件规则（原 Skin，并入外观主题，作为稳定性较弱的手段 ②）。外观由**预设**整套选择，作用于所有窗口；文件夹级功能主题使用 §11.6 的插件能力，不通过开放外观 CSS 的权限实现业务逻辑。
 
 ### 12.1 Design Tokens
 

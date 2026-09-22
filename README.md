@@ -12,17 +12,17 @@
 | [FrameVault_PRD_zh-CN.md](./FrameVault_PRD_zh-CN.md) | 产品需求（功能优先级 P0/P1/P2、里程碑） |
 | [FrameVault_Technical_Architecture_zh-CN.md](./FrameVault_Technical_Architecture_zh-CN.md) | 技术栈、模块边界、Vault 规范、同步模型 |
 | [docs/ARCHITECTURE_IMPL_zh-CN.md](./docs/ARCHITECTURE_IMPL_zh-CN.md) | **实现架构**：应该有哪些文件、每个文件负责什么、对外暴露什么接口 |
-| [docs/theme-contract.md](./docs/theme-contract.md) | **主题契约**：公开 token 表 / 公开 selector 表 / 主题包格式 / 层顺序 |
+| [docs/theme-contract.md](./docs/theme-contract.md) | **外观契约**：公开 token 表 / 外观预设规格 / 公开 selector 表 / 主题包格式 / 层顺序 |
 | [docs/REFERENCES.md](./docs/REFERENCES.md) | 参考项目清单（学习用，含许可证红线） |
 
 ## 当前产品方向与开发范围
 
 - **先做好单窗口**：文件夹导航组织记录，功能主题提供内容区体验；多窗口、浏览器式多标签暂缓。
 - **文件夹级功能主题（Workspace Type）**：文件夹绑定一套体验，其下记录共同遵循。它可以包含专门界面、操作流程与业务规则，目标是进入不同主题像进入不同用途的小应用。
-- **功能主题与外观主题分离**：普通记录、旅行、挑战属于功能主题；蓝色配色、字体等属于外观 Theme。功能主题是未来插件扩展的主要方向之一。
+- **功能主题与外观主题分离**：普通日记、旅行、挑战属于功能主题（玩法：字段、编辑方式、视图）；配色 / 字体 / 圆角属于外观主题，按**一组一组的值**（外观预设）整套选择，**作用于所有窗口**。功能主题只能有"巧思"级别的视觉（图标 / 文案 / 场景横幅 / 舞台内点缀色），且用户选择优先。功能主题是未来插件扩展的主要方向之一。
 - **图库与阅读**：基础体验提供相册式照片/视频浏览和 Markdown 阅读，共享同一份记录数据；不同功能主题后续可提供自定义视图。
 - **用户决定顺序**：文件夹与记录支持拖动排序、置顶/取消置顶；顺序、置顶和主题绑定是需持久化的用户数据，不只是临时界面状态。
-- **三种内置主题已接通**：旅行（青绿、地点与旅途时间线）、挑战（炭黑橙色、环形进度与打卡记录 / 照片墙）、普通日记（暖白棕色、日记时间线）。主题自带默认视觉风格，外观设置的用户覆盖仍优先；不包含参考图里的背景摄影或插画。
+- **三个内置功能主题已接通**：普通日记（日记时间线）、旅行（地点 + 旅途见闻）、挑战（环形进度 + 连续天数 + 打卡墙）。外观可以整套切换（暖纸 / 青碧 / 炭火，每套都有浅色与深色），主题只**推荐**一套、用户可以改；不包含参考图里的背景摄影或插画。
 - **挑战已有第一版**：打卡墙（一格一张照片、日期取拍摄日）、目标天数与进度、连续天数与最长连续、“连续已中断”提示，纯文字打卡也可在时间线编辑、删除与撤销。**清零 / 轮次 / 违规判定仍未做**（PRD §12 第 16 条）。
 
 **实现现状（2026-09-22）**：可以新建 / 导入 / 切换仓库，新建场景并绑定主题，按主题分组浏览场景，写文字记录，**导入照片与视频并在界面里看大图 / 播放**；导入时读 EXIF 拍摄时间。内置**旅行、挑战、普通日记**三个主题，桌面与窄屏共用。记录可以**反复编辑**（标题 + 多行正文）、**随时追加照片**、**删除并且能撤销**（墓碑保留原文件）；这些能力收在 `useSceneData`，录入与时间线分别复用 `SceneComposer` / `EntryTimeline`。普通日记保留旧 id `builtin.plain`，已有仓库无需迁移。
@@ -41,7 +41,7 @@
 | 应用容器 | Tauri 2 | Windows / macOS / Android 宿主 |
 | 前端语言 | TypeScript | UI、插件 SDK、应用层类型 |
 | 前端框架 | React + Vite | 页面、组件、交互状态 |
-| 样式与外观主题 | CSS Variables + Design Tokens + Cascade Layers | 外观主题/皮肤扩展基础；功能主题通过应用层和 Plugin API 实现 |
+| 样式与外观主题 | CSS Variables + Design Tokens + Cascade Layers | 外观主题（预设 + 用户覆盖）扩展基础；功能主题走应用层与 Plugin API，与外观分离 |
 | 本地核心 | Rust | 文件、索引、同步、哈希、大文件流、权限边界 |
 | Android 原生 | Kotlin | 系统相机、SAF、Activity 生命周期 |
 | 本地索引 | SQLite | **仅**索引、缓存、同步状态、pending 操作 |
@@ -60,7 +60,7 @@ frame-vault/
 ├── README.md                                   # 本文件
 ├── docs/
 │   ├── ARCHITECTURE_IMPL_zh-CN.md              # 实现架构：文件、接口、命令表、数据结构
-│   ├── theme-contract.md                       # 主题契约：token 表、公开 selector、主题包格式
+│   ├── theme-contract.md                       # 外观契约：token 表、外观预设规格、公开 selector、主题包格式
 │   └── REFERENCES.md                           # 参考项目与许可证红线
 ├── .gitignore                                  # 已预置 node_modules / dist / target
 ├── .vscode/                                    # 本机编辑器配置（已 gitignore）

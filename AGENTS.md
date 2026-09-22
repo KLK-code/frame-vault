@@ -79,9 +79,14 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 |---|---|---|---|
 | 一个文件夹（容器） | 文件夹 | **场景** | `Folder` / `FolderMeta` / `FolderNode` |
 | 文件夹绑定的那套玩法 | 功能主题（**Workspace Type**） | **主题** | `scene` ⚠️ 见下 |
-| 配色 / 字体 / 皮肤 | 外观 Theme | 外观 | `--fv-*` token、`features/theme/` |
+| 整个软件的风格（配色 / 字体 / 圆角 / 间距 / 阴影） | 外观主题（**Theme**：手段 ① 变量覆盖 ✅ + 手段 ② 组件规则 ⚠️） | 外观 | `--fv-*` token、`features/theme/`、`src/skins.css` |
+| 一整套命名好的外观值 | 外观预设（**Preset**） | 外观 | `preset.*`、`:root[data-appearance]` |
 | 一条记录 | Entry | 记录 | `Entry` |
 | 照片 / 视频 | 媒体 | 照片 / 视频 | `MediaMeta` / `MediaItem` |
+
+⚠️ **“皮肤 / Skin” 不再是独立概念**：它并入**外观主题**，作为外观主题两种手段中的第二种
+（手段 ① 变量覆盖 = 覆盖 `--fv-*`，✅ 承诺稳定；手段 ② 组件规则 = 覆盖公开类名，改密度 / 边框 / 布局细节，⚠️ 有限承诺）。
+**UI 文案与文档里不要再用“皮肤”指代配色**：配色叫「外观」，一整套叫「外观预设」。
 
 ⚠️ **代码里的 `scene` 是历史命名**，它的真实含义是"这个文件夹绑定的功能主题 id"
 （`FolderMeta.scene`、`SceneInfo`、`effectiveScene`、`builtin_scenes()`）。
@@ -128,7 +133,12 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   否则一百个主题会发明一百种格式，Vault 就不再是开放格式；
   不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
-- 三个内置主题共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除），仍由 `useSceneData` 提供数据。`manifest.presentation` 仅声明图标名与文案；外壳只经注册表读取。主骨架的 `data-scene` 让 `tokens.css` 选择默认配色，用户外观覆盖优先。普通日记仍用 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`。
+- 三个内置主题共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除），仍由 `useSceneData` 提供数据。`manifest.presentation` 仅声明图标名与文案；外壳只经注册表读取。普通日记是 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`。
+- **外观与功能主题靠 CSS 作用域分开，不许互相引用**：
+  - **外观主题**（一套值 = 一个预设）挂 `:root[data-appearance="preset.x"]`，**所有窗口、所有区域**都读它；用户手调的单值覆盖优先级最高（内联在 `documentElement` 上）。**外壳**（标题栏 / 侧栏 / 选中行 / 设置窗口）的风格属于外观，**不许**跟着“当前场景是哪个主题”变。
+  - **功能主题的巧思**只挂它自己的**舞台容器**（`data-scene` 在舞台那一层，**不在** `.app-root`），所以主题样式在作用域上碰不到外壳；允许的只有白名单：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、`--fv-scene-accent`（舞台内少量点缀），以及主题视图自己的排版。
+  - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedSkin` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
+  - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / scene-accent），字号、间距、圆角尺度、阴影这些“骨架”值三套必须一致 —— 三套外观要像**同一个产品**，不是三个 App。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
   只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
@@ -159,7 +169,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 |---|---|
 | 命令 / 事件 | `ARCHITECTURE_IMPL §5.1 / §5.2` + 本文 §5 |
 | 磁盘布局、字段、schema | `ARCHITECTURE_IMPL §13` + `PRD §12` 里对应待决项 |
-| 设计 token、公开类名 | `docs/theme-contract.md` + `tokens.css` |
+| 设计 token、公开类名、外观预设 | `docs/theme-contract.md` + `tokens.css` + `skins.css` |
 | 前端目录结构、分层规则 | `ARCHITECTURE_IMPL §4` |
 | 阶段范围变化（做什么/不做什么） | `README.md`「当前产品方向与开发范围」+ PRD 里程碑 |
 | 踩到新坑 | `ARCHITECTURE_IMPL 附录 B` + 本文 §9 |
@@ -189,6 +199,8 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 用 `overflow: auto` 简写又想单独控制一个轴 | 写了 `overflow-x: hidden` 却毫无效果（简写把它重置回 auto）；修复“看起来改了但没生效” | 简写会重置**两个**轴，跟书写顺序无关的错觉最坑人。要单独控制就**全用长写**：`overflow-x: hidden; overflow-y: auto;`；插在简写**之前**必被覆盖 |
 | 在移动端调 `open_vault_manager` / `open_settings` | 第二个窗口开不出来，调用失败或毫无反应 | **Android / iOS 只有一个 WebView 窗口**：这两样在移动端必须做成**内嵌页面**（见 `app/MobileShell.tsx`） |
 | 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |
+| 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏、侧栏、设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的外观只走巧思白名单 |
+| 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式，最难查 | 共享组件里不许出现主题 id；需要区分的观感做成 token（如 `--fv-nav-active-bg` / `--fv-nav-active-fg`），由**外观预设**给值 |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 
@@ -224,12 +236,13 @@ apps/framevault/
 │   │   │                       scenes/travel（旅行）/ SceneComposer / EntryTimeline / SceneIcon
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
-│   │   └── theme/              外观：token schema + 实时编辑 + 跨窗口同步
+│   │   └── theme/              外观：预设选择 + token schema + 实时编辑 + 跨窗口同步
 │   ├── lib/api.ts              **唯一** invoke / listen / convertFileSrc 出口
 │   ├── lib/platform.ts         前端唯一一处"现在是什么系统"的判断（isMacOS / isMobileOS）
 │   ├── lib/useCompact.ts       视口够不够宽（响应式，不是平台分支）
 │   ├── styles/                 layers.css（层顺序）/ reset.css / compact.css（窄屏横切调整）
-│   └── tokens.css              设计令牌：唯一允许出现裸色值的地方
+│   ├── tokens.css              设计令牌默认值（`:root`）：唯一允许出现裸色值的地方
+│   └── skins.css               外观预设：`:root[data-appearance="preset.*"]`，每套必须浅 / 深两套
 └── src-tauri/
     ├── tauri.conf.json         assetProtocol 已开；窗口 decorations: false（Windows 自绘标题栏）
     ├── tauri.macos.conf.json   macOS 覆盖：窗口走原生红黄绿（Overlay + hiddenTitle）

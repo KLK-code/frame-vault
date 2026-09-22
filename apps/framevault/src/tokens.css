@@ -4,7 +4,7 @@
 :root {
   /* ── 颜色 ── */
   --fv-color-bg: #ffffff; /* 内容区底色 */
-  --fv-color-surface: #fbfbfa; /* 侧栏 / 面板底色（Obsidian 的暖灰） */
+  --fv-color-surface: #fbfbfa; /* 侧栏 / 面板 / 标题栏底色（Obsidian 的暖灰） */
   --fv-color-surface-hover: #f2f2f1; /* 悬停底色 */
   --fv-color-text: #1f1f1f; /* 正文 */
   --fv-color-muted: #8a8a8a; /* 次要文字 */
@@ -17,6 +17,11 @@
   --fv-color-accent-hover: #f0f5fc; /* 悬停淡蓝 */
 
   --fv-color-danger: #c0392b;
+  --fv-color-danger-strong: #e81123; /* 关闭按钮悬停（Windows 习惯色） */
+  --fv-color-on-danger: #ffffff; /* 危险底上的文字色 */
+
+  /* ── 尺寸 ── */
+  --fv-titlebar-height: 32px;
 
   /* ── 圆角（Things 偏小圆角）── */
   --fv-radius-sm: 4px;

@@ -1,10 +1,11 @@
 import { useEffect } from "react";
-import { closeVaultManager } from "./lib/api";
+import TitleBar from "./app/TitleBar";
 import VaultManagerPanel from "./features/vault/VaultManagerPanel";
+import { closeVaultManager } from "./lib/api";
 import "./VaultManagerWindow.css";
 
 export default function VaultManagerWindow() {
-  // Esc 关闭窗口（走 Rust 命令，不受 capabilities 限制）
+  // 保留 Esc 关闭（没有 UI，纯快捷键）
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") closeVaultManager();
@@ -15,15 +16,10 @@ export default function VaultManagerWindow() {
 
   return (
     <main className="manager-window">
-      <div className="manager-window__bar">
-        <span>独立窗口 · 按 Esc 或点右侧按钮关闭</span>
-        <button onClick={() => closeVaultManager()}>关闭窗口</button>
-      </div>
-
+      <TitleBar title="管理仓库" />
       <div className="manager-window__body">
         <VaultManagerPanel />
       </div>
     </main>
   );
 }
-

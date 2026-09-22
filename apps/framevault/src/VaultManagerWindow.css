@@ -6,32 +6,9 @@
   background: var(--fv-color-bg);
 }
 
-.manager-window__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--fv-space-3);
-  padding: var(--fv-space-2) var(--fv-space-3);
-  background: var(--fv-color-surface);
-  border-bottom: 1px solid var(--fv-color-border);
-  font-size: var(--fv-text-sm);
-  color: var(--fv-color-muted);
-}
-
-.manager-window__bar button {
-  padding: 4px 10px;
-  border: 1px solid var(--fv-color-border);
-  border-radius: var(--fv-radius-md);
-  background: var(--fv-color-bg);
-  font-size: var(--fv-text-sm);
-}
-
-.manager-window__bar button:hover {
-  background: var(--fv-color-surface-hover);
-}
-
 .manager-window__body {
   flex: 1;
+  min-height: 0;
   padding: var(--fv-space-4) var(--fv-space-5);
   overflow: auto;
 }

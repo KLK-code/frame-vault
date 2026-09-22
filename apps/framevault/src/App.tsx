@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import TitleBar from "./app/TitleBar";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
 import { PAGES } from "./lib/pages";
 import "./App.css";
@@ -58,52 +59,56 @@ function App() {
   }
 
   return (
-    <main className="app">
-      <aside className="sidebar" style={{ width: sidebarWidth }}>
-        <h2>FrameVault</h2>
+    <div className="app-root">
+      <TitleBar title="FrameVault" />
 
-        <nav>
-          {PAGES.map(({ id, label }) => (
-            <button
-              key={id}
-              className={id === activeId ? "active" : ""}
-              onClick={() => setActiveId(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+      <main className="app">
+        <aside className="sidebar" style={{ width: sidebarWidth }}>
+          <h2>FrameVault</h2>
 
-        <VaultSwitcher />
-      </aside>
+          <nav>
+            {PAGES.map(({ id, label }) => (
+              <button
+                key={id}
+                className={id === activeId ? "active" : ""}
+                onClick={() => setActiveId(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
 
-      <div
-        className="app__divider"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="拖动调整侧栏宽度，双击复位"
-        aria-valuenow={sidebarWidth}
-        aria-valuemin={MIN_WIDTH}
-        aria-valuemax={MAX_WIDTH}
-        tabIndex={0}
-        onPointerDown={startDrag}
-        onDoubleClick={() => applyWidth(DEFAULT_WIDTH, true)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowLeft") {
-            e.preventDefault();
-            applyWidth(widthRef.current - 16, true);
-          }
-          if (e.key === "ArrowRight") {
-            e.preventDefault();
-            applyWidth(widthRef.current + 16, true);
-          }
-        }}
-      />
+          <VaultSwitcher />
+        </aside>
 
-      <section className="content">
-        <ActivePage />
-      </section>
-    </main>
+        <div
+          className="app__divider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖动调整侧栏宽度，双击复位"
+          aria-valuenow={sidebarWidth}
+          aria-valuemin={MIN_WIDTH}
+          aria-valuemax={MAX_WIDTH}
+          tabIndex={0}
+          onPointerDown={startDrag}
+          onDoubleClick={() => applyWidth(DEFAULT_WIDTH, true)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowLeft") {
+              e.preventDefault();
+              applyWidth(widthRef.current - 16, true);
+            }
+            if (e.key === "ArrowRight") {
+              e.preventDefault();
+              applyWidth(widthRef.current + 16, true);
+            }
+          }}
+        />
+
+        <section className="content">
+          <ActivePage />
+        </section>
+      </main>
+    </div>
   );
 }
 

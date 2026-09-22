@@ -1,7 +1,15 @@
-.app {
+/* 最外层：标题栏在上，主区域在下 */
+.app-root {
   display: flex;
+  flex-direction: column;
   height: 100vh; /* 老浏览器兜底 */
   height: 100dvh; /* 手机地址栏不会顶掉视口高度 */
+}
+
+.app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
 /* 宽度由 App.tsx 的 inline style 给，这里不要写死 */

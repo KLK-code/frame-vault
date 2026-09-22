@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "framevault",
-        "width": 800,
-        "height": 600
+        "title": "FrameVault",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 640,
+        "minHeight": 420,
+        "decorations": false
       }
     ],
     "security": {

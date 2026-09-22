@@ -129,7 +129,7 @@ pub fn open_vault_manager(app: tauri::AppHandle) -> Result<(), String> {
     .title("管理仓库")
     .inner_size(760.0, 540.0)
     .resizable(true)
-    .decorations(true)
+    .decorations(false) // 自绘标题栏（见 src/app/TitleBar.tsx）
     .closable(true)
     .center()
     .build()

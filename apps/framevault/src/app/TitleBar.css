@@ -1,0 +1,41 @@
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 var(--fv-titlebar-height);
+  height: var(--fv-titlebar-height);
+  padding-left: var(--fv-space-3);
+  background: var(--fv-color-surface);
+  border-bottom: 1px solid var(--fv-color-border);
+  user-select: none;
+}
+
+.titlebar__title {
+  font-size: var(--fv-text-sm);
+  color: var(--fv-color-muted);
+}
+
+.titlebar__actions {
+  display: flex;
+  height: 100%;
+}
+
+.titlebar__btn {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--fv-color-muted);
+}
+
+.titlebar__btn:hover {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+}
+
+.titlebar__btn--close:hover {
+  background: var(--fv-color-danger-strong);
+  color: var(--fv-color-on-danger);
+}

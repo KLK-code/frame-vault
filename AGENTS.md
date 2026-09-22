@@ -151,6 +151,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 把 HEIC 直接塞进 `<img>` | 先缩略图；解不开就查扩展名给占位 + 原文件路径 |
 | 文件行尾 CRLF | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 在组件里写裸色值 | 用 `--fv-*`；要新颜色先给 token 起个语义名字 |
+| 删掉的文件又自己回来了 | 编辑器还开着那个标签页，会话恢复时把内容写回磁盘。删磁盘文件 ≠ 关标签页；报"找不到模块"时先 `git status` 看它是不是未跟踪的 `??` |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 

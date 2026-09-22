@@ -1,7 +1,7 @@
 .vault-switcher {
   position: relative;
-  margin-top: auto; /* 贴到侧栏底部 */
-  padding-top: var(--fv-space-3);
+  flex: 1;
+  min-width: 0;
 }
 
 /* 无边框、悬停才出底：Obsidian 侧栏底部那个仓库切换器的做法 */

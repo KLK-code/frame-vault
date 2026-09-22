@@ -27,12 +27,13 @@
   height: 100%;
   border: none;
   background: transparent;
-  color: var(--fv-color-muted);
+  /* 用正文色而不是 muted：系统标题栏的按钮本来就是接近纯黑的 */
+  color: var(--fv-color-text);
 }
 
 .titlebar__btn:hover {
   background: var(--fv-color-surface-hover);
-  color: var(--fv-color-text);
+  color: var(--fv-color-text-strong);
 }
 
 .titlebar__btn--close:hover {

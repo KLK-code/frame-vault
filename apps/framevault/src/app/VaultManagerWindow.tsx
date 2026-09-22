@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import TitleBar from "./app/TitleBar";
-import VaultManagerPanel from "./features/vault/VaultManagerPanel";
-import { closeVaultManager } from "./lib/api";
-import "./VaultManagerWindow.css";
+import TitleBar from "./TitleBar";
+import VaultManagerPanel from "../features/vault/VaultManagerPanel";
+import { closeVaultManager } from "../lib/api";
+import "./window.css";
 
 export default function VaultManagerWindow() {
   // 保留 Esc 关闭（没有 UI，纯快捷键）
@@ -15,9 +15,9 @@ export default function VaultManagerWindow() {
   }, []);
 
   return (
-    <main className="manager-window">
+    <main className="window">
       <TitleBar title="管理仓库" />
-      <div className="manager-window__body">
+      <div className="window__body">
         <VaultManagerPanel />
       </div>
     </main>

@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import TitleBar from "./app/TitleBar";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
+import { openSettings } from "./lib/api";
 import { PAGES } from "./lib/pages";
 import "./App.css";
+
+function IconSettings() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 4.5h12M2 11.5h12" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="6" cy="4.5" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="10.5" cy="11.5" r="1.9" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
 
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 480;
@@ -78,7 +89,12 @@ function App() {
             ))}
           </nav>
 
-          <VaultSwitcher />
+          <div className="sidebar__footer">
+            <VaultSwitcher />
+            <button className="sidebar__icon" title="设置" onClick={() => openSettings()}>
+              <IconSettings />
+            </button>
+          </div>
         </aside>
 
         <div

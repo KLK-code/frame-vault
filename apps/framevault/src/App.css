@@ -57,6 +57,31 @@
   font-weight: 500;
 }
 
+/* 侧栏底部：仓库切换器 + 设置按钮 */
+.sidebar__footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-1);
+}
+
+.sidebar__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+}
+
+.sidebar__icon:hover {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+}
+
 /* ── 可拖动的分隔条 ── */
 .app__divider {
   flex: 0 0 5px;

@@ -5,7 +5,7 @@ import "./TitleBar.css";
 function IconMinimize() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="M0 5h10" stroke="currentColor" strokeWidth="1" />
+      <path d="M0 5h10" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -13,7 +13,7 @@ function IconMinimize() {
 function IconMaximize() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1" />
+      <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -21,8 +21,8 @@ function IconMaximize() {
 function IconRestore() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1" />
-      <path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" strokeWidth="1" />
+      <rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.5 2.5V0.5h7v7h-2" fill="none" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -30,7 +30,7 @@ function IconRestore() {
 function IconClose() {
   return (
     <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />
+      <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }

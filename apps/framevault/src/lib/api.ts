@@ -32,6 +32,9 @@ export const forgetVault = (path: string) => invoke<VaultInfo[]>("forget_vault",
 export const openVaultManager = () => invoke<void>("open_vault_manager");
 export const closeVaultManager = () => invoke<void>("close_vault_manager");
 
+export const openSettings = () => invoke<void>("open_settings");
+export const closeSettings = () => invoke<void>("close_settings");
+
 
 // ── 记录 ──
 export const saveEntry = (id: string, title: string, createdAt: string) =>

@@ -194,7 +194,7 @@ lib.rs（组装）
 | `vault.rs` | `list_vaults` / `add_vault` / `switch_vault` / `forget_vault` / `create_vault` | ✅ 前四个，⬜ create_vault |
 | `entry.rs` | `save_entry` / `load_entry` / `list_entries` / `delete_entry` | ✅ 前两个 |
 | `media.rs` | `import_media` / `make_thumbnail` | M1 |
-| `window.rs` | `open_vault_manager` / `close_vault_manager` | ✅ |
+| `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
 | `sync.rs` | `sync_now` / `sync_status` / `cancel_sync` | M4 |
 
 #### `src-tauri/src/capture/` ⬜
@@ -272,8 +272,10 @@ src/
 ├── app/                      ── 外壳层：只管窗口、导航、当前页面 ──
 │   ├── AppShell.tsx          主窗口外壳
 │   ├── AppShell.css
-│   ├── VaultManagerWindow.tsx  第二窗口外壳
-│   ├── VaultManagerWindow.css
+│   ├── TitleBar.tsx / .css    自绘标题栏（两个窗口共用）
+│   ├── window.css            独立窗口共用的外框布局
+│   ├── VaultManagerWindow.tsx  管理仓库窗口外壳
+│   ├── SettingsWindow.tsx      设置窗口外壳
 │   ├── navigation.ts         导航项：id / label / 分组 / 图标
 │   └── routes.ts             id → 懒加载组件（React.lazy）
 ├── pages/                    ── 页面层：一个页面一个目录 ──
@@ -295,8 +297,10 @@ src/
 │   │   ├── VaultList.tsx
 │   │   ├── VaultRow.tsx
 │   │   └── useVaults.ts      仓库数据 hook（列表 + 增删切换）
-│   └── timeline/
-│       └── EntryCard.tsx
+│   ├── timeline/
+│   │   └── EntryCard.tsx
+│   └── settings/
+│       └── SettingsPanel.tsx  设置面板（按钮先占位，id 就是将来的接口名）
 ├── components/               ── 通用原语：与业务无关，纯 props ──
 │   ├── PageHeader.tsx        统一页头（标题 + 右侧操作区）
 │   ├── Button.tsx
@@ -432,6 +436,8 @@ export default function TimelinePage() {
 | `make_thumbnail` | `mediaId` / `maxSize` | `string` | 生成缩略图并返回路径 | ⬜ M1 |
 | `open_vault_manager` | — | `void` | 打开管理窗口（已开则聚焦） | ✅ |
 | `close_vault_manager` | — | `void` | 关闭管理窗口 | ✅ |
+| `open_settings` | — | `void` | 打开设置窗口（已开则聚焦） | ✅ |
+| `close_settings` | — | `void` | 关闭设置窗口 | ✅ |
 | `sync_now` / `sync_status` | — | `SyncReport` / `SyncState` | 手动同步 / 查状态 | ⬜ M4 |
 
 ### 5.2 事件全表（后端 → 前端推送）

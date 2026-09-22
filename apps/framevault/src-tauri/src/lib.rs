@@ -42,6 +42,8 @@ pub fn run() {
             commands::load_entry,
             commands::open_vault_manager,
             commands::close_vault_manager,
+            commands::open_settings,
+            commands::close_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

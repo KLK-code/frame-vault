@@ -7,6 +7,7 @@
   --fv-color-surface: #fbfbfa; /* 侧栏 / 面板 / 标题栏底色（Obsidian 的暖灰） */
   --fv-color-surface-hover: #f2f2f1; /* 悬停底色 */
   --fv-color-text: #1f1f1f; /* 正文 */
+  --fv-color-text-strong: #0a0a0a; /* 需要更实的时候（标题栏按钮悬停等） */
   --fv-color-muted: #8a8a8a; /* 次要文字 */
   --fv-color-border: #e8e8e6; /* 发丝线 */
   --fv-color-border-strong: #d8d8d5; /* 需要用力的分隔线 */

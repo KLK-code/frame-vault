@@ -1,3 +1,4 @@
+@layer components {
 .settings__title {
   margin: 0 0 var(--fv-space-5);
   font-size: var(--fv-text-xl);
@@ -57,4 +58,5 @@
   margin: var(--fv-space-4) 0 0;
   font-size: var(--fv-text-sm);
   color: var(--fv-color-muted);
+}
 }

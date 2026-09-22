@@ -1,3 +1,4 @@
+@layer components {
 .vault-switcher {
   position: relative;
   flex: 1;
@@ -116,4 +117,5 @@
 
 .vault-switcher__error {
   color: var(--fv-color-danger);
+}
 }

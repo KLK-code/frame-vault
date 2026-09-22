@@ -1,3 +1,4 @@
+@layer components {
 .manager__head {
   display: flex;
   align-items: center;
@@ -96,4 +97,5 @@
   margin-top: var(--fv-space-4);
   font-size: var(--fv-text-sm);
   color: var(--fv-color-muted);
+}
 }

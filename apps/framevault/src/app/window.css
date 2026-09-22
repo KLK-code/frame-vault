@@ -1,3 +1,4 @@
+@layer components {
 /* 所有独立窗口共用的外框布局：标题栏 + 内容区 */
 .window {
   display: flex;
@@ -12,4 +13,5 @@
   min-height: 0;
   padding: var(--fv-space-4) var(--fv-space-5);
   overflow: auto;
+}
 }

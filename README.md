@@ -11,6 +11,8 @@
 | [FrameVault_PRD_zh-CN.md](./FrameVault_PRD_zh-CN.md) | 产品需求（功能优先级 P0/P1/P2、里程碑） |
 | [FrameVault_Technical_Architecture_zh-CN.md](./FrameVault_Technical_Architecture_zh-CN.md) | 技术栈、模块边界、Vault 规范、同步模型 |
 | [docs/ARCHITECTURE_IMPL_zh-CN.md](./docs/ARCHITECTURE_IMPL_zh-CN.md) | **实现架构**：应该有哪些文件、每个文件负责什么、对外暴露什么接口 |
+| [docs/theme-contract.md](./docs/theme-contract.md) | **主题契约**：公开 token 表 / 公开 selector 表 / 主题包格式 / 层顺序 |
+| [docs/REFERENCES.md](./docs/REFERENCES.md) | 参考项目清单（学习用，含许可证红线） |
 
 ## 当前产品方向与开发范围
 

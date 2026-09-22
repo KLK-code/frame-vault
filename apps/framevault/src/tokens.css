@@ -1,50 +1,94 @@
 /* FrameVault Design Tokens
    风格基准：Obsidian + Things —— 中性、干净、发丝线边框、小圆角、几乎不用重色块。
-   规则：组件里不写裸色值，一切颜色都必须在这里有名字（FV-THM-001）。 */
-:root {
-  /* ── 颜色 ── */
-  --fv-color-bg: #ffffff; /* 内容区底色 */
-  --fv-color-surface: #fbfbfa; /* 侧栏 / 面板 / 标题栏底色（Obsidian 的暖灰） */
-  --fv-color-surface-hover: #f2f2f1; /* 悬停底色 */
-  --fv-color-text: #1f1f1f; /* 正文 */
-  --fv-color-text-strong: #0a0a0a; /* 需要更实的时候（标题栏按钮悬停等） */
-  --fv-color-muted: #8a8a8a; /* 次要文字 */
-  --fv-color-border: #e8e8e6; /* 发丝线 */
-  --fv-color-border-strong: #d8d8d5; /* 需要用力的分隔线 */
+   规则：
+     1) 组件里不写裸色值，一切颜色都必须在这里有名字（FV-THM-001）；
+     2) 想换肤/做主题包，只覆盖这一层里的变量，不要动组件 CSS；
+     3) 加新变量前先想清楚语义（"是什么"而不是"长什么样"）。 */
+@layer base {
+  :root {
+    /* ── 颜色：底层 ── */
+    --fv-color-bg: #ffffff; /* 内容区底色 */
+    --fv-color-surface: #fbfbfa; /* 侧栏 / 面板 / 标题栏（Obsidian 的暖灰） */
+    --fv-color-surface-hover: #f2f2f1; /* 悬停底色 */
+    --fv-color-surface-active: #eaeae8; /* 按下底色 */
 
-  /* 主色：原来那个蓝。想换主题只改这三行 */
-  --fv-color-accent: #086ddd;
-  --fv-color-accent-soft: #e8f1fd; /* 选中底色 */
-  --fv-color-accent-hover: #f0f5fc; /* 悬停淡蓝 */
+    /* ── 颜色：文字 ── */
+    --fv-color-text: #1f1f1f; /* 正文 */
+    --fv-color-text-strong: #0a0a0a; /* 需要更实（标题栏按钮悬停等） */
+    --fv-color-muted: #8a8a8a; /* 次要文字 */
 
-  --fv-color-danger: #c0392b;
-  --fv-color-danger-strong: #e81123; /* 关闭按钮悬停（Windows 习惯色） */
-  --fv-color-on-danger: #ffffff; /* 危险底上的文字色 */
+    /* ── 颜色：线 ── */
+    --fv-color-border: #e8e8e6; /* 发丝线 */
+    --fv-color-border-strong: #d8d8d5; /* 需要用力的分隔线 */
 
-  /* ── 尺寸 ── */
-  --fv-titlebar-height: 32px;
+    /* ── 颜色：主色（想换主题只改这三行 + strong）── */
+    --fv-color-accent: #086ddd;
+    --fv-color-accent-soft: #e8f1fd; /* 选中底色 */
+    --fv-color-accent-hover: #f0f5fc; /* 悬停淡色 */
 
-  /* ── 圆角（Things 偏小圆角）── */
-  --fv-radius-sm: 4px;
-  --fv-radius-md: 6px;
-  --fv-radius-lg: 10px;
+    /* ── 颜色：状态 ── */
+    --fv-color-danger: #c0392b;
+    --fv-color-danger-strong: #e81123; /* 关闭按钮悬停（Windows 习惯色） */
+    --fv-color-on-danger: #ffffff;
+    --fv-color-focus-ring: #086ddd; /* 键盘聚焦环 */
+    --fv-color-selection: #d7e6fb; /* 文本选中底色 */
 
-  /* ── 间距（等比，别在组件里写裸 px）── */
-  --fv-space-1: 4px;
-  --fv-space-2: 8px;
-  --fv-space-3: 12px;
-  --fv-space-4: 16px;
-  --fv-space-5: 24px;
-  --fv-space-6: 32px;
-  --fv-space-7: 48px;
+    /* ── 尺寸 ── */
+    --fv-titlebar-height: 32px;
 
-  /* ── 字体 ── */
-  --fv-font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-  --fv-text-sm: 12px;
-  --fv-text-base: 13px;
-  --fv-text-lg: 15px;
-  --fv-text-xl: 20px;
+    /* ── 圆角 ── */
+    --fv-radius-sm: 4px;
+    --fv-radius-md: 6px;
+    --fv-radius-lg: 10px;
 
-  /* ── 阴影：只给浮层用，别到处堆 ── */
-  --fv-shadow-menu: 0 6px 24px rgba(0, 0, 0, 0.1);
+    /* ── 间距（等比）── */
+    --fv-space-1: 4px;
+    --fv-space-2: 8px;
+    --fv-space-3: 12px;
+    --fv-space-4: 16px;
+    --fv-space-5: 24px;
+    --fv-space-6: 32px;
+    --fv-space-7: 48px;
+
+    /* ── 字体 ── */
+    --fv-font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    --fv-font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --fv-text-xs: 11px;
+    --fv-text-sm: 12px;
+    --fv-text-base: 13px;
+    --fv-text-lg: 15px;
+    --fv-text-xl: 20px;
+    --fv-line-height: 1.55;
+
+    /* ── 阴影阶梯：只给浮层用 ── */
+    --fv-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --fv-shadow-2: 0 6px 24px rgba(0, 0, 0, 0.1);
+    --fv-shadow-menu: var(--fv-shadow-2); /* 兼容旧名字 */
+  }
+
+  /* 深色主题：覆盖同一批变量即可，组件一行都不用改 */
+  [data-theme="dark"] {
+    --fv-color-bg: #1e1e1e;
+    --fv-color-surface: #262626;
+    --fv-color-surface-hover: #2f2f2f;
+    --fv-color-surface-active: #383838;
+
+    --fv-color-text: #dcdcdc;
+    --fv-color-text-strong: #f5f5f5;
+    --fv-color-muted: #9a9a9a;
+
+    --fv-color-border: #363636;
+    --fv-color-border-strong: #4a4a4a;
+
+    --fv-color-accent: #6ea8fe;
+    --fv-color-accent-soft: #26364d;
+    --fv-color-accent-hover: #2b3d57;
+
+    --fv-color-danger: #e06c5a;
+    --fv-color-on-danger: #ffffff;
+    --fv-color-focus-ring: #6ea8fe;
+    --fv-color-selection: #33465f;
+
+    --fv-shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45);
+  }
 }

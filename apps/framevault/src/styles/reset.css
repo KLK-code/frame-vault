@@ -1,3 +1,4 @@
+@layer reset {
 *,
 *::before,
 *::after {
@@ -30,4 +31,15 @@ select {
 
 button {
   cursor: pointer;
+}
+
+/* 让新加的 token 真的有使用方 */
+:focus-visible {
+  outline: 2px solid var(--fv-color-focus-ring);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: var(--fv-color-selection);
+}
 }

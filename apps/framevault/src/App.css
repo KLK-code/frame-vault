@@ -1,3 +1,4 @@
+@layer components {
 /* 最外层：标题栏在上，主区域在下 */
 .app-root {
   display: flex;
@@ -172,4 +173,5 @@
   .content {
     padding: var(--fv-space-5);
   }
+}
 }

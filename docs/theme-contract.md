@@ -1,0 +1,162 @@
+# FrameVault 主题契约（Theme Contract）
+
+> 面向：想给 FrameVault 写外观主题的人，以及要改默认样式的我们自己。
+> 配套阅读：架构文档 §4.6（样式归属）、§13.1（外观主题 vs 功能主题）；设置窗口里的「外观 · 实时调整」。
+
+## 0. 三层可定制级别（先认清自己在哪一层）
+
+| 级别 | 做什么 | 用什么 | 稳定性 |
+|---|---|---|---|
+| **1. 变量覆盖**（推荐） | 换颜色 / 字体 / 圆角 / 间距 | 覆盖 `--fv-*` 变量 | ✅ **承诺稳定** |
+| **2. 组件规则**（Skin） | 改密度、边框、布局细节 | 覆盖第 2 节列出的公开类名 | ⚠️ 有限承诺 |
+| **3. 功能主题**（Workspace Type） | 换界面结构与流程 | 插件（M5） | 未定 |
+
+**写主题请优先停在级别 1。** 级别 2 用到的类名如果不在公开表里，随时可能变。
+
+## 1. 公开 token 表（可安全覆盖）
+
+共 **39** 个变量，其中 **17** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
+
+| 变量 | 默认值 | 用途 | 深色主题覆盖 |
+|---|---|---|---|
+| `--fv-color-bg` | `#ffffff` | 内容区底色 | ✅ |
+| `--fv-color-surface` | `#fbfbfa` | 侧栏 / 面板 / 标题栏（Obsidian 的暖灰） | ✅ |
+| `--fv-color-surface-hover` | `#f2f2f1` | 悬停底色 | ✅ |
+| `--fv-color-surface-active` | `#eaeae8` | 按下底色 | ✅ |
+| `--fv-color-text` | `#1f1f1f` | 正文 | ✅ |
+| `--fv-color-text-strong` | `#0a0a0a` | 需要更实（标题栏按钮悬停等） | ✅ |
+| `--fv-color-muted` | `#8a8a8a` | 次要文字 | ✅ |
+| `--fv-color-border` | `#e8e8e6` | 发丝线 | ✅ |
+| `--fv-color-border-strong` | `#d8d8d5` | 需要用力的分隔线 | ✅ |
+| `--fv-color-accent` | `#086ddd` | — | ✅ |
+| `--fv-color-accent-soft` | `#e8f1fd` | 选中底色 | ✅ |
+| `--fv-color-accent-hover` | `#f0f5fc` | 悬停淡色 | ✅ |
+| `--fv-color-danger` | `#c0392b` | — | ✅ |
+| `--fv-color-danger-strong` | `#e81123` | 关闭按钮悬停（Windows 习惯色） | — |
+| `--fv-color-on-danger` | `#ffffff` | — | ✅ |
+| `--fv-color-focus-ring` | `#086ddd` | 键盘聚焦环 | ✅ |
+| `--fv-color-selection` | `#d7e6fb` | 文本选中底色 | ✅ |
+| `--fv-titlebar-height` | `32px` | — | — |
+| `--fv-radius-sm` | `4px` | — | — |
+| `--fv-radius-md` | `6px` | — | — |
+| `--fv-radius-lg` | `10px` | — | — |
+| `--fv-space-1` | `4px` | — | — |
+| `--fv-space-2` | `8px` | — | — |
+| `--fv-space-3` | `12px` | — | — |
+| `--fv-space-4` | `16px` | — | — |
+| `--fv-space-5` | `24px` | — | — |
+| `--fv-space-6` | `32px` | — | — |
+| `--fv-space-7` | `48px` | — | — |
+| `--fv-font-sans` | `system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif` | — | — |
+| `--fv-font-mono` | `ui-monospace, "Cascadia Mono", Consolas, monospace` | — | — |
+| `--fv-text-xs` | `11px` | — | — |
+| `--fv-text-sm` | `12px` | — | — |
+| `--fv-text-base` | `13px` | — | — |
+| `--fv-text-lg` | `15px` | — | — |
+| `--fv-text-xl` | `20px` | — | — |
+| `--fv-line-height` | `1.55` | — | — |
+| `--fv-shadow-1` | `0 1px 2px rgba(0, 0, 0, 0.06)` | — | — |
+| `--fv-shadow-2` | `0 6px 24px rgba(0, 0, 0, 0.1)` | — | ✅ |
+| `--fv-shadow-menu` | `var(--fv-shadow-2)` | 兼容旧名字 | — |
+
+规则：
+
+1. **只覆盖，不要新增**（新增变量属于改默认样式，请提 PR 而不是包主题）；
+2. **不要用 `!important`**——主题写在 `@layer theme` 里，本来就压过组件层（见第 4 节）；
+3. **深色模式**：覆盖 `[data-theme="dark"]` 里同一批变量，组件一行都不用改。
+
+## 2. 公开 selector 表（承诺稳定的类名）
+
+只有下面这些类名是对外承诺的，其余（尤其未来新增的内部类）**不保证不变**。
+
+| 区域 | 公开类名 |
+|---|---|
+| 标题栏 | `.titlebar`、`.titlebar__title`、`.titlebar__actions`、`.titlebar__btn`、`.titlebar__btn--close` |
+| 主外壳 | `.app-root`、`.app`、`.sidebar`、`.sidebar nav button`、`.sidebar__footer`、`.sidebar__icon`、`.app__divider`、`.content` |
+| 独立窗口 | `.window`、`.window__body` |
+| 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
+| 设置界面 | `.settings__title`、`.settings__group`、`.settings__rows`、`.settings__row`、`.settings__label`、`.settings__badge`、`.settings__status` |
+| 管理仓库 | `.manager__head`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__status` |
+
+命名约定：`.block__element--modifier`。**内部类名不加 `fv-` 前缀**，加了就意味着对外承诺。
+
+## 3. 主题包格式（M3 落地，现在是设计稿）
+
+```text
+my-theme/
+├── manifest.json
+├── theme.css
+└── preview.webp          可选，列表里显示用
+```
+
+`manifest.json`：
+
+```json
+{
+  "id": "com.example.sakura",
+  "name": "Sakura",
+  "version": "1.0.0",
+  "themeApiVersion": "1",
+  "author": "your name",
+  "description": "淡粉配色，浅色/深色各一套",
+  "modes": ["light", "dark"]
+}
+```
+
+`theme.css`：**必须写在 `@layer theme` 里**
+
+```css
+@layer theme {
+  :root {
+    --fv-color-accent: #d16b86;
+    --fv-color-accent-soft: #fbeef2;
+  }
+
+  [data-theme="dark"] {
+    --fv-color-accent: #e79bb0;
+    --fv-color-accent-soft: #3a2a30;
+  }
+}
+```
+
+安全约束（沿用技术架构文档 §12.2）：主题默认**不执行 JS**、不允许远程资源、不允许读 Vault。纯 CSS。
+
+## 4. 层顺序：为什么主题能压过组件
+
+`src/styles/layers.css`：
+
+```css
+@layer reset, base, components, theme, user;
+```
+
+- `reset`：浏览器默认样式归零
+- `base`：**tokens 就在这里**（`tokens.css`）
+- `components`：所有组件样式
+- `theme`：**主题包只写这一层** → 天然压过 components，**不需要 `!important`，也不用比选择器权重**
+- `user`：用户在设置界面里的实时覆盖，落在 `:root` 的内联样式上，是**最强的一层**
+
+> 注意：**未分层的样式会强过所有分层样式**。所以项目里任何新 CSS 文件都必须写进某一层，否则这套契约会漏。
+
+## 5. 用实时编辑器调出默认样式（现在就能用）
+
+1. 打开 **设置** 窗口 → 「外观 · 实时调整」；
+2. 改颜色 / 圆角 / 字号 / 间距 → **全局立即生效**，不用重启、不用编译；
+3. 满意后点「**复制当前覆盖为 CSS**」；
+4. 把复制到的内容粘回 `src/tokens.css` 的 `:root` → 它就成了新的默认样式；
+5. 单项点 `↺` 还原，或「全部重置」回到 tokens 里的默认值。
+
+覆盖值存在 `localStorage`（键 `fv.themeOverrides`），配色模式存在 `fv.colorScheme`。它们属于「视图 / 偏好」类状态，**不进 Vault**（架构文档 §14）。
+
+**为什么先做这个**：它能让你在**不写一行代码**的情况下把默认样式调出来——调好之后再决定哪些值固化成默认、哪些留给主题作者。
+
+## 6. 兼容策略
+
+| 变更 | 是否破坏性 | 处理 |
+|---|---|---|
+| 新增一个 token | ❌ 不是 | 老主题不写它就用默认值 |
+| 新增一个组件 / 类名 | ❌ 不是 | 主题不覆盖就没影响 |
+| **删除或改名** token / 公开类名 | ✅ **是** | 必须升 `themeApiVersion`，并写 ADR |
+| 改动层的顺序或名字 | ✅ **是** | 同上 |
+| 组件改用新的内部类名（不在公开表里） | ❌ 不是 | 主题本来就不该依赖它们 |
+
+每次破坏性变更写一条 ADR（`docs/adr/`），并在本文档第 1、2 节更新表格。

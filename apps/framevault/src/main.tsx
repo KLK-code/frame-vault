@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import "./styles/layers.css"; // 必须最先导入：声明层顺序
 import "./styles/reset.css";
 import "./tokens.css";
 import App from "./App";

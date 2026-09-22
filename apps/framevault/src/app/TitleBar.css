@@ -1,3 +1,4 @@
+@layer components {
 .titlebar {
   display: flex;
   align-items: center;
@@ -39,4 +40,5 @@
 .titlebar__btn--close:hover {
   background: var(--fv-color-danger-strong);
   color: var(--fv-color-on-danger);
+}
 }

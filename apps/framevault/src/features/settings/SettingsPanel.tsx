@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ThemeEditor from "../theme/ThemeEditor";
 import "./SettingsPanel.css";
 
 type Item = {
@@ -10,13 +11,6 @@ type Item = {
 };
 
 const GROUPS: { title: string; items: Item[] }[] = [
-  {
-    title: "外观",
-    items: [
-      { id: "theme.choose", label: "选择外观主题…", hint: "M3" },
-      { id: "theme.followSystem", label: "跟随系统深色模式", hint: "M3" },
-    ],
-  },
   {
     title: "Vault",
     items: [
@@ -65,6 +59,19 @@ export default function SettingsPanel() {
   return (
     <>
       <h1 className="settings__title">设置</h1>
+
+      <section className="settings__group">
+        <h2>外观 · 实时调整</h2>
+        <ThemeEditor />
+        <div className="settings__rows" style={{ marginTop: "var(--fv-space-3)" }}>
+          <button
+            className="settings__row"
+            onClick={() => handle({ id: "theme.install", label: "安装外观主题包…" })}
+          >
+            <span className="settings__label">安装外观主题包…（M3）</span>
+          </button>
+        </div>
+      </section>
 
       {GROUPS.map((group) => (
         <section className="settings__group" key={group.title}>

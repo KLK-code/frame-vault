@@ -173,7 +173,7 @@ lib.rs（组装）
 - **规则**：锁只保护内存，**不要拿着锁做磁盘 IO**（用 `{ }` 把临界区圈小）。
 - **扩展方向**：加「最近打开」等字段；超过一个文件就拆成 `state/` 目录。
 
-#### `src-tauri/src/vault/` ⬜（当前是单文件 `vault.rs` ✅）
+#### `src-tauri/src/vault/` ✅（已按下面的形状拆开：mod / model / storage / id）
 领域核心。**这个目录里永远不出现 `tauri`。**
 
 | 文件 | 职责 | 对外接口（签名级） | 阶段 |
@@ -191,8 +191,8 @@ lib.rs（组装）
 
 | 文件 | 命令 | 阶段 |
 |---|---|---|
-| `vault.rs` | `list_vaults` / `add_vault` / `switch_vault` / `forget_vault` / `create_vault` | ✅ 前四个，⬜ create_vault |
-| `entry.rs` | `save_entry` / `load_entry` / `list_entries` / `delete_entry` | ✅ 前两个 |
+| `vault.rs`（将来拆出） | `list_vaults` / `add_vault` / `create_vault` / `switch_vault` / `forget_vault` | ✅ 全部 |
+| `entry.rs`（将来拆出） | `save_entry` / `load_entry` / `list_entries` / `read_vault_meta` / ⬜ `delete_entry` | ✅ 除 delete 外 |
 | `media.rs` | `import_media` / `make_thumbnail` | M1 |
 | `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
 | `sync.rs` | `sync_now` / `sync_status` / `cancel_sync` | M4 |
@@ -431,10 +431,11 @@ export default function TimelinePage() {
 | `add_vault` | `path` | `VaultInfo[]` | 导入文件夹为仓库（并设为当前） | ✅ |
 | `switch_vault` | `path` | `void` | 切换当前仓库 | ✅ |
 | `forget_vault` | `path` | `VaultInfo[]` | 从列表移除（**不删磁盘文件**） | ✅ |
-| `create_vault` | `name` / `parentPath?` | `VaultInfo[]` | 新建仓库（建目录 + 写 vault.json） | ⬜ |
+| `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份） | ✅ |
 | `save_entry` | `id` / `title` / `createdAt` | `string`（写入路径） | 写一条记录 | ✅ |
 | `load_entry` | `id` | `Entry` | 读一条记录 | ✅ |
-| `list_entries` | — | `Entry[]` | 列当前仓库全部记录（时间线用） | ⬜ |
+| `list_entries` | — | `Entry[]` | 列当前仓库全部记录（新的在前，坏数据跳过） | ✅ |
+| `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份） | ✅ |
 | `delete_entry` | `id` | `void` | 删除（写 tombstone） | ⬜ |
 | `import_media` | `entryId` / `sourcePath` | `Media` | 导入媒体 | ⬜ M1 |
 | `make_thumbnail` | `mediaId` / `maxSize` | `string` | 生成缩略图并返回路径 | ⬜ M1 |
@@ -713,6 +714,8 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 ## 附录 A：当前已实现清单（本文档写作时）
 
 **后端**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出）；`state.rs`（仓库注册表 + `vaults.json` 持久化）；`commands.rs`（8 个命令）；`vault.rs`（`Entry` 模型、原子写入、4 个单元测试）；`examples/demo.rs`。
+
+**Rust 侧结构**：`vault/{mod,model,storage,id}.rs`（领域核心，不认识 tauri）、`error.rs`（`AppError` + `AppResult`，命令里不再手写 `map_err`）、`state.rs`、`commands.rs`（12 个命令）。
 
 **前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：**可拖动侧栏** + 导航 + 页面注册表）；`VaultManagerWindow.tsx`（第二窗口外壳）；`features/vault/VaultSwitcher.tsx`（仓库切换悬浮菜单）；`features/vault/VaultManagerPanel.tsx`（窗口内的管理面板）；`lib/api.ts`（全部命令包装）；`lib/pages.tsx`（注册表）；`pages/{Placeholder,VaultPage}`；`tokens.css`；`styles/reset.css`。
 

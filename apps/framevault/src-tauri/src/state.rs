@@ -1,3 +1,4 @@
+use crate::error::AppResult;
 use crate::vault::write_json_atomic;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -24,7 +25,7 @@ impl AppState {
     }
 
     /// 启动时调一次：把上次的列表读回来
-    pub fn load(&self) -> std::io::Result<()> {
+    pub fn load(&self) -> AppResult<()> {
         if !self.config_path.exists() {
             return Ok(()); // 第一次运行，正常情况
         }
@@ -36,7 +37,7 @@ impl AppState {
     }
 
     /// 每次改动后调一次：写回磁盘
-    pub fn save(&self) -> std::io::Result<()> {
+    pub fn save(&self) -> AppResult<()> {
         let guard = self.vaults.lock().unwrap();
         write_json_atomic(&self.config_path, &*guard)
     }

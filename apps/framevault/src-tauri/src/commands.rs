@@ -1,16 +1,13 @@
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::{self, Entry};
 use std::path::PathBuf;
-use tauri::Manager;
-use tauri::State;
+use tauri::{Manager, State};
 
 /// 所有命令共用的取路径逻辑
-fn active_vault(state: &AppState) -> Result<PathBuf, String> {
-    let guard = state.vaults.lock().map_err(|e| e.to_string())?;
-    guard
-        .active
-        .clone()
-        .ok_or_else(|| "还没有选择仓库".to_string())
+fn active_vault(state: &AppState) -> AppResult<PathBuf> {
+    let guard = state.vaults.lock()?;
+    guard.active.clone().ok_or(AppError::NotSelected)
 }
 
 #[derive(serde::Serialize)]
@@ -21,9 +18,9 @@ pub struct VaultInfo {
     pub exists: bool,
 }
 
-/// 列表逻辑抽出来，add / forget 复用
-fn vault_list(app: &AppState) -> Result<Vec<VaultInfo>, String> {
-    let guard = app.vaults.lock().map_err(|e| e.to_string())?;
+/// 列表逻辑抽出来，add / forget / create 复用
+fn vault_list(app: &AppState) -> AppResult<Vec<VaultInfo>> {
+    let guard = app.vaults.lock()?;
 
     Ok(guard
         .known
@@ -41,50 +38,96 @@ fn vault_list(app: &AppState) -> Result<Vec<VaultInfo>, String> {
 }
 
 #[tauri::command]
-pub fn list_vaults(state: State<'_, AppState>) -> Result<Vec<VaultInfo>, String> {
+pub fn list_vaults(state: State<'_, AppState>) -> AppResult<Vec<VaultInfo>> {
     vault_list(state.inner())
 }
 
+/// 导入一个**已经存在**的 Vault 目录：必须有 vault.json
 #[tauri::command]
-pub fn add_vault(state: State<'_, AppState>, path: String) -> Result<Vec<VaultInfo>, String> {
+pub fn add_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<VaultInfo>> {
     let app = state.inner();
-    {
-        let mut guard = app.vaults.lock().map_err(|e| e.to_string())?;
-        let p = PathBuf::from(&path);
-        if !p.is_dir() {
-            return Err(format!("不是有效目录: {path}"));
-        }
-        if !guard.known.iter().any(|k| k == &p) {
-            guard.known.push(p.clone());
-        }
-        guard.active = Some(p);
+    let dir = PathBuf::from(&path);
+
+    if !dir.is_dir() {
+        return Err(AppError::Invalid(format!("不是有效目录：{path}")));
     }
-    app.save().map_err(|e| e.to_string())?;
+    if !vault::is_vault(&dir) {
+        return Err(AppError::Invalid(format!(
+            "{} 不是 Vault 目录（缺少 vault.json）。\n如果想把它变成 Vault，请用「新建仓库…」。",
+            dir.display()
+        )));
+    }
+
+    {
+        let mut guard = app.vaults.lock()?;
+        if !guard.known.iter().any(|k| k == &dir) {
+            guard.known.push(dir.clone());
+        }
+        guard.active = Some(dir);
+    }
+    app.save()?;
+
+    vault_list(app)
+}
+
+/// 在指定目录里创建一个新 Vault（可以"收养"已经有 entries/ 的目录）
+#[tauri::command]
+pub fn create_vault(
+    state: State<'_, AppState>,
+    path: String,
+    name: String,
+    created_at: String,
+) -> AppResult<Vec<VaultInfo>> {
+    let app = state.inner();
+    let dir = PathBuf::from(&path);
+
+    // 名字留空就取目录名：路径解析属于 Rust 的活，前端不做字符串手术
+    let display_name = if name.trim().is_empty() {
+        dir.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "新仓库".to_string())
+    } else {
+        name
+    };
+
+    let meta = vault::create_vault(&dir, &display_name, &created_at)?;
+    println!("[rust] create_vault: {} = {}", meta.name, dir.display());
+
+    {
+        let mut guard = app.vaults.lock()?;
+        if !guard.known.iter().any(|k| k == &dir) {
+            guard.known.push(dir.clone());
+        }
+        guard.active = Some(dir);
+    }
+    app.save()?;
+
     vault_list(app)
 }
 
 #[tauri::command]
-pub fn switch_vault(state: State<'_, AppState>, path: String) -> Result<(), String> {
+pub fn switch_vault(state: State<'_, AppState>, path: String) -> AppResult<()> {
     let app = state.inner();
     {
-        let mut guard = app.vaults.lock().map_err(|e| e.to_string())?;
+        let mut guard = app.vaults.lock()?;
         guard.active = Some(PathBuf::from(&path));
     }
-    app.save().map_err(|e| e.to_string())
+    app.save()?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn forget_vault(state: State<'_, AppState>, path: String) -> Result<Vec<VaultInfo>, String> {
+pub fn forget_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<VaultInfo>> {
     let app = state.inner();
     {
-        let mut guard = app.vaults.lock().map_err(|e| e.to_string())?;
+        let mut guard = app.vaults.lock()?;
         let p = PathBuf::from(&path);
         guard.known.retain(|k| k != &p);
         if guard.active.as_ref() == Some(&p) {
             guard.active = guard.known.first().cloned();
         }
     }
-    app.save().map_err(|e| e.to_string())?;
+    app.save()?;
     vault_list(app)
 }
 
@@ -94,30 +137,43 @@ pub fn save_entry(
     id: String,
     title: String,
     created_at: String,
-) -> Result<String, String> {
+) -> AppResult<String> {
     let vault_dir = active_vault(state.inner())?;
     println!("[rust] save_entry: {id} -> {}", vault_dir.display());
 
     let entry = Entry::new(&id, &title, &created_at);
-    let path = vault::write_entry(&vault_dir, &entry).map_err(|e| e.to_string())?;
+    let path = vault::write_entry(&vault_dir, &entry)?;
     Ok(path.display().to_string())
 }
 
 #[tauri::command]
-pub fn load_entry(state: State<'_, AppState>, id: String) -> Result<Entry, String> {
+pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<Entry> {
     let vault_dir = active_vault(state.inner())?;
-    vault::read_entry(&vault_dir, &id).map_err(|e| e.to_string())
+    Ok(vault::read_entry(&vault_dir, &id)?)
 }
 
-// ── 多窗口 ──
-// 注意 #[tauri::command(async)]：官方文档说没有 async 关键字的命令在**主线程**执行，
+/// 列出当前仓库里的所有记录（时间线用）
+#[tauri::command]
+pub fn list_entries(state: State<'_, AppState>) -> AppResult<Vec<Entry>> {
+    let vault_dir = active_vault(state.inner())?;
+    Ok(vault::list_entries(&vault_dir)?)
+}
+
+/// 读当前仓库的身份信息（vault.json）
+#[tauri::command]
+pub fn read_vault_meta(state: State<'_, AppState>) -> AppResult<vault::VaultMeta> {
+    let vault_dir = active_vault(state.inner())?;
+    Ok(vault::read_vault_meta(&vault_dir)?)
+}
+
+// ── 窗口 ──
+// 注意 #[tauri::command(async)]：没有 async 关键字的命令在主线程执行，
 // 在主线程里建窗口会把消息循环搞坏（窗口建出来但关不掉）。
-// 加上 async 后，函数体会在单独的线程上跑。
 
 #[tauri::command(async)]
-pub fn open_vault_manager(app: tauri::AppHandle) -> Result<(), String> {
+pub fn open_vault_manager(app: tauri::AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_webview_window("vault-manager") {
-        w.set_focus().map_err(|e| e.to_string())?;
+        w.set_focus()?;
         return Ok(());
     }
 
@@ -129,27 +185,26 @@ pub fn open_vault_manager(app: tauri::AppHandle) -> Result<(), String> {
     .title("管理仓库")
     .inner_size(760.0, 540.0)
     .resizable(true)
-    .decorations(false) // 自绘标题栏（见 src/app/TitleBar.tsx）
+    .decorations(false) // 自绘标题栏
     .closable(true)
     .center()
-    .build()
-    .map_err(|e| e.to_string())?;
+    .build()?;
 
     Ok(())
 }
 
 #[tauri::command(async)]
-pub fn close_vault_manager(app: tauri::AppHandle) -> Result<(), String> {
+pub fn close_vault_manager(app: tauri::AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_webview_window("vault-manager") {
-        w.close().map_err(|e| e.to_string())?;
+        w.close()?;
     }
     Ok(())
 }
 
 #[tauri::command(async)]
-pub fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
+pub fn open_settings(app: tauri::AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_webview_window("settings") {
-        w.set_focus().map_err(|e| e.to_string())?;
+        w.set_focus()?;
         return Ok(());
     }
 
@@ -161,19 +216,18 @@ pub fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
     .title("设置")
     .inner_size(720.0, 560.0)
     .resizable(true)
-    .decorations(false) // 自绘标题栏
+    .decorations(false)
     .closable(true)
     .center()
-    .build()
-    .map_err(|e| e.to_string())?;
+    .build()?;
 
     Ok(())
 }
 
 #[tauri::command(async)]
-pub fn close_settings(app: tauri::AppHandle) -> Result<(), String> {
+pub fn close_settings(app: tauri::AppHandle) -> AppResult<()> {
     if let Some(w) = app.get_webview_window("settings") {
-        w.close().map_err(|e| e.to_string())?;
+        w.close()?;
     }
     Ok(())
 }

@@ -1,4 +1,5 @@
 mod commands;
+mod error;
 mod state;
 pub mod vault;
 
@@ -36,10 +37,13 @@ pub fn run() {
             greet,
             commands::list_vaults,
             commands::add_vault,
+            commands::create_vault,
             commands::switch_vault,
             commands::forget_vault,
             commands::save_entry,
             commands::load_entry,
+            commands::list_entries,
+            commands::read_vault_meta,
             commands::open_vault_manager,
             commands::close_vault_manager,
             commands::open_settings,

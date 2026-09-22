@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   addVault,
+  createVault,
   listVaults,
   openVaultManager,
   pickFolder,
@@ -57,6 +58,19 @@ export default function VaultSwitcher() {
     }
   }
 
+  async function handleCreate() {
+    const picked = await pickFolder("选择一个文件夹作为新 Vault");
+    if (!picked) return;
+    try {
+      // 名字留空：让 Rust 从目录名推导（路径解析归 Rust）
+      setVaults(await createVault(picked));
+      setOpen(false);
+      setStatus("已创建仓库 ✅");
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
   async function handleAdd() {
     const picked = await pickFolder("选择一个文件夹作为 Vault");
     if (!picked) return;
@@ -107,8 +121,14 @@ export default function VaultSwitcher() {
 
           <div className="vault-switcher__sep" />
 
+          <button role="menuitem" className="vault-switcher__item" onClick={handleCreate}>
+            <span className="vault-switcher__item-name">新建仓库…</span>
+            <span className="vault-switcher__path">在一个文件夹里创建 vault.json</span>
+          </button>
+
           <button role="menuitem" className="vault-switcher__item" onClick={handleAdd}>
-            <span className="vault-switcher__item-name">添加仓库…</span>
+            <span className="vault-switcher__item-name">添加已有仓库…</span>
+            <span className="vault-switcher__path">必须是已经带 vault.json 的目录</span>
           </button>
 
           <button

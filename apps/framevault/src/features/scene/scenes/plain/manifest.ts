@@ -7,8 +7,6 @@ import type { SceneManifest } from "../../manifest";
 const manifest: SceneManifest = {
   presentation: {
     icon: "book", eyebrow: "DAILY JOURNAL", suggestedAppearance: "preset.paper",
-    subtitle: "记录生活，那些细小而珍贵的瞬间",
-    signature: "Good Day", motto: "平凡的日子，也值得被认真记录。",
   },
   entryFields: [
     { key: "text", label: "正文", type: "textarea", placeholder: "写点什么…" },

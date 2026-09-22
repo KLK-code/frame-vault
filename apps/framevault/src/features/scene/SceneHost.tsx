@@ -43,9 +43,7 @@ export default function SceneHost({ folder, scene, onSceneConfigChange }: Props)
             <h1 className="scene-host__name">{folder.name}</h1>
             <span className="scene-host__theme">{scene ? scene.name : folder.effectiveScene}</span>
           </div>
-          <p className="scene-host__subtitle">{presentation?.subtitle ?? scene?.description}</p>
         </div>
-        {presentation && <span className="scene-host__signature" aria-hidden="true">{presentation.signature}<SceneIcon name={presentation.icon} size={38} /></span>}
       </header>
 
       {!View && (

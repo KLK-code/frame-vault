@@ -44,10 +44,6 @@
   border-top: 1px solid var(--fv-color-border);
 }
 
-.sidebar__motto { padding: var(--fv-space-5); color: var(--fv-color-accent); }
-.sidebar__motto p { max-width: 15ch; font-family: var(--fv-font-display); font-size: var(--fv-text-lg); line-height: 1.9; }
-.sidebar__motto span { font-size: var(--fv-text-xs); color: var(--fv-color-muted); letter-spacing: .08em; }
-
 .sidebar__icon {
   flex: 0 0 auto;
   display: grid;

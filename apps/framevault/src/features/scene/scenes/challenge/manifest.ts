@@ -9,8 +9,6 @@ import type { SceneManifest } from "../../manifest";
 const manifest: SceneManifest = {
   presentation: {
     icon: "bolt", eyebrow: "MAKE IT HAPPEN", suggestedAppearance: "preset.ember",
-    subtitle: "挑战今天，遇见更强的自己",
-    signature: "NEVER GIVE UP", motto: "更好的自己，从每一次坚持开始。",
   },
   entryFields: [
     { key: "text", label: "打卡心得", type: "textarea", placeholder: "记录今天的进步…" },

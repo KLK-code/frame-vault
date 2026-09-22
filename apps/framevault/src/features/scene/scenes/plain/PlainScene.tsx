@@ -26,6 +26,19 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** WebView 自己就能解的图片格式。HEIC 不在其中——而 iPhone 直出恰恰是 HEIC，所以必须区别对待 */
+const WEBVIEW_IMAGE_EXTS = new Set(["jpg", "jpeg", "jpe", "png", "webp", "gif", "bmp", "avif"]);
+
+/**
+ * 这个媒体能不能直接丢给 <img>：有缩略图就用缩略图（快），否则看格式。
+ * 返回 null = 显示不了，界面要给占位和说明，别丢一个碎图给用户。
+ */
+function displayableSrc(item: MediaItem): string | null {
+  if (item.thumbPath) return item.thumbPath;
+  if (item.mime.startsWith("video/")) return null;
+  return WEBVIEW_IMAGE_EXTS.has(item.ext) ? item.originalPath : null;
+}
+
 /**
  * 内置"普通记录"：一条记录 = 一个标题 + 时间 + 若干照片/视频。
  *
@@ -157,25 +170,26 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
 
                 {items.length > 0 && (
                   <ul className="entry__media">
-                    {items.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          className="thumb"
-                          title={`${item.name} · ${formatBytes(item.bytes)}`}
-                          onClick={() => setPreview(item)}
-                        >
-                          {item.mime.startsWith("video/") ? (
-                            <span className="thumb__video">▶ {item.ext.toUpperCase()}</span>
-                          ) : (
-                            <img
-                              loading="lazy"
-                              src={assetUrl(item.thumbPath ?? item.originalPath)}
-                              alt={item.name}
-                            />
-                          )}
-                        </button>
-                      </li>
-                    ))}
+                    {items.map((item) => {
+                      const src = displayableSrc(item);
+                      return (
+                        <li key={item.id}>
+                          <button
+                            className="thumb"
+                            title={`${item.name} · ${formatBytes(item.bytes)}`}
+                            onClick={() => setPreview(item)}
+                          >
+                            {src ? (
+                              <img loading="lazy" src={assetUrl(src)} alt={item.name} />
+                            ) : (
+                              <span className="thumb__fallback">
+                                {item.mime.startsWith("video/") ? "▶" : "?"} {item.ext.toUpperCase()}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </li>
@@ -196,8 +210,19 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
                 controls
                 autoPlay
               />
+            ) : WEBVIEW_IMAGE_EXTS.has(preview.ext) ? (
+              <img
+                className="lightbox__media"
+                src={assetUrl(preview.originalPath)}
+                alt={preview.name}
+              />
             ) : (
-              <img className="lightbox__media" src={assetUrl(preview.originalPath)} alt={preview.name} />
+              // 不假装能显示：说清楚原因，并给出原文件位置
+              <div className="lightbox__unsupported">
+                <p>WebView 解不开 .{preview.ext}（常见于 iPhone 直出的 HEIC）。</p>
+                <p>文件已经完整导入，原始文件在这里：</p>
+                <code>{preview.originalPath}</code>
+              </div>
             )}
 
             <div className="lightbox__bar">

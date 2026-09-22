@@ -707,6 +707,8 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 
 > 为什么缩略图放本机：它是**派生数据**。放进 Vault 只会让同步白搬几 GB，还会在每台设备上各自冲突；丢了在导入时重建即可。
 
+**不假装能显示**：HEIC / AVIF 这类 `image` 库解不开（也是 WebView 解不开的）格式，导入照旧成功、文件完整落盘，但界面给**明确的占位与说明**，而不是丢一个碎图。iPhone 直出就是 HEIC，这条迟早会遇到——要真正支持得等 M1 之后接平台解码（PRD FV-MED-002「以平台解码能力为准」）。
+
 **导入流程（一次导入 = 一条记录）**：选文件 → 建一条记录（标题取输入框内容，没写就用日期）→ 逐个 `import_media` → 刷新列表。
 标题兜底写在前端，因为“一次导入算一条记录”是工作流选择，不是数据规则——换主题可以换一套录入流程。
 
@@ -762,3 +764,4 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 切换仓库后照片全碎 | 新 Vault 没被放行 | `switch_vault` / `create_vault` / `add_vault` 和启动时都要调 `allow_vault_assets` |
 | 带 alpha 的 PNG 存成 JPEG | 缩略图报错：Jpeg 不支持 Rgba8 | 先 `.to_rgb8()` 再 `save` |
 | 图省事用 `**` 放行 asset 范围 | WebView 能读整台机器的文件，前端一旦被注入就完蛋 | 只放行当前 Vault + 它的缩略图目录 |
+| 把 HEIC 直接塞进 `<img>` | 网格里一片碎图（而 iPhone 直出就是 HEIC） | 先生成缩略图；生成不了就查扩展名，给占位 + 原文件路径，别丢碎图 |

@@ -1,0 +1,75 @@
+/* 窄屏横切调整 —— 跨组件的触摸目标 / 安全区 / 面板布局。
+   规矩：
+     1) 内容**全部**包在窄屏媒体查询里，桌面端一点不受影响；
+     2) 只放"没有哪个组件该独自负责"的调整（组件自己的样式仍在它自己目录里）；
+     3) 触摸目标的下限参考 iOS 44pt / Android 48dp。 */
+@layer components {
+  @media (max-width: 640px) {
+    /* ── 触摸目标：小按钮放大，行内按钮加内边距 ── */
+    .entry__actions button,
+    .challenge__note-actions button,
+    .scene-notice__action,
+    .challenge__setup,
+    .plain-scene__compose button,
+    .challenge__compose button,
+    .manager__head button,
+    .manager__actions button {
+      min-height: 40px;
+      padding: 8px 14px;
+      font-size: var(--fv-text-base);
+    }
+
+    .entry__actions,
+    .challenge__note-actions {
+      gap: var(--fv-space-3);
+    }
+
+    .scene-tree__add,
+    .scene-row__more {
+      width: 34px;
+      height: 34px;
+    }
+
+    /* 手指点得准的前提：输入框别太矮 */
+    .plain-scene__compose input,
+    .challenge__compose input,
+    .entry__edit-title,
+    .entry__edit-text,
+    .field__control,
+    .settings__search {
+      min-height: 44px;
+      font-size: var(--fv-text-base);
+    }
+
+    /* ── 设置面板：左导航 + 右内容 → 上下堆叠 ── */
+    .settings {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+    }
+
+    .settings__nav {
+      flex-direction: row;
+      align-items: center;
+      gap: var(--fv-space-2);
+      padding: var(--fv-space-2) var(--fv-space-3);
+      border-right: none;
+      border-bottom: 1px solid var(--fv-color-border);
+    }
+
+    .settings__search {
+      flex: 0 0 38%;
+    }
+
+    .settings__list {
+      flex-direction: row;
+      gap: var(--fv-space-1);
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .settings__nav-item {
+      flex: 0 0 auto;
+      min-height: 40px;
+    }
+  }
+}

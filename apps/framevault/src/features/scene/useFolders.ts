@@ -12,6 +12,30 @@ import {
   type SceneInfo,
 } from "../../lib/api";
 
+/**
+ * "当前选中的场景"。两套骨架（桌面 / 手机）共用这一份规则：
+ * 场景没了或还没选 → 自动落到第一个。
+ */
+export function useActiveFolder(folders: FolderNode[]) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (folders.length === 0) {
+      if (activeId !== null) setActiveId(null);
+      return;
+    }
+    if (!folders.some((folder) => folder.id === activeId)) {
+      setActiveId(folders[0].id);
+    }
+  }, [folders, activeId]);
+
+  return {
+    activeId,
+    setActiveId,
+    active: folders.find((folder) => folder.id === activeId) ?? null,
+  };
+}
+
 /** 一个"主题分组"：同一种属性的场景聚在一起，方便查找 */
 export type SceneGroup = {
   scene: SceneInfo;

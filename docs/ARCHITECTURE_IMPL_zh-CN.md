@@ -573,6 +573,15 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | 平台专属 API（托盘、Intent、SAF） | Rust `#[cfg(desktop)]` / `#[cfg(target_os = "android")]`；前端不写平台分支 | `lib.rs`、`capture/android.rs` |
 | 打包 | 两条独立流水线：`pnpm tauri build` / `pnpm tauri android build` | — |
 
+**移动端的硬约束：只有一个 WebView 窗口。** 桌面端「管理仓库」「设置」是独立窗口（`open_vault_manager` / `open_settings`），
+而 Android / iOS 上开不出第二个窗口 —— 所以移动端必须把它们做成**内嵌页面**（见 `app/MobileShell.tsx`）。
+
+**两套骨架，一份能力。** 桌面 = 左场景树 + 右场景舞台（`App.tsx` 的 `DesktopShell`）；
+手机 = 顶部场景切换 + 主题渲染区 + 底部标签栏（`app/MobileShell.tsx`）。
+两者共用 `useFolders` / `useActiveFolder` / `useSceneData` / `SceneHost`，**区别只有编排**。
+选哪套由 `lib/useCompact.ts`（视口宽度，响应式）与 `lib/platform.ts` 的 `isMobileOS`（能不能开第二个窗口）共同决定。
+窄屏的横切调整集中在 `styles/compact.css`，**全部包在媒体查询里**，桌面端不受影响。
+
 **为什么不让前端判平台**：一旦 UI 里散落 `if (isAndroid)`，加第三个平台就要重写一遍。**能力探测**让新增平台只多一个 provider 实现。
 
 ---
@@ -794,7 +803,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / 两个独立窗口）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
-**验证状态**：`cargo test` 26 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 283 KB / CSS 31 KB）。
+**验证状态**：`cargo test` 26 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 288 KB / CSS 36 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
@@ -809,6 +818,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 忘了开 asset 协议 / 忘了放行目录 | 照片全是碎图 | Cargo 开 `protocol-asset` + `assetProtocol.enable` + 运行时 `allow_directory(vault)` |
 | 把 HEIC 直接塞进 `<img>` | 网格里一片碎图（iPhone 直出就是 HEIC） | 先生成缩略图；解不开就查扩展名给占位 + 原文件路径 |
 | 把导入日当成拍摄日 | 从相册导旧照片，日期全是"今天" | 读 EXIF `DateTimeOriginal` 存 `takenAt`；读不到才退回 `addedAt` |
+| 在移动端调 `open_vault_manager` / `open_settings` | 第二个窗口开不出来，调用失败或毫无反应 | **Android / iOS 只有一个 WebView 窗口**：移动端必须做成内嵌页面（见 `app/MobileShell.tsx`） |
 | 把删除做成真删文件 | 同步时另一台设备把记录"复活"，用户也没法反悔 | 写**墓碑**（`deletedAt`），列表默认不显示；真删盘留给将来的"清理回收站" |
 | 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |

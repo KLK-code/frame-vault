@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/layers.css"; // 必须最先导入：声明层顺序
 import "./styles/reset.css";
+import "./styles/compact.css"; // 窄屏横切调整（触摸目标 / 安全区 / 面板堆叠）
 import "./tokens.css";
 import App from "./App";
 import VaultManagerWindow from "./app/VaultManagerWindow";

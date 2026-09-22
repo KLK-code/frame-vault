@@ -20,7 +20,9 @@ FrameVault 是一个**开放、本地优先、可扩展**的跨平台照片与�
 | 包管理 | pnpm（workspace） | Tauri CLI 用 `@tauri-apps/cli` 作为 devDependency，**永远不要 `cargo install tauri-cli`** |
 | 许可 | Apache-2.0 | 引入新依赖前先看 `docs/REFERENCES.md` 的许可证红线 |
 
-**平台范围**：**Windows 仍是主开发平台；macOS 已验证可编译、可运行**（2026-09 实测：`cargo test` / `pnpm exec tsc --noEmit` / `pnpm build` / `pnpm tauri dev` 全通，窗口走系统原生红黄绿，见 `src-tauri/tauri.macos.conf.json`）。**Android 及"调用系统相机拍照"仍明确推迟**到专门的 Android 适配阶段——不要为了 Android 提前设计跨平台抽象。
+**平台范围**：**Windows 仍是主开发平台；macOS 已验证可编译、可运行**（2026-09 实测：`cargo test` / `pnpm exec tsc --noEmit` / `pnpm build` / `pnpm tauri dev` 全通，窗口走系统原生红黄绿，见 `src-tauri/tauri.macos.conf.json`）。**Android：界面适配已开始**（手机骨架 + 窄屏横切调整已落地），但**构建环境（JDK / Android SDK / NDK / Rust 交叉目标）与真机验证尚未做**——
+所以"能编出 APK"这句话现在还不成立，别把它当已完成。调用系统相机仍推迟到需要时再写 Kotlin 插件。
+**不要为了 Android 提前设计跨平台抽象**：Android 的差异目前只体现为"窗口开不出来"和"屏幕窄"。
 
 ## 2. 分层与依赖方向（最容易被改坏的地方）
 
@@ -49,6 +51,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **平台差异只允许出现在两处**：后端 `commands/window.rs`（窗口 builder 的 `#[cfg(target_os = "macos")]` 分支）
   与前端 `lib/platform.ts`（唯一的 OS 判断）。**别在别处写 `if (isMac)` / `#[cfg]`**——
   每多一处，就多一处“只在一边编译过”的机会。真要加第三处，先改这一条。
+- **两套骨架**：桌面 = 左场景树 + 右场景舞台（`App.tsx` 里的 `DesktopShell`）；手机 = 顶部场景切换 + 主题渲染区 + 底部标签栏（`app/MobileShell.tsx`）。
+  两者**共用同一份能力与数据**（`useFolders` / `useActiveFolder` / `useSceneData` / `SceneHost`），**区别只有编排**。
+  走哪套由 `lib/useCompact.ts`（视口宽度，响应式）与 `isMobileOS`（能不能开第二个窗口）共同决定。
 
 ## 3. 数据模型铁律
 
@@ -122,6 +127,8 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
+- **窄屏横切调整放 `styles/compact.css`**：只放“没有哪个组件该独自负责”的调整（触摸目标下限、安全区、设置面板堆叠），
+  而且**全部包在窄屏媒体查询里** —— 桌面端一点不受影响。组件自己的样式仍旧留在组件目录。
 - 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。
 - 状态分区（README 工程约定最后一条）：持久化用户数据（Rust）/ 当前选择（`useState`）/ 视图与面板开关（`useState` + localStorage）/ 派生数据（Rust 缓存）。
   **不要合成一个大的 `page` 对象**。
@@ -171,6 +178,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 在 `commands/window.rs` 里直接链 `title_bar_style` / `hidden_title` / `traffic_light_position` | 这三个方法带 `#[cfg(target_os = "macos")]`，**Windows 直接编译不过**。必须包进 `#[cfg(target_os = "macos")]` 块，非 mac 分支保持 `.decorations(false)` |
 | 以为 `trafficLightPosition.y` 是"按钮顶边到窗口顶边的距离"，或以为 `y = 顶栏高 - 按钮高` | 都不是。tao 把标题栏容器高度设成 `按钮frame高 + y`，容器顶边钉在窗口顶边，按钮却保留它到容器**底边**的距离 —— 于是 **y 每 +1，红黄绿就往下 1px**。实测 `按钮中心 = y + 2`：顶栏 32px 要居中就是 `y = 14`（x=20 对齐 20~72px，前端留 80px）。对不齐别推公式，`screencapture` 截图量按钮中心，改成 `中心 - 2`。**y 只有一份**（`tauri.macos.conf.json` 的主窗口配置），子窗口在 `native_titlebar()` 里从 `app.config()` 读，别在 Rust 里再抄一个常量；因此改顶栏高度只需同步 **JSON + `tokens.css`** 两处 |
 | 想自己写 `onDoubleClick` 做"双击顶栏最大化" | 不用写：Tauri 注入的 `drag.js` 已经带了，而且 macOS 上专门走 `mouseup`（鼠标移开还能取消），比自写更贴系统习惯 |
+| 在移动端调 `open_vault_manager` / `open_settings` | 第二个窗口开不出来，调用失败或毫无反应 | **Android / iOS 只有一个 WebView 窗口**：这两样在移动端必须做成**内嵌页面**（见 `app/MobileShell.tsx`） |
 | 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
@@ -198,16 +206,19 @@ apps/framevault/
 │   ├── App.tsx / App.css       主窗口外壳：左场景树 + 右场景舞台 + 可拖分隔条
 │   ├── main.tsx                入口：按窗口 label 分派
 │   ├── app/                    TitleBar / 独立窗口外壳 / window.css
+│   │                           MobileShell.tsx（手机骨架：顶栏 + 标签栏 + 整屏弹层）
 │   ├── features/
 │   │   ├── scene/              场景层：useFolders（数据+归类）/ SceneTree / SceneHost /
 │   │   │                       registry.ts（主题→视图）/ mediaFormat.ts / MediaLightbox.tsx
+│   │   │                       SceneMedia.tsx（场景照片墙，手机“照片”页）
 │   │   │                       scenes/plain（普通记录）/ scenes/challenge（挑战打卡墙）
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：token schema + 实时编辑 + 跨窗口同步
 │   ├── lib/api.ts              **唯一** invoke / listen / convertFileSrc 出口
-│   ├── lib/platform.ts         前端唯一一处"现在是什么系统"的判断（isMacOS）
-│   ├── styles/                 layers.css（层顺序）/ reset.css
+│   ├── lib/platform.ts         前端唯一一处"现在是什么系统"的判断（isMacOS / isMobileOS）
+│   ├── lib/useCompact.ts       视口够不够宽（响应式，不是平台分支）
+│   ├── styles/                 layers.css（层顺序）/ reset.css / compact.css（窄屏横切调整）
 │   └── tokens.css              设计令牌：唯一允许出现裸色值的地方
 └── src-tauri/
     ├── tauri.conf.json         assetProtocol 已开；窗口 decorations: false（Windows 自绘标题栏）

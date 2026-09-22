@@ -77,6 +77,8 @@
 | 标题栏 | `.titlebar`、`.titlebar__title`、`.titlebar__actions`、`.titlebar__btn`、`.titlebar__btn--close` |
 | 主外壳 | `.app-root`、`.app`、`.sidebar`、`.sidebar__footer`、`.sidebar__icon`、`.app__divider`、`.content` |
 | 场景树（左侧） | `.scene-tree`、`.scene-tree__head`、`.scene-tree__title`、`.scene-tree__add`、`.scene-tree__compose`、`.scene-tree__compose-actions`、`.scene-tree__scroll`、`.scene-tree__empty`、`.scene-group`、`.scene-group__title`、`.scene-group__count`、`.scene-row`、`.scene-row-wrap`、`.scene-row__name`、`.scene-row__pin`、`.scene-row__more`、`.scene-row__input`、`.scene-menu` |
+| 手机骨架 | `.mobile`、`.mobile__bar`、`.mobile__scene`、`.mobile__scene-name`、`.mobile__scene-theme`、`.mobile__body`、`.mobile__settings`、`.mobile__tabs`、`.mobile__tab`、`.mobile__sheet`、`.mobile__sheet-head`、`.mobile__sheet-title`、`.mobile__sheet-done`、`.mobile__sheet-body`、`.mobile__vault`、`.mobile__vault-dot`、`.mobile__vault-name`、`.mobile__caret`、`.mobile__hint`、`.mobile__error` |
+| 场景照片墙 | `.photo-grid`、`.photo-grid__cell`、`.photo-grid__date`、`.photo-grid__fallback`、`.photo-grid__empty` |
 | 可撤销提示 | `.scene-notice`、`.scene-notice__text`、`.scene-notice__action`、`.scene-notice__close` |
 | 声明式表单 | `.fields`、`.field`、`.field__label`、`.field__unit`、`.field__control` |
 | 场景舞台（右侧） | `.scene-host`、`.scene-host--empty`、`.scene-host__head`、`.scene-host__name`、`.scene-host__theme`、`.scene-host__notice` |

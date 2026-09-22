@@ -14,3 +14,15 @@
  * 真做的时候一并处理；判错的后果只是顶栏内边距和按钮，不碰数据。
  */
 export const isMacOS = navigator.userAgent.includes("Macintosh");
+
+/**
+ * 是不是移动端系统。**用来决定"能不能再开一个窗口"**，不是用来决定长什么样的
+ * （长什么样由视口宽度决定，那是响应式，不是平台分支）。
+ *
+ * 为什么必须区分：桌面端「管理仓库」「设置」是**独立的 WebView 窗口**，
+ * 而 Android / iOS 上只有一个 WebView —— 在那儿调 open_settings 只会失败。
+ * 所以移动端要把这两样都做成内嵌页面。
+ *
+ * 同样是 UA 判断，理由与 isMacOS 一样（见上面的长注释）；iPad 桌面模式的边界也一样。
+ */
+export const isMobileOS = /Android|iPhone|iPad|iPod/.test(navigator.userAgent);

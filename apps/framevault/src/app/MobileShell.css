@@ -1,0 +1,210 @@
+@layer components {
+/* 手机骨架：整屏高度 = 视口，三段式（顶栏 / 内容 / 标签栏）。
+   安全区在这里处理：刘海与手势条（桌面端这些值是 0，不影响）。 */
+.mobile {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+}
+
+.mobile__bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: calc(var(--fv-space-2) + env(safe-area-inset-top)) var(--fv-space-3) var(--fv-space-2);
+  border-bottom: 1px solid var(--fv-color-border);
+  background: var(--fv-color-surface);
+}
+
+.mobile__scene {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+  min-height: 44px;
+  padding: 0 var(--fv-space-2);
+  border: none;
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-lg);
+  font-weight: 600;
+}
+
+.mobile__scene:active {
+  background: var(--fv-color-surface-active);
+}
+
+.mobile__scene-name {
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile__scene-theme {
+  padding: 2px 8px;
+  border: 1px solid var(--fv-color-border);
+  border-radius: 999px;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  font-weight: 400;
+}
+
+.mobile__caret {
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+}
+
+.mobile__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--fv-space-3);
+}
+
+/* 设置是自己内部滚动的两栏，外层别再滚一层 */
+.mobile__body.is-fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.mobile__settings {
+  flex: 1;
+  min-height: 0;
+}
+
+.mobile__hint,
+.mobile__error {
+  margin: 0;
+  font-size: var(--fv-text-sm);
+  line-height: var(--fv-line-height);
+  color: var(--fv-color-muted);
+}
+
+.mobile__error {
+  margin-top: var(--fv-space-3);
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border: 1px solid var(--fv-color-danger);
+  border-radius: var(--fv-radius-md);
+  color: var(--fv-color-danger);
+  overflow-wrap: anywhere;
+}
+
+/* ── 底部标签栏：拇指区 ── */
+.mobile__tabs {
+  flex: 0 0 auto;
+  display: flex;
+  border-top: 1px solid var(--fv-color-border);
+  background: var(--fv-color-surface);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile__tab {
+  flex: 1;
+  min-height: 52px;
+  border: none;
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.mobile__tab.is-active {
+  color: var(--fv-color-accent);
+  font-weight: 600;
+}
+
+.mobile__tab:active {
+  background: var(--fv-color-surface-active);
+}
+
+/* ── 整屏弹层（场景列表 / 仓库管理）── */
+.mobile__sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--fv-color-bg);
+  padding-top: env(safe-area-inset-top);
+}
+
+.mobile__sheet-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border-bottom: 1px solid var(--fv-color-border);
+  background: var(--fv-color-surface);
+}
+
+.mobile__sheet-title {
+  font-size: var(--fv-text-lg);
+  font-weight: 600;
+}
+
+.mobile__sheet-done {
+  min-height: 40px;
+  padding: 0 var(--fv-space-3);
+  border: none;
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-accent);
+  font-family: inherit;
+  font-size: var(--fv-text-base);
+}
+
+.mobile__vault {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+  min-height: 48px;
+  padding: 0 var(--fv-space-3);
+  border: none;
+  border-bottom: 1px solid var(--fv-color-border);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-base);
+}
+
+.mobile__vault:active {
+  background: var(--fv-color-surface-hover);
+}
+
+.mobile__vault-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fv-color-accent);
+}
+
+.mobile__vault-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.mobile__sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mobile__sheet-body.is-padded {
+  padding: var(--fv-space-4) var(--fv-space-3);
+}
+}

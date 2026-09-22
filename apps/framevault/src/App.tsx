@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import TitleBar from "./app/TitleBar";
 import SceneHost from "./features/scene/SceneHost";
 import SceneTree from "./features/scene/SceneTree";
-import { useFolders } from "./features/scene/useFolders";
+import { useActiveFolder, useFolders } from "./features/scene/useFolders";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
 import { confirm, openSettings } from "./lib/api";
+import { isMobileOS } from "./lib/platform";
+import { useCompact } from "./lib/useCompact";
+import MobileShell from "./app/MobileShell";
 import "./App.css";
 
 function IconSettings() {
@@ -28,30 +31,18 @@ function readWidth(): number {
 }
 
 /**
- * 主窗口 = 左（场景树）+ 右（场景舞台）。
+ * 桌面骨架：左（场景树）+ 右（场景舞台）。
  *
  * 中间那条可拖动的分隔条只影响显示（宽度记在 localStorage），不是数据。
  */
-function App() {
+function DesktopShell() {
   const { folders, scenes, groups, error, create, rename, remove, togglePinned, bindScene } =
     useFolders();
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // 选中规则两套骨架共用一份（见 useFolders 的 useActiveFolder）
+  const { activeId, setActiveId, active } = useActiveFolder(folders);
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
   const dragging = useRef(false);
   const widthRef = useRef(sidebarWidth);
-
-  // 选中的场景没了（被删/仓库换了）就自动落到第一个
-  useEffect(() => {
-    if (folders.length === 0) {
-      if (activeId !== null) setActiveId(null);
-      return;
-    }
-    if (!folders.some((folder) => folder.id === activeId)) {
-      setActiveId(folders[0].id);
-    }
-  }, [folders, activeId]);
-
-  const active = folders.find((folder) => folder.id === activeId) ?? null;
   const activeScene = active ? (scenes.find((s) => s.id === active.effectiveScene) ?? null) : null;
 
   function applyWidth(next: number, persist = false) {
@@ -163,4 +154,15 @@ function App() {
   );
 }
 
-export default App;
+/**
+ * 用哪套骨架：
+ * - **移动端系统**：只有一个 WebView 窗口，独立窗口（管理仓库 / 设置）根本开不出来，必须走手机骨架；
+ * - **窄视口**：桌面用户把窗口拉窄也走手机骨架（响应式）。
+ *
+ * 判断依据是"能不能开第二个窗口"和"够不够宽"，都不是"长什么样"——
+ * 平台相关的判断只在 lib/platform.ts 里（AGENTS §2）。
+ */
+export default function App() {
+  const compact = useCompact();
+  return isMobileOS || compact ? <MobileShell /> : <DesktopShell />;
+}

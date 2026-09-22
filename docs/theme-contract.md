@@ -81,7 +81,7 @@
 | 独立窗口 | `.window`、`.window__body` |
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
-| 管理仓库 | `.manager__head`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__status` |
+| 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
 
 命名约定：`.block__element--modifier`。**内部类名不加 `fv-` 前缀**，加了就意味着对外承诺。
 

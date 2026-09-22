@@ -13,16 +13,42 @@
   font-weight: 600;
 }
 
+.manager__head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--fv-space-2);
+}
+
 .manager__head button {
   padding: 6px 12px;
   border: 1px solid var(--fv-color-border);
   border-radius: var(--fv-radius-md);
   background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
   font-size: var(--fv-text-base);
 }
 
 .manager__head button:hover {
   background: var(--fv-color-surface-hover);
+}
+
+/* 新建是这里的主动作，给它一点颜色；其余按钮保持发丝线风格 */
+.manager__head button.is-primary {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-bg);
+}
+
+.manager__head button.is-primary:hover {
+  background: var(--fv-color-accent);
+  opacity: 0.9;
+}
+
+.manager__hint {
+  margin: calc(-1 * var(--fv-space-2)) 0 var(--fv-space-4);
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
 }
 
 .manager__empty {

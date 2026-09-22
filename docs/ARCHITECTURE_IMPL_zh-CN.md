@@ -308,7 +308,9 @@ App.tsx ──▶ features/* ──▶ lib/api.ts ──▶ (invoke / listen) �
 **外壳已经实现的交互**（都属于"视图状态"，存 `localStorage`，**不进 Vault**——见 §14）：
 
 - **侧栏宽度可拖动**：分隔条用 Pointer 事件（鼠标与触摸通用），夹在 160~480px；双击复位；聚焦后按 ← / → 也能调；**松手才写 localStorage**（不要每帧写）。
-- **仓库切换悬浮菜单**：侧栏底部的小按钮 → 向上弹出菜单（新建 / 添加 / 管理仓库…）；点菜单外面或按 Esc 关闭。管理仓库的**唯一入口**在这个菜单里，点开才是独立窗口。
+- **仓库切换悬浮菜单**：侧栏底部的小按钮 → 向上弹出菜单，**只做切换**（外加一个进入管理窗口的入口）；点菜单外面或按 Esc 关闭。
+- **写操作只在管理窗口里**：新建仓库 / 添加已有仓库 / 移除，全部放在独立窗口（`VaultManagerPanel`）。菜单是"顺手切一下"的地方，写操作放这儿误点代价大，何况"选目录 + 起名"本来就塞不进悬浮菜单。
+- **两个窗口靠事件对齐**：管理窗口改完仓库集合，Rust 广播 `vault://changed`，主窗口的切换器和场景树各自重载——不要试图用 React 状态跨窗口同步。
 
 ### 4.3 四条规则（这才是"不乱"的关键）
 
@@ -420,7 +422,7 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 | 命令 | 参数（前端传） | 返回 | 用途 | 状态 |
 |---|---|---|---|---|
 | `list_vaults` | — | `VaultInfo[]` | 取仓库列表 + 当前项 + 目录是否还存在 | ✅ |
-| `add_vault` | `path` | `VaultInfo[]` | 导入文件夹为仓库（并设为当前） | ✅ |
+| `add_vault` | `path` | `VaultInfo[]` | 添加已有仓库（必须是带 vault.json 的目录；并设为当前） | ✅ |
 | `switch_vault` | `path` | `void` | 切换当前仓库 | ✅ |
 | `forget_vault` | `path` | `VaultInfo[]` | 从列表移除（**不删磁盘文件**） | ✅ |
 | `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份） | ✅ |

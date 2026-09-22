@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  addVault,
-  createVault,
-  listVaults,
-  openVaultManager,
-  pickFolder,
-  switchVault,
-  type VaultInfo,
-} from "../../lib/api";
+import { listVaults, onVaultChanged, openVaultManager, switchVault, type VaultInfo } from "../../lib/api";
 import "./VaultSwitcher.css";
 
+/**
+ * 侧栏底部的仓库切换器。
+ *
+ * 它**只负责切换**——新建 / 添加 / 移除都在独立的管理窗口里（见 VaultManagerPanel）。
+ * 理由：菜单是"快速切一下"的地方，放写操作会让误点代价变大，
+ * 而且新增仓库需要选目录 + 填名字，悬浮菜单本来就装不下这些交互。
+ */
 export default function VaultSwitcher() {
   const [open, setOpen] = useState(false);
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
@@ -27,8 +26,12 @@ export default function VaultSwitcher() {
     }
   }
 
+  // 自己挂载时拉一次；管理窗口改了仓库列表（新建/添加/移除）会广播事件，这里跟着刷新
   useEffect(() => {
-    refresh();
+    void refresh();
+    return onVaultChanged(() => {
+      void refresh();
+    });
   }, []);
 
   // 点菜单外面 / 按 Esc 关闭
@@ -58,31 +61,6 @@ export default function VaultSwitcher() {
     }
   }
 
-  async function handleCreate() {
-    const picked = await pickFolder("选择一个文件夹作为新 Vault");
-    if (!picked) return;
-    try {
-      // 名字留空：让 Rust 从目录名推导（路径解析归 Rust）
-      setVaults(await createVault(picked));
-      setOpen(false);
-      setStatus("已创建仓库 ✅");
-    } catch (e) {
-      setStatus(String(e));
-    }
-  }
-
-  async function handleAdd() {
-    const picked = await pickFolder("选择一个文件夹作为 Vault");
-    if (!picked) return;
-    try {
-      await addVault(picked);
-      await refresh();
-      setOpen(false);
-    } catch (e) {
-      setStatus(String(e));
-    }
-  }
-
   return (
     <div className="vault-switcher" ref={boxRef}>
       <button
@@ -98,7 +76,11 @@ export default function VaultSwitcher() {
       {open && (
         <div className="vault-switcher__menu" role="menu">
           {vaults.length === 0 ? (
-            <p className="vault-switcher__empty">还没有仓库</p>
+            <p className="vault-switcher__empty">
+              还没有仓库。
+              <br />
+              打开下面的「管理仓库…」新建或添加。
+            </p>
           ) : (
             vaults.map((v) => (
               <button
@@ -121,16 +103,6 @@ export default function VaultSwitcher() {
 
           <div className="vault-switcher__sep" />
 
-          <button role="menuitem" className="vault-switcher__item" onClick={handleCreate}>
-            <span className="vault-switcher__item-name">新建仓库…</span>
-            <span className="vault-switcher__path">在一个文件夹里创建 vault.json</span>
-          </button>
-
-          <button role="menuitem" className="vault-switcher__item" onClick={handleAdd}>
-            <span className="vault-switcher__item-name">添加已有仓库…</span>
-            <span className="vault-switcher__path">必须是已经带 vault.json 的目录</span>
-          </button>
-
           <button
             role="menuitem"
             className="vault-switcher__item"
@@ -140,6 +112,7 @@ export default function VaultSwitcher() {
             }}
           >
             <span className="vault-switcher__item-name">管理仓库…</span>
+            <span className="vault-switcher__path">新建 / 添加 / 移除仓库</span>
           </button>
 
           {status && <p className="vault-switcher__error">{status}</p>}

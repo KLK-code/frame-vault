@@ -111,7 +111,13 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   主题只声明"我要什么字段 / 什么配置"，表单由核心的 `SceneFields` 渲染，**主题不许自己手写那套 input + label**。
 - **主题自己的字段按主题 id 命名空间存放**：`entry.fields["builtin.plain"].text`。
   读的时候要兼容老数据（早期直接写在 `fields` 顶层的 key），写的时候只替换自己那一个命名空间。
-- **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）已经抽出来了，新主题直接复用，**别写第四份**。
+- **基础能力默认齐备**：新建 / 编辑 / **删除（写墓碑，可撤销）** / 追加照片 / 选文件 / 刷新 / 忙碌与错误 / "这条按哪天算"——**主题不该为了这些去自己写一遍**。
+  权限上区分两种"默认"：**内置主题默认齐备且默认授权**；第三方主题同样默认齐备，但要按 `needs` 声明 + 用户同意。
+- **什么该进核心？判据：这个能力会不会改变磁盘上的数据形状？**
+  会（删除怎么标、字段怎么命名空间、照片归属怎么表达）→ **必须进核心**，所有主题共用一种格式，
+  否则一百个主题会发明一百种格式，Vault 就不再是开放格式；
+  不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
+- **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
 - 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。
 - 状态分区（README 工程约定最后一条）：持久化用户数据（Rust）/ 当前选择（`useState`）/ 视图与面板开关（`useState` + localStorage）/ 派生数据（Rust 缓存）。

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  deleteEntry,
   importMedia,
   listEntries,
   listMedia,
   newId,
   pickMediaFiles,
+  restoreEntry,
   saveEntry,
   updateEntry,
   type Entry,
@@ -47,6 +49,13 @@ export type SceneData = {
   attachPhotos: (entryId: string) => Promise<boolean>;
   /** 新建一条记录并把选中的照片全放进去 */
   createWithPhotos: (title: string, text?: string) => Promise<Entry | null>;
+  /** 删除一条记录（写墓碑，不删文件）；`notice` 会变成可撤销的提示 */
+  remove: (entry: Entry) => Promise<boolean>;
+  /** 撤销刚才那次删除 */
+  undo: () => Promise<boolean>;
+  /** 一句可撤销的提示（主题用 `SceneNotice` 显示；10 秒后自动消失） */
+  notice: string | null;
+  dismissNotice: () => void;
   clearError: () => void;
 };
 
@@ -55,6 +64,19 @@ export function useSceneData(folder: FolderNode): SceneData {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  /** 刚被删掉的那条，供撤销用 */
+  const [lastDeleted, setLastDeleted] = useState<string | null>(null);
+
+  // 提示自己会消失；消失后就不能撤销了（和大多数应用的"撤销"窗口一致）
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => {
+      setNotice(null);
+      setLastDeleted(null);
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const reload = useCallback(async () => {
     try {
@@ -186,6 +208,39 @@ export function useSceneData(folder: FolderNode): SceneData {
     [folder.id, importInto, reload],
   );
 
+  const remove = useCallback(
+    async (entry: Entry) => {
+      setBusy(entry.id);
+      try {
+        await deleteEntry(entry.id);
+        setLastDeleted(entry.id);
+        setNotice(`已删除「${entry.title || "未命名记录"}」`);
+        await reload();
+        return true;
+      } catch (err) {
+        setError(String(err));
+        return false;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [reload],
+  );
+
+  const undo = useCallback(async () => {
+    if (!lastDeleted) return false;
+    try {
+      await restoreEntry(lastDeleted);
+      setLastDeleted(null);
+      setNotice(null);
+      await reload();
+      return true;
+    } catch (err) {
+      setError(String(err));
+      return false;
+    }
+  }, [lastDeleted, reload]);
+
   return {
     entries,
     media,
@@ -200,6 +255,13 @@ export function useSceneData(folder: FolderNode): SceneData {
     importPhotos,
     attachPhotos,
     createWithPhotos,
+    remove,
+    undo,
+    notice,
+    dismissNotice: () => {
+      setNotice(null);
+      setLastDeleted(null);
+    },
     clearError: () => setError(null),
   };
 }

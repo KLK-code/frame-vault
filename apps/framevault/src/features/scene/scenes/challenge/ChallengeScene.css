@@ -283,6 +283,11 @@
   gap: var(--fv-space-2);
 }
 
+.challenge__note-actions button.is-danger {
+  border-color: var(--fv-color-danger);
+  color: var(--fv-color-danger);
+}
+
 .challenge__note-hint {
   margin: 0;
   color: var(--fv-color-muted);

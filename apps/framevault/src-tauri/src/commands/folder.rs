@@ -163,9 +163,10 @@ pub fn delete_folder(state: State<'_, AppState>, id: String) -> AppResult<Vec<Fo
     let vault_dir = active_vault(&state)?;
     let folder = read_folder(&vault_dir, &id)?;
 
+    // 只数"活着"的记录：墓碑不算还有东西（它们只等恢复或清理）
     let count = vault::list_entries(&vault_dir)?
         .iter()
-        .filter(|e| e.folder_id.as_deref() == Some(id.as_str()))
+        .filter(|e| !e.is_deleted() && e.folder_id.as_deref() == Some(id.as_str()))
         .count();
     if count > 0 {
         return Err(AppError::Invalid(format!(

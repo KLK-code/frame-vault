@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { assetUrl, type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
+import SceneNotice from "../../SceneNotice";
 import { displayableSrc, formatBytes, formatDay, localDay } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
 import { useSceneData } from "../../useSceneData";
@@ -209,6 +210,8 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
         </button>
       </div>
 
+      <SceneNotice message={data.notice} onUndo={data.undo} onDismiss={data.dismissNotice} />
+
       {data.error && <p className="challenge__error">{data.error}</p>}
 
       {cells.length === 0 ? (
@@ -268,6 +271,17 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
                     disabled={data.busy === previewEntry.id}
                   >
                     {data.busy === previewEntry.id ? "导入中…" : "＋ 加照片到这条"}
+                  </button>
+                  <button
+                    className="is-danger"
+                    onClick={() => {
+                      void data.remove(previewEntry).then((ok) => {
+                        if (ok) setPreview(null);
+                      });
+                    }}
+                    disabled={data.busy === previewEntry.id}
+                  >
+                    删除这条
                   </button>
                 </div>
               </div>

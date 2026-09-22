@@ -123,6 +123,16 @@
   cursor: default;
 }
 
+.entry__actions button.is-danger {
+  color: var(--fv-color-danger);
+}
+
+.entry__actions button.is-danger:hover:not(:disabled) {
+  border-color: var(--fv-color-danger);
+  background: transparent;
+  color: var(--fv-color-danger);
+}
+
 .entry__meta {
   margin-left: auto;
   color: var(--fv-color-muted);

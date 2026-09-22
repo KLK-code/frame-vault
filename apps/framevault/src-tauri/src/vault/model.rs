@@ -38,6 +38,11 @@ pub struct Entry {
     /// 场景自定义字段的开放区（核心不解释它的内容）
     #[serde(default = "empty_object")]
     pub fields: serde_json::Value,
+
+    /// 墓碑：删除时间。**不是真删文件**——
+    /// 同步时别的设备靠它知道"这条被删了"，用户也能反悔（PRD：删除要能传播）
+    #[serde(default)]
+    pub deleted_at: Option<String>,
 }
 
 impl Entry {
@@ -52,6 +57,7 @@ impl Entry {
             folder_id: None,
             scene: None,
             fields: empty_object(),
+            deleted_at: None,
         }
     }
 
@@ -67,6 +73,22 @@ impl Entry {
         if !now.trim().is_empty() {
             self.updated_at = now.to_string();
         }
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+
+    /// 逻辑删除：写墓碑。文件、媒体、字段全都留着——用户能后悔比省那点磁盘重要
+    pub fn mark_deleted(&mut self, now: &str) {
+        self.deleted_at = Some(now.to_string());
+        self.touch(now);
+    }
+
+    /// 从墓碑里恢复
+    pub fn restore(&mut self, now: &str) {
+        self.deleted_at = None;
+        self.touch(now);
     }
 
     /// 局部更新：**只改给到的部分**。
@@ -103,6 +125,40 @@ pub struct VaultMeta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tombstone_marks_and_restores() {
+        let mut entry = Entry::new("e1", "标题", "2026-01-01T00:00:00Z");
+        assert!(!entry.is_deleted());
+
+        entry.mark_deleted("2026-03-03T09:00:00Z");
+        assert!(entry.is_deleted());
+        assert_eq!(entry.deleted_at.as_deref(), Some("2026-03-03T09:00:00Z"));
+        assert_eq!(entry.updated_at, "2026-03-03T09:00:00Z", "删除也是一次修改");
+        assert_eq!(entry.created_at, "2026-01-01T00:00:00Z");
+
+        entry.restore("2026-03-04T09:00:00Z");
+        assert!(!entry.is_deleted());
+        assert!(entry.deleted_at.is_none());
+        assert_eq!(entry.updated_at, "2026-03-04T09:00:00Z");
+    }
+
+    #[test]
+    fn old_entry_json_without_tombstone_still_loads() {
+        let old = r#"{
+            "schemaVersion": 1,
+            "id": "e1",
+            "title": "老记录",
+            "tags": [],
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-01-01T00:00:00Z"
+        }"#;
+
+        let entry: Entry = serde_json::from_str(old).unwrap();
+        assert_eq!(entry.title, "老记录");
+        assert!(entry.deleted_at.is_none(), "老文件没有墓碑 = 活着");
+        assert!(!entry.is_deleted());
+    }
 
     #[test]
     fn update_keeps_ownership_and_created_at() {

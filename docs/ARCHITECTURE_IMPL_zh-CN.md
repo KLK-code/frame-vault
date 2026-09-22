@@ -193,7 +193,7 @@ lib.rs（组装）
 |---|---|---|
 | `vault.rs` | `list_vaults` / `add_vault` / `create_vault` / `switch_vault` / `forget_vault` / `vault_exists` | ✅ 全部 |
 | `folder.rs` | `list_folder_tree` / `create_folder` / `rename_folder` / `delete_folder` / `bind_folder_scene` / `set_folder_pinned` / `reorder_folders` / `list_scenes` | ✅ 全部 |
-| `entry.rs` | `new_id` / `save_entry` / `load_entry` / `list_entries` / `read_vault_meta` / ⬜ `delete_entry` / ⬜ `update_entry` | ✅ 除改删外 |
+| `entry.rs` | `new_id` / `save_entry` / `update_entry` / `delete_entry` / `restore_entry` / `load_entry` / `list_entries` / `read_vault_meta` | ✅ 全部 |
 | `media.rs` | `import_media`（`async`，含复制 / sha256 / 探尺寸 / 生成缩略图） / `list_media` | ✅ 本轮 |
 | `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
 | `sync.rs` | `sync_now` / `sync_status` / `cancel_sync` | M4 |
@@ -374,6 +374,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 |---|---|
 | `entries` / `media` / `mediaOf(entryId)` / `dateOf(entry)` | 本场景的记录、只属于它的媒体、"这条按哪天算"（最早照片的拍摄时间，否则记录时间） |
 | `create(title, text?)` / `edit(entry, { title?, fields? })` | 建一条 / 改一条；归属与创建时间由 Rust 保证不动 |
+| `remove(entry)` / `undo()` / `notice` | **删除（写墓碑，可撤销）**；提示由 `SceneNotice` 显示，10 秒后消失 |
 | `pickPhotos()` / `importPhotos(entryId, files)` | 原语：选文件、把文件导进某条记录（挑战用这两个自己编排"一张照片一条记录"） |
 | `attachPhotos(entryId)` / `createWithPhotos(title)` | 便利组合：往已有记录加照片 / 新建一条并放照片 |
 | `busy` / `error` / `reload()` | 忙碌与错误状态、手动刷新 |
@@ -388,6 +389,10 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 **要加"距离 / 时长"这类主题特有字段？在 manifest 里加两行声明即可**——不用改核心，也不用改别的主题。
 这是"通用能力 vs 主题特有"的分界：**通用能力进 `useSceneData`；主题特有的一律先走声明**；
 真到了声明表达不出来的那天（要跑自己的算法），才上主机 API + 权限声明（M3 之后，见 §11.6）。
+
+**判据：什么该进核心？** 看它**会不会改变磁盘上的数据形状**。会（删除怎么标、字段怎么命名空间、照片归属怎么表达）
+→ 必须进核心，所有主题共用一种格式；不会（卡片多大、点哪里、按什么排序）→ 留给主题。
+这就是"基础功能默认做好"的真正理由：不是省事，是**格式统一**（一百个主题各写一套删除 = 一百种墓碑格式，Vault 就不再开放）。
 
 **规则**：主题只决定"显示哪些、按什么顺序、点哪里触发哪个能力"。**不许在主题里再写一遍取数据 + 过滤 + 刷新**——
 普通记录与挑战能同时具备"改文字 / 追加照片"，就是因为能力只有一份。
@@ -470,8 +475,10 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | `new_id` | — | `string` | 发一个 UUIDv7 记录 id（前端不自己拼时间戳 id） | ✅ |
 | `save_entry` | `id` / `title` / `createdAt?` / `updatedAt?` / `folderId?` | `Entry` | 写一条记录（主题**由所属场景解析**后快照进 `scene`） | ✅ |
 | `update_entry` | `id` / `title?` / `fields?` / `updatedAt?` | `Entry` | 编辑已有记录：**只改给到的部分**，归属与创建时间不动（`fields` 整体替换，不深合并） | ✅ |
+| `delete_entry` | `id` / `deletedAt` | `Entry` | **逻辑删除（写墓碑）**：文件 / 媒体 / 字段都留着，随时能恢复；同步靠它传播"删除" | ✅ |
+| `restore_entry` | `id` / `now` | `Entry` | 撤销删除（清墓碑） | ✅ |
 | `load_entry` | `id` | `Entry` | 读一条记录 | ✅ |
-| `list_entries` | `folderId?` | `Entry[]` | 列记录（新的在前；给了 `folderId` 就只看那个场景；坏数据跳过） | ✅ |
+| `list_entries` | `folderId?` / `includeDeleted?` | `Entry[]` | 列记录（新的在前；**墓碑默认不出现**，要看回收站才传 `includeDeleted`；坏数据跳过） | ✅ |
 | `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份） | ✅ |
 | `import_media` | `sourcePath` / `entryId?` / `addedAt` | `MediaItem` | 把一个文件**复制**进 Vault（算 sha256 / 探尺寸 / 生成缩略图）；`async` 命令，不占主线程 | ✅ |
 | `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前；返回原文件与缩略图的**绝对路径**，前端不拼路径） | ✅ |
@@ -483,7 +490,6 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | `set_folder_pinned` | `id` / `pinned` | `FolderNode[]` | 置顶 / 取消置顶 | ✅ |
 | `reorder_folders` | `orderedIds` | `FolderNode[]` | 排序落盘（拖动排序的命令已就绪，UI 还没接） | ✅ |
 | `list_scenes` | — | `SceneInfo[]` | 可用主题清单（现在只有 `builtin.plain`） | ✅ |
-| `delete_entry` | `id` | `void` | 删除（写 tombstone） | ⬜ |
 | `open_vault_manager` | — | `void` | 打开管理窗口（已开则聚焦） | ✅ |
 | `close_vault_manager` | — | `void` | 关闭管理窗口 | ✅ |
 | `open_settings` | — | `void` | 打开设置窗口（已开则聚焦） | ✅ |
@@ -724,7 +730,6 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 
 | 命令 | 参数 | 返回 | 用途 |
 |---|---|---|---|
-| `delete_entry` | `id` | `void` | 删除记录（写 tombstone，同步时别的设备才知道“这是删了”） |
 | `set_entry_pinned` / `reorder_entries` | `id` / `…` | `Entry[]` | 记录级排序与置顶 |
 | `sync_now` / `sync_status` | — | `SyncReport` / `SyncState` | 手动同步 / 查状态（M4） |
 
@@ -766,7 +771,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 |---|---|---|---|---|
 | **持久化用户数据** | 文件夹排序、置顶、主题绑定、挑战进度、主题配置 | **Rust** | Vault 内 JSON（原子写入） | 命令 + 返回全量 |
 | **当前选择** | 选中的文件夹、当前工作区视图 | 前端（展示用），可请求 Rust 恢复 | 内存（可选写 localStorage） | `useState` |
-| **视图与面板开关** | 图库 / 列表切换、侧栏折叠、编辑面板显隐 | 前端 | 内存 | `useState` |
+| **视图与面板开关** | 图库 / 列表切换、侧栏折叠、编辑面板显隐 | 前端 | 内存（需要记住的写 localStorage） | `useState` |
 | **派生数据** | SQLite 索引、缩略图、搜索缓存 | Rust | 应用数据目录 | 命令；**可随时重建** |
 
 **三条纪律**：
@@ -778,36 +783,35 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 **为什么**：一旦把"用户排的序"和"当前打开的视图"混在一起，你会很快遇到"重启后顺序没了"或"切主题把排序重置了"这类 bug，而且很难查。**分区是给未来的自己省时间。**
 
 ---
-## 附录 A：当前已实现清单（更新于 2026-04 场景模型落地）
 
-**Rust 外壳**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出、21 个命令注册）；`error.rs`（`AppError` / `AppResult`，命令里不再手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
+## 附录 A：当前已实现清单（更新于 2026-04）
 
-**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry` / `VaultMeta` / `SCHEMA_VERSION`）、`storage.rs`（tmp + rename 原子写入，列出时跳过坏数据）、`folder.rs`（场景元数据 + 排序）、`scene.rs`（内置主题登记）、`media.rs`（媒体导入 / 哈希 / 尺寸 / 缩略图）、`id.rs`（UUIDv7）。
+**Rust 外壳**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出、29 条命令注册——含一个示例 `greet`）；`error.rs`（`AppError` / `AppResult`，命令里不手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
 
-**命令层**（`commands/`，薄适配器，23 个命令）：`vault.rs`（7 个）、`folder.rs`（8 个）、`entry.rs`（5 个）、`media.rs`（2 个，导入是 `async`）、`window.rs`（4 个，全部 `async`）。另外命令层还负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
+**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry`：`folderId` / `scene` 快照 / `fields` 开放区 / `deletedAt` 墓碑，以及 `apply_update` / `mark_deleted` / `restore`）、`storage.rs`（tmp + rename 原子写入；列出时跳过坏数据；返回**含墓碑**的全部记录）、`folder.rs`（场景元数据 / 排序 / 删场景守卫只数活记录）、`scene.rs`（内置主题登记：普通记录、挑战）、`media.rs`（导入 / sha256 / 尺寸 / EXIF 拍摄时间 / 缩略图）、`id.rs`（UUIDv7）。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / **`useSceneData` 底层能力** / `manifest.ts` 主题声明契约 / `SceneFields` 声明→表单 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`（各自 `manifest.ts` + `index.ts` + 视图））；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**验证状态**：`cargo test` 24 passed（记录 2 条新增：局部更新不许改归属与创建时间、只给一半参数时另一半必须原样保留；媒体 10 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录 / EXIF 时间归一化 / 没有 EXIF 就留空；场景 2 条：id 不重复、每个场景都有名字与描述）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 277 KB / CSS 27 KB）。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / 两个独立窗口）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+
+**验证状态**：`cargo test` 26 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 283 KB / CSS 31 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
 | 坑 | 现象 | 正确做法 |
 |---|---|---|
-| 同步命令里建窗口 | 窗口建出来但**关不掉**，进程也不退出 | 窗口相关命令加 `#[tauri::command(async)]` |
+| 同步命令里建窗口 | 窗口建出来但**关不掉**，进程也不退出 | 窗口 / 长任务命令加 `#[tauri::command(async)]` |
 | 忘记给第二个窗口授权 | 那个窗口里所有插件调用被静默拒绝 | `capabilities` 的 `windows` 要列出**每个**窗口 label |
 | 用 URL 查询串区分窗口 | 参数被编码搞坏，窗口渲染错内容 | 前端读 `getCurrentWindow().label` 判断 |
 | 只关主窗口 | 进程不退出（还有别的窗口活着） | `on_window_event` 里对主窗口 `CloseRequested` 调 `app.exit(0)` |
 | 拿着锁做磁盘 IO | 并发时卡死 | 用 `{ }` 圈小临界区，IO 放锁外 |
+| 改了 `generate_handler!` 里的命令名 | 界面报 `command xxx not found`，但 `cargo check` 一切正常 | 改了 Rust 命令名**必须重启** `pnpm tauri dev`：HMR 只换前端 |
+| 忘了开 asset 协议 / 忘了放行目录 | 照片全是碎图 | Cargo 开 `protocol-asset` + `assetProtocol.enable` + 运行时 `allow_directory(vault)` |
+| 把 HEIC 直接塞进 `<img>` | 网格里一片碎图（iPhone 直出就是 HEIC） | 先生成缩略图；解不开就查扩展名给占位 + 原文件路径 |
+| 把导入日当成拍摄日 | 从相册导旧照片，日期全是"今天" | 读 EXIF `DateTimeOriginal` 存 `takenAt`；读不到才退回 `addedAt` |
+| 把删除做成真删文件 | 同步时另一台设备把记录"复活"，用户也没法反悔 | 写**墓碑**（`deletedAt`），列表默认不显示；真删盘留给将来的"清理回收站" |
+| 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
-| 改了 `generate_handler!` 里的命令名 | 界面报 `command xxx not found`，但 `cargo check` 一切正常 | 改 Rust 侧命令名后**必须重启 `pnpm tauri dev`**：HMR 只换前端，跑着的二进制还是旧命令表 |
-| 只在两个窗口里试 | 一个窗口里“命令失效”、主题改了另一个窗口没反应 | Tauri **每个窗口是独立 `document`**；跨窗口只认事件（`emit` + 每个窗口自己 `listen`） |
-| 把 `entries/` 空目录当成仓库根 | 数据变成 `entries/entries/…` 多一层 | `is_vault()` 只认 `vault.json`，导入前必须先校验 |
-| 忘了开 asset 协议 | 照片全是碎图，控制台里 `asset://` 被拒 | Cargo 开 `protocol-asset` + `tauri.conf.json` 的 `assetProtocol.enable`，运行时还要 `asset_protocol_scope().allow_directory(vault, true)` |
-| 切换仓库后照片全碎 | 新 Vault 没被放行 | `switch_vault` / `create_vault` / `add_vault` 和启动时都要调 `allow_vault_assets` |
-| 带 alpha 的 PNG 存成 JPEG | 缩略图报错：Jpeg 不支持 Rgba8 | 先 `.to_rgb8()` 再 `save` |
-| 图省事用 `**` 放行 asset 范围 | WebView 能读整台机器的文件，前端一旦被注入就完蛋 | 只放行当前 Vault + 它的缩略图目录 |
-| 把 HEIC 直接塞进 `<img>` | 网格里一片碎图（而 iPhone 直出就是 HEIC） | 先生成缩略图；生成不了就查扩展名，给占位 + 原文件路径，别丢碎图 |
-| 把导入日当成拍摄日 | 从相册导旧照片，卡片上的日期全是"今天" | 读 EXIF `DateTimeOriginal` 存 `takenAt`；读不到才退回 `addedAt` |
-| 删掉的文件又自己回来了 | 编辑器报"找不到模块 xxx"，但 `git status` 里它是未跟踪的 `??`，`grep` 也没人 import 它 | **编辑器里那个标签页还开着**：删磁盘文件 ≠ 关标签页，会话恢复会把它写回来。关掉标签页（必要时完整重启编辑器），再 `grep` 一遍悬空引用 |
+| 用一次整文件写回改文档 | 读到一半就写回，会把文件尾部**整段截断**（本文件就栽过一次） | 改文档用定位替换（`edit` / 按行 splice），别用"读全文再写回"；写完 `tail` 看一眼尾部 |
+

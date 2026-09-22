@@ -24,6 +24,8 @@ export type Entry = {
   scene: string | null;
   /** 主题自定义字段的开放区 */
   fields: Record<string, unknown>;
+  /** 墓碑：删除时间。有值 = 已删除（文件还在，能恢复） */
+  deletedAt: string | null;
 };
 
 /** 一个场景 = 一个文件夹 + 绑定的主题。仓库层面是平的，没有父子关系。 */
@@ -182,9 +184,20 @@ export const updateEntry = (
 
 export const loadEntry = (id: string) => invoke<Entry>("load_entry", { id });
 
-/** 列出记录（新的在前）；给了 folderId 就只看那个场景里的 */
-export const listEntries = (folderId: string | null = null) =>
-  invoke<Entry[]>("list_entries", { folderId });
+/**
+ * 列出记录（新的在前）；给了 folderId 就只看那个场景里的。
+ * **墓碑默认不出现**，要回收站那种视图才传 includeDeleted。
+ */
+export const listEntries = (folderId: string | null = null, includeDeleted = false) =>
+  invoke<Entry[]>("list_entries", { folderId, includeDeleted });
+
+/** 逻辑删除：写墓碑。文件、媒体、字段都留着，随时能恢复 */
+export const deleteEntry = (id: string, deletedAt = new Date().toISOString()) =>
+  invoke<Entry>("delete_entry", { id, deletedAt });
+
+/** 撤销删除：把墓碑清掉 */
+export const restoreEntry = (id: string, now = new Date().toISOString()) =>
+  invoke<Entry>("restore_entry", { id, now });
 
 // ── 媒体 ──
 /**

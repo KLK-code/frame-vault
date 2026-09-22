@@ -4,7 +4,7 @@
 //! 归属靠 `folderId` 字段。仓库层面不嵌套，展示层才分组。
 
 use super::active_vault;
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::{self, list_entries as read_entries, read_folder, write_entry, Entry};
 use serde::Serialize;
@@ -85,6 +85,38 @@ pub fn update_entry(
     Ok(entry)
 }
 
+/// 逻辑删除（写墓碑）。
+///
+/// **不删文件、不删媒体、不删字段**：这样"删除"能被同步传播（另一台设备不会把它复活），
+/// 用户也能立刻反悔。真删盘的任务留给将来的"清理回收站"。
+#[tauri::command]
+pub fn delete_entry(
+    state: State<'_, AppState>,
+    id: String,
+    deleted_at: String,
+) -> AppResult<Entry> {
+    if deleted_at.trim().is_empty() {
+        return Err(AppError::Invalid("缺少删除时间".into()));
+    }
+
+    let vault_dir = active_vault(&state)?;
+    let mut entry = vault::read_entry(&vault_dir, &id)?;
+    entry.mark_deleted(&deleted_at);
+    write_entry(&vault_dir, &entry)?;
+    println!("[rust] delete_entry: {} 写了墓碑", entry.id);
+    Ok(entry)
+}
+
+/// 撤销删除：把墓碑清掉
+#[tauri::command]
+pub fn restore_entry(state: State<'_, AppState>, id: String, now: String) -> AppResult<Entry> {
+    let vault_dir = active_vault(&state)?;
+    let mut entry = vault::read_entry(&vault_dir, &id)?;
+    entry.restore(&now);
+    write_entry(&vault_dir, &entry)?;
+    Ok(entry)
+}
+
 #[tauri::command]
 pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<Entry> {
     let vault_dir = active_vault(&state)?;
@@ -92,20 +124,26 @@ pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<Entry> {
 }
 
 /// 列出记录。`folder_id` 给 `None` = 全部；给字符串 = 只列这个场景里的。
+///
+/// **墓碑默认不出现**（它们是"已删除"），要看得显式传 `include_deleted`——
+/// 比如将来的回收站，或者调试。
 #[tauri::command]
 pub fn list_entries(
     state: State<'_, AppState>,
     folder_id: Option<String>,
+    include_deleted: Option<bool>,
 ) -> AppResult<Vec<Entry>> {
     let vault_dir = active_vault(&state)?;
-    let all = read_entries(&vault_dir)?;
-    Ok(match folder_id.as_deref() {
-        Some(fid) => all
-            .into_iter()
-            .filter(|e| e.folder_id.as_deref() == Some(fid))
-            .collect(),
-        None => all,
-    })
+    let keep_deleted = include_deleted.unwrap_or(false);
+
+    Ok(read_entries(&vault_dir)?
+        .into_iter()
+        .filter(|e| keep_deleted || !e.is_deleted())
+        .filter(|e| match folder_id.as_deref() {
+            Some(fid) => e.folder_id.as_deref() == Some(fid),
+            None => true,
+        })
+        .collect())
 }
 
 #[tauri::command]

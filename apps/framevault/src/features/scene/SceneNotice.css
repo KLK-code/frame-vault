@@ -1,0 +1,50 @@
+@layer components {
+.scene-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-surface);
+}
+
+.scene-notice__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--fv-color-text);
+  font-size: var(--fv-text-sm);
+}
+
+.scene-notice__action {
+  flex: 0 0 auto;
+  padding: 3px 12px;
+  border: 1px solid var(--fv-color-accent);
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-accent);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.scene-notice__action:hover {
+  background: var(--fv-color-accent-hover);
+}
+
+.scene-notice__close {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-family: inherit;
+  font-size: var(--fv-text-xs);
+}
+
+.scene-notice__close:hover {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+}
+}

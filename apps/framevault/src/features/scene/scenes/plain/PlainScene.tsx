@@ -2,6 +2,7 @@ import { useState } from "react";
 import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
+import SceneNotice from "../../SceneNotice";
 import { fieldText, readField, writeFields } from "../../manifest";
 import { displayableSrc, formatBytes, formatTime } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
@@ -68,6 +69,12 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
           记录
         </button>
       </div>
+
+      <SceneNotice
+        message={data.notice}
+        onUndo={data.undo}
+        onDismiss={data.dismissNotice}
+      />
 
       {data.error && <p className="plain-scene__error">{data.error}</p>}
 
@@ -169,6 +176,13 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
                         disabled={data.busy === entry.id}
                       >
                         {data.busy === entry.id ? "导入中…" : "＋ 加照片…"}
+                      </button>
+                      <button
+                        className="is-danger"
+                        onClick={() => void data.remove(entry)}
+                        disabled={data.busy === entry.id}
+                      >
+                        删除
                       </button>
                       <span className="entry__meta">
                         {inline

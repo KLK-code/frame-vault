@@ -120,6 +120,10 @@ pub fn read_entry(vault: &Path, id: &str) -> AppResult<Entry> {
 
 /// 扫描 Vault 下所有 Entry。
 /// 原则：**一条坏数据不该毁掉整次扫描** —— 单独跳过并打日志。
+/// 列出**全部**记录（含墓碑）。
+///
+/// 领域层给的是事实，"墓碑要不要显示"是展示策略——命令层按参数过滤，
+/// 需要恢复时（撤销、回收站）还能拿到它们。
 pub fn list_entries(vault: &Path) -> AppResult<Vec<Entry>> {
     let dir = entries_dir(vault);
     if !dir.is_dir() {

@@ -515,7 +515,8 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 **输入侧（同一层）有两种编辑器，主题只挑"用哪个"**：
 
 - `MarkdownField.tsx` = textarea + 语法工具栏 + 编辑 / 预览切换。`SceneFields` 渲染多行字段时用的就是它，所以**所有主题自动都有**；
-- `MarkdownWysiwyg.tsx` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，装 `commonmark` + `gfm`）：边写边渲染、语法符号不出现。现在只有写作台用它，**`React.lazy` 按需加载**（它带着 ProseMirror 家族；实测静态引入会把主包从 417.7 KB 顶到约 749 KB，懒加载后是主包 417.7 KB + 独立 chunk 331.2 KB / gzip 101.2 KB，写作台之外一行都不下载）。
+- `MarkdownWysiwyg.tsx` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，装 `commonmark` + `gfm`）：边写边渲染、语法符号不出现。现在只有写作台用它，**`React.lazy` 按需加载**（它带着 ProseMirror 家族；实测静态引入会把主包从 417.9 KB 顶到约 752 KB，懒加载后是主包 417.9 KB + 独立 chunk 334.0 KB / gzip 102.1 KB，写作台之外一行都不下载）；
+- **剪贴板是它最容易缺的那一半**：ProseMirror 默认只处理剪贴板里的 HTML，纯文本会被原样当字面文字 —— 粘一整篇 `.md` 进来就是一堆源码（实测：粘 `FrameVault_Technical_Architecture_zh-CN.md`、`AGENTS.md`、`theme-contract.md` 都是这样）。所以它自己接了 `EditorProps.handlePaste`，靠 `EditorView.someProp` 里"编辑器 props 先于插件"的顺序压过插件：纯文本、或来源（VS Code 的 `vscode-editor-data`）声明是 Markdown 的，用 `parserCtx` 解析成 Slice 再 `replaceSelection`；带 HTML 的富文本，只有当纯文本里带**块级** Markdown（`looksLikeMarkdown`，在 `src/markdown/parse.ts`）时才抢。复制出去交给 `@milkdown/kit/plugin/clipboard`，剪贴板里给的是 Markdown 文本 —— 两头对得上，笔记才能在这个软件和编辑器之间来回搬。
 
 **编辑引擎 ≠ 渲染引擎**：`MarkdownView` 负责"把 Markdown 显示成排版"（只读投影，核心唯一的渲染器，主题不许另写）；`MarkdownWysiwyg` 负责"让你不看见语法符号地打字"（可写，是全仓库唯一 import `@milkdown/*` 的地方）。两者之间只有磁盘上那一串 Markdown 文本，所以**记录用哪个编辑器敲的，磁盘格式、渲染器、主题都不知道**。
 

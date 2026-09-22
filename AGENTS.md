@@ -142,6 +142,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **Markdown 是核心能力，不是主题私有**：解析只许走 `src/markdown/parse.ts`（别处不许 import `remark` / `unified`）；渲染走 `features/scene/markdown/`（`registry.ts` 是将来加自定义块的扩展点）；**主题不许自己写渲染器**。规矩：原始 HTML 不渲染（给可见提示）、软换行按换行显示、认不出的节点降级显示、**只读不回写**。
   **输入控件也在核心，而且有两种（主题只挑"用哪个"）**：`MarkdownField` = textarea + 语法工具栏 + 编辑/预览切换，`SceneFields` 渲染多行字段时默认就用它（表单 / 快速记录）；`MarkdownWysiwyg` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，**按需加载**），长文用。
   **主题不许自己写工具栏 / 预览 / 富文本编辑器，也不许 import `@milkdown/*` 或 `prosemirror-*`**；要文档级编辑就在视图里 `React.lazy` 引核心的 `MarkdownWysiwyg`（写作台就是这么做的），字段声明照旧写 `textarea`。两个控件的接口一模一样（`value` 进、Markdown 字符串出），所以磁盘格式和渲染器都不用知道记录是哪个编辑器敲的。
+  **粘贴也是核心能力**：所见即所得编辑器必须自己接 `EditorProps.handlePaste` —— ProseMirror 默认只认剪贴板里的 HTML，纯文本会原样变成字面文字，粘一整篇 `.md` 进来就是一屏源码。判据「这段文本像不像 Markdown」写在 `src/markdown/parse.ts` 的 `looksLikeMarkdown`，**只认块级构造**（标题 / 列表 / 代码块 / 引用 / 表格 / 分隔线），行内记号不算 —— 判据保守一点，最多少解析一次，不会把用户粘的富文本改坏。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
   只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
@@ -210,7 +211,8 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 把 Markdown 渲染塞进 p 标签 | 标题 / 列表是块级元素，浏览器自动闭合外层 p，DOM 与预期不符、排版莫名 | 容器用 div（正文那处已改）；同理别把块级元素放进 p |
 | 跨窗口状态**整份回写** | 主骨架每次重算外观都会写一次盘，把设置窗口刚改的变量 / 刚选的选择冲回旧值 —— 表现为「改了没反应」「切了没用」 | **每个字段只有一个 owner**：overrides / scheme / appearance 只有设置窗口写，applied 只有主骨架写；写盘一律 **patch 合并**（只带自己那一项），广播出去的才是合并后的完整快照 |
 | 把所见即所得编辑器当受控组件整份回写 | 每次渲染都 `replaceAll(value)`：光标被拽回开头、中文输入法串被打断、撤销栈被清，表现为"打着打着字跳了" | 编辑器**只在"外部换了内容"时回灌一次**：用 ref 记住自己刚 `onChange` 出去的那份，`value === emitted` 就直接返回；自己的输入只向上报，不往下灌 |
-| 重编辑器静态 import | 一次都没打开的写作台，也让首屏多下载 331 KB（gzip +101 KB）—— 实测主包 417.7 KB vs 静态引入后的 ~749 KB | 带框架的重编辑器一律 `React.lazy` + `Suspense`（写作台只在自己这一屏里加载它）；判断标准是"不是每次开窗都要用的东西" |
+| 重编辑器静态 import | 一次都没打开的写作台，也让首屏多下载 334 KB（gzip +102 KB）—— 实测主包 417.9 KB vs 静态引入后的 ~752 KB | 带框架的重编辑器一律 `React.lazy` + `Suspense`（写作台只在自己这一屏里加载它）；判断标准是"不是每次开窗都要用的东西" |
+| 以为所见即所得编辑器会自动把粘进来的 Markdown 排版 | 粘一整篇 `.md`（从 VS Code / 记事本 / 终端复制）得到的是一屏源码：ProseMirror 只认剪贴板里的 HTML，纯文本一律当字面文字塞进段落 | 自己接 `EditorProps.handlePaste`（编辑器 props 的优先级高于任何插件）：纯文本、或来源声明自己是 Markdown 的，走 `parserCtx` 解析后 `replaceSelection`；带 HTML 的富文本，只有当**纯文本里带块级 Markdown** 时才抢。复制出去交给 `@milkdown/kit/plugin/clipboard`，剪贴板里是 Markdown 文本 |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 

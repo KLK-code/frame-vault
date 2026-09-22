@@ -251,70 +251,159 @@ lib.rs（组装）
 
 ## 4. 前端（TypeScript + React）架构
 
-### 4.1 分层与依赖方向
+### 4.1 先说现在哪里乱（诚实版）
+
+当前 `src/` 是这样平铺的：`App.tsx` / `App.css` / `tokens.css` / `styles/reset.css` / `lib/api.ts` / `lib/pages.tsx` / `pages/*.tsx` / `VaultManagerWindow.tsx`。文件不多，但**规则不统一**，页面一多就会失控：
+
+| 症状 | 具体表现 |
+|---|---|
+| 样式有三种放法 | `App.css` 在根、`tokens.css` 在根、`reset.css` 在 `styles/`、`VaultManagerPage.css` 跟页面同目录 |
+| 页面里什么都干 | 取数据 + 转错误 + 渲染 + 写状态文案，全塞在一个 `VaultPage.tsx` 里 |
+| 没有通用原语 | 按钮、空状态、错误提示每个页面各写一遍 |
+| 注册表位置不对 | `lib/pages.tsx` 里 `import` 了**所有**页面，它是外壳的配置，不是通用工具 |
+| 外壳与页面互相知道 | `App.tsx` 里写死了页面的渲染分支 |
+| 窗口外壳和页面内容平级 | `VaultManagerWindow.tsx` 和 `pages/VaultManagerPage.tsx` 混在一层 |
+
+### 4.2 目标结构：四层 + 一个约定
 
 ```text
-main.tsx（入口：按窗口 label 分派）
-   ├── App.tsx（主窗口外壳：导航 + 页面注册表）
-   └── VaultManagerWindow.tsx（第二窗口外壳）
-          └── pages/*（页面：自己负责 h1、布局、数据获取）
-                 ├── components/*（通用组件：纯展示 + props）
-                 └── lib/api.ts（唯一 invoke 出口）
-                        └── lib/types.ts（与 Rust 对齐的类型）
+src/
+├── main.tsx                  入口：按窗口 label 分派
+├── app/                      ── 外壳层：只管窗口、导航、当前页面 ──
+│   ├── AppShell.tsx          主窗口外壳
+│   ├── AppShell.css
+│   ├── VaultManagerWindow.tsx  第二窗口外壳
+│   ├── VaultManagerWindow.css
+│   ├── navigation.ts         导航项：id / label / 分组 / 图标
+│   └── routes.ts             id → 懒加载组件（React.lazy）
+├── pages/                    ── 页面层：一个页面一个目录 ──
+│   ├── timeline/
+│   │   ├── TimelinePage.tsx
+│   │   └── TimelinePage.css
+│   ├── gallery/
+│   ├── calendar/
+│   ├── vault/
+│   │   ├── VaultPage.tsx
+│   │   └── VaultPage.css
+│   ├── vault-manager/
+│   │   ├── VaultManagerPage.tsx
+│   │   └── VaultManagerPage.css
+│   └── Placeholder.tsx
+├── features/                 ── 业务块：被 ≥2 个页面用到才升级到这里 ──
+│   ├── vault/
+│   │   ├── VaultList.tsx
+│   │   ├── VaultRow.tsx
+│   │   └── useVaults.ts      仓库数据 hook（列表 + 增删切换）
+│   └── timeline/
+│       └── EntryCard.tsx
+├── components/               ── 通用原语：与业务无关，纯 props ──
+│   ├── PageHeader.tsx        统一页头（标题 + 右侧操作区）
+│   ├── Button.tsx
+│   ├── Card.tsx
+│   ├── EmptyState.tsx
+│   ├── ErrorNotice.tsx
+│   └── Spinner.tsx
+├── lib/                      ── 数据与工具 ──
+│   ├── api.ts                唯一 invoke 出口
+│   ├── types.ts              与 Rust 对齐的类型（Entry / VaultInfo / …）
+│   ├── useAsync.ts           统一的 加载 / 错误 / 刷新
+│   └── capabilities.ts       （M2）
+├── styles/                   ── 全局样式，只有这三个文件 ──
+│   ├── reset.css
+│   ├── tokens.css
+│   └── layers.css            （M3）
+└── assets/
 ```
 
-| 层 | 目录 | 允许 | 禁止 |
-|---|---|---|---|
-| 外壳 | `App.tsx`、`VaultManagerWindow.tsx` | 导航、页面切换、窗口级布局 | 写业务逻辑、写死某个页面的内容 |
-| 页面 | `pages/` | 组合组件、调 `lib/api.ts`、管自己的状态 | 直接 `invoke`、import 别的页面 |
-| 组件 | `components/` | props 进、事件出 | 调 IPC、读写 localStorage |
-| 数据层 | `lib/api.ts` | 包装 invoke、定义类型 | 写业务规则 |
-| 样式 | `styles/`、`tokens.css` | 定义变量与全局层 | 写具体组件样式（那属于组件自己的 css） |
+**依赖方向（不许反向）**：
 
-### 4.2 文件清单与接口
+```text
+app/  ──▶ pages/ ──▶ features/ ──▶ components/
+  │            │            │
+  └────────────┴────────────┴──▶ lib/（api / types / useAsync）
+  所有层都可以用 styles/ 里的变量，但没人 import 别人的样式文件
+```
 
-| 文件 | 职责 | 对外接口 | 状态 |
-|---|---|---|---|
-| `src/main.tsx` | 入口，按窗口 label 决定渲染谁 | — | ✅ |
-| `src/App.tsx` | 主窗口外壳：侧栏导航 + 按注册表渲染当前页 | — | ✅ |
-| `src/VaultManagerWindow.tsx` | 第二窗口外壳：顶栏（关闭按钮）+ 管理界面 | — | ✅ |
-| `src/lib/api.ts` | **唯一** invoke 出口，所有命令的 TS 包装 | 见第 5.1 节 | ✅ |
-| `src/lib/types.ts` | 与 Rust 结构体一一对应的类型 | `Entry` / `Media` / `VaultInfo` / `VaultMeta` | ⬜ |
-| `src/lib/pages.tsx` | 页面注册表 | `PAGES: PageDef[]`、`type PageDef = { id, label, Page }` | ✅ |
-| `src/lib/capabilities.ts` | 能力探测（这平台能不能拍照/录像/选文件夹） | `getCapabilities(): Promise<Capabilities>` | ⬜ M2 |
-| `src/lib/platform/` | 平台适配实现（同一接口两套实现） | `capturePhoto()`、`pickFolder()` | ⬜ M2 |
-| `src/components/VaultSwitcher.tsx` | Obsidian 风格仓库切换按钮 + 弹出菜单 | props: `vaults` / `activePath` / `onSwitch` / `onOpenManager` | ⬜ 下一步 |
-| `src/components/EmptyState.tsx` | 空状态占位 | props: `title` / `hint` / `action?` | ⬜ M1 |
-| `src/components/EntryCard.tsx` | 时间线里的记录卡片 | props: `entry` / `onOpen` | ⬜ M1 |
-| `src/pages/TimelinePage.tsx` | 时间线页 | 无 props（自己取数据） | ⬜ M1 |
-| `src/pages/EntryPage.tsx` | 记录详情 / 编辑 | props: `entryId` | ⬜ M1 |
-| `src/pages/Placeholder.tsx` | 临时占位页 | props: `title` | ✅ |
-| `src/pages/VaultPage.tsx` | 当前仓库概览 + 快捷操作 | — | ✅ |
-| `src/pages/VaultManagerPage.tsx` | 仓库管理（导入 / 切换 / 移除） | — | ✅ |
-| `src/styles/reset.css` | 归零浏览器默认样式 | — | ✅ |
-| `src/tokens.css` | **Design Tokens**（`--fv-*`） | CSS 变量 | ✅ |
-| `src/styles/layers.css` | CSS Cascade Layers 顺序声明 | `@layer reset, base, components, theme, user` | ⬜ M3 |
+### 4.3 四条规则（这才是"不乱"的关键）
 
-### 4.3 状态管理：什么时候升级
-
-| 阶段 | 用什么 | 触发条件 |
+| 规则 | 说明 | 例子 |
 |---|---|---|
-| 现在 | `useState` + props 下传 | 页面内部状态、少量跨层数据 |
-| 跨页面共享（如"当前仓库"） | `Context` + `useContext` | 同一个数据要在 3 个以上页面用 |
-| 复杂异步状态（同步进度、队列） | Zustand / Jotai 等 | 出现"服务端状态缓存"需求时 |
+| **一个页面一个目录** | 页面本体 + 它的样式 + **只属于它**的子组件都放里面 | `pages/timeline/` 里可以放 `EntryCard.tsx`，删页面时删一个目录 |
+| **复用要"有人催"** | 第二个页面真要用才从 `pages/` 升级到 `features/`，第三个才升级到 `components/` | `EntryCard` 一开始就放 `pages/timeline/` |
+| **样式与组件同目录同名** | 全局样式只有 `styles/` 下三个文件；其它样式跟它服务的组件并排 | `TimelinePage.css` 与 `TimelinePage.tsx` 同目录 |
+| **外壳不认识页面内部** | 外壳只读 `app/navigation.ts` 的 id/label 和 `app/routes.ts` 的映射 | `AppShell.tsx` 不 `import` 任何 page |
 
-**为什么不要一开始就上状态库**：现在数据都来自 Rust，前端只是**展示 + 转发**；过早引入全局 store 会让边界模糊，也让你分不清"这份数据谁说了算"。**Rust 是唯一数据源**，这条别丢。
+### 4.4 页面契约（每个页面长什么样）
 
-### 4.4 样式策略
+```tsx
+// pages/timeline/TimelinePage.tsx
+export default function TimelinePage() {
+  const { data, error, loading, reload } = useAsync(listEntries, []);
 
-| 场景 | 用什么 | 例子 |
+  return (
+    <>
+      <PageHeader title="时间线" actions={<Button onClick={reload}>刷新</Button>} />
+      {loading && <Spinner />}
+      {error && <ErrorNotice message={error} onRetry={reload} />}
+      {data?.length === 0 && <EmptyState title="还没有记录" hint="点「新建」开始" />}
+      {data?.map((e) => <EntryCard key={e.id} entry={e} />)}
+    </>
+  );
+}
+```
+
+三条约定：
+
+1. **默认导出、无 props**（页面自己取数据，不靠外壳喂）；
+2. **页面自己渲染 `PageHeader`**（外壳不替它写标题——这是"每页一套设计"的前提）；
+3. **loading / error / empty 三态用统一原语**，不各写各的文案。
+
+### 4.5 三个复用层级的判定
+
+```text
+只用一次          → 留在页面目录里（pages/timeline/EntryCard.tsx）
+两个页面都要用     → 升级到 features/（features/timeline/EntryCard.tsx）
+跟业务无关（纯 props）→ 升级到 components/（components/Card.tsx）
+```
+
+**不要提前升级**。放进 `components/` 的东西一旦带上业务字段，就会变成"什么都能塞的杂物间"。
+
+### 4.6 样式归属规则
+
+| 场景 | 放哪 | 例子 |
 |---|---|---|
-| 颜色 / 间距 / 圆角 | `tokens.css` 的 `var(--fv-*)` | `color: var(--fv-color-text)` |
-| 页面 / 组件私有样式 | 同名 `.css` 文件 + 语义化类名 | `VaultPage.css` 里的 `.vault-page__head` |
-| 需要绝对隔离时 | CSS Modules（`*.module.css`） | 包装第三方组件 |
-| 主题切换 | 覆盖变量，不改任何组件 | `html[data-theme="dark"] { --fv-color-bg: ... }` |
+| 全局变量 / 主题 | `styles/tokens.css` | `--fv-color-text` |
+| 浏览器默认样式归零 | `styles/reset.css` | `box-sizing`、`margin: 0` |
+| 外壳布局 | `app/AppShell.css` | `.app`、`.sidebar`、`.content` |
+| 页面 / 组件私有 | 与它同目录同名 | `pages/vault/VaultPage.css` |
+| 需要绝对隔离 | `*.module.css` | 包装第三方组件时 |
 
-**规则**：组件里**不写裸色值**。任何颜色都应该在 `tokens.css` 里有名字——这是 FV-THM-001（P0）的直接落地。
+**外壳的类名由外壳拥有**：页面不该去写 `.content` 或 `.sidebar`。页面拿到的只有"一块可用区域"，怎么在里面排版是页面自己的事。
+
+### 4.7 迁移步骤（每步都能跑，别一次改完）
+
+| 步 | 做什么 | 验证 |
+|---|---|---|
+| 1 | 建目录骨架：`styles/`、`app/`、`components/`、`features/` | `ls src` |
+| 2 | `tokens.css` 与 `styles/reset.css` 都搬到 `styles/`，改 `main.tsx` 的 import | `pnpm dev` 样式不变 |
+| 3 | 抽通用原语：`PageHeader` / `Button` / `EmptyState` / `ErrorNotice` / `Spinner` | 页面里不再有内联的加载文案 |
+| 4 | 建 `lib/types.ts`、`lib/useAsync.ts`；把 `api.ts` 里的类型搬过去 | `tsc --noEmit` 通过 |
+| 5 | 页面搬进目录：`pages/VaultPage.tsx` → `pages/vault/VaultPage.tsx`（同步改 import） | `pnpm dev` 页面正常 |
+| 6 | 抽业务块：把管理页的列表抽成 `features/vault/VaultList.tsx` + `useVaults.ts` | 管理页变薄，逻辑可复用 |
+| 7 | 外壳改名：`App.tsx` → `app/AppShell.tsx`；`lib/pages.tsx` → `app/navigation.ts` + `app/routes.ts`（`React.lazy` 按需加载） | 切页面正常，新增页面只改这两个文件 |
+| 8 | 更新本文档 §4 与 `README` 的结构说明 | — |
+
+**纪律**：每一步结束都跑一次 `pnpm exec tsc --noEmit` 和 `pnpm dev` 看一眼；出问题只可能是刚做的那一步。
+
+### 4.8 什么时候引入路由库 / 状态库
+
+| 引入什么 | 触发条件 | 现在需要吗 |
+|---|---|---|
+| react-router 等路由库 | 页面需要 **URL 参数 / 前进后退 / 深链接** | ❌ 不需要，注册表 + `useState` 够用 |
+| Zustand / Jotai 等状态库 | 出现"服务端状态缓存"痛点（同一份远端数据多处使用、需要失效策略） | ❌ 不需要，Rust 是唯一数据源，`useAsync` 够用 |
+| CSS-in-JS | 需要运行时主题计算 | ❌ 不需要，CSS 变量就是干这个的 |
+
+**为什么先不引入**：现在前端只是**展示 + 转发**，引入路由和 store 会让"谁说了算"变模糊，也让你多学两个库却解决不了当下的问题。
 
 ---
 

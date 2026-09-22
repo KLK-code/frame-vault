@@ -207,7 +207,8 @@
 /* ── 缩略图网格 ── */
 .entry__media {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  /* 上限写具体像素而不是 1fr：格子封顶后，窗口变宽只会多出列，不会让每张图跟着膨胀 */
+  grid-template-columns: repeat(auto-fill, minmax(112px, 176px));
   gap: var(--fv-space-2);
   margin: 0;
   padding: 0;

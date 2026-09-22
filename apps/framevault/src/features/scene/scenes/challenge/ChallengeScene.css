@@ -220,7 +220,8 @@
 /* ── 打卡墙：一格一张照片，日期压在右下角 ── */
 .wall {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  /* 同上：给打卡墙的格子一个上限（148~220），换列时跳变有上界 */
+  grid-template-columns: repeat(auto-fill, minmax(148px, 220px));
   gap: var(--fv-space-3);
   margin: 0;
   padding: 0;

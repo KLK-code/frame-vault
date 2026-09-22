@@ -1,7 +1,8 @@
 @layer components {
 .photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  /* 同上：手机照片墙 104~168 */
+  grid-template-columns: repeat(auto-fill, minmax(104px, 168px));
   gap: var(--fv-space-2);
   margin: 0;
   padding: 0;

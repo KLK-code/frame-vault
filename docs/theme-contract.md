@@ -15,7 +15,7 @@
 
 ## 1. 公开 token 表（可安全覆盖）
 
-共 **39** 个变量，其中 **17** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
+共 **38** 个变量，其中 **17** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
 
 | 变量 | 默认值 | 用途 | 深色主题覆盖 |
 |---|---|---|---|
@@ -23,9 +23,9 @@
 | `--fv-color-surface` | `#fbfbfa` | 侧栏 / 面板 / 标题栏（Obsidian 的暖灰） | ✅ |
 | `--fv-color-surface-hover` | `#f2f2f1` | 悬停底色 | ✅ |
 | `--fv-color-surface-active` | `#eaeae8` | 按下底色 | ✅ |
-| `--fv-color-text` | `#1f1f1f` | 正文 | ✅ |
+| `--fv-color-text` | `#171717` | 正文：接近纯黑，屏幕上更利落 | ✅ |
 | `--fv-color-text-strong` | `#0a0a0a` | 需要更实（标题栏按钮悬停等） | ✅ |
-| `--fv-color-muted` | `#8a8a8a` | 次要文字 | ✅ |
+| `--fv-color-muted` | `#6e6e6e` | 次要文字：不要太浅，浅了整屏发灰 | ✅ |
 | `--fv-color-border` | `#e8e8e6` | 发丝线 | ✅ |
 | `--fv-color-border-strong` | `#d8d8d5` | 需要用力的分隔线 | ✅ |
 | `--fv-color-accent` | `#086ddd` | — | ✅ |
@@ -47,20 +47,22 @@
 | `--fv-space-5` | `24px` | — | — |
 | `--fv-space-6` | `32px` | — | — |
 | `--fv-space-7` | `48px` | — | — |
-| `--fv-font-sans` | `system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif` | — | — |
 | `--fv-font-mono` | `ui-monospace, "Cascadia Mono", Consolas, monospace` | — | — |
-| `--fv-text-xs` | `11px` | — | — |
-| `--fv-text-sm` | `12px` | — | — |
-| `--fv-text-base` | `13px` | — | — |
-| `--fv-text-lg` | `15px` | — | — |
-| `--fv-text-xl` | `20px` | — | — |
-| `--fv-line-height` | `1.55` | — | — |
+| `--fv-text-xs` | `12px` | — | — |
+| `--fv-text-sm` | `13px` | — | — |
+| `--fv-text-base` | `15px` | — | — |
+| `--fv-text-lg` | `17px` | — | — |
+| `--fv-text-xl` | `22px` | — | — |
+| `--fv-line-height` | `1.6` | — | — |
 | `--fv-shadow-1` | `0 1px 2px rgba(0, 0, 0, 0.06)` | — | — |
 | `--fv-shadow-2` | `0 6px 24px rgba(0, 0, 0, 0.1)` | — | ✅ |
 | `--fv-shadow-menu` | `var(--fv-shadow-2)` | 兼容旧名字 | — |
 
 规则：
 
+0. **对比度**：正文类文字（`--fv-color-text`）对比度要 ≥ **4.5:1**，次要文字（`--fv-color-muted`）≥ **3:1**。
+   `--fv-color-muted` **只给次要文字**用（说明、路径、占位、状态行）；导航项、标题、按钮标签这类**主要文字必须用 `--fv-color-text`**——
+   错误地把 muted 当默认文字色，会让整个界面"灰蒙蒙"，这是最常见的主题事故。
 1. **只覆盖，不要新增**（新增变量属于改默认样式，请提 PR 而不是包主题）；
 2. **不要用 `!important`**——主题写在 `@layer theme` 里，本来就压过组件层（见第 4 节）；
 3. **深色模式**：覆盖 `[data-theme="dark"]` 里同一批变量，组件一行都不用改。

@@ -13,9 +13,9 @@
     --fv-color-surface-active: #eaeae8; /* 按下底色 */
 
     /* ── 颜色：文字 ── */
-    --fv-color-text: #1f1f1f; /* 正文 */
+    --fv-color-text: #171717; /* 正文：接近纯黑，屏幕上更利落 */
     --fv-color-text-strong: #0a0a0a; /* 需要更实（标题栏按钮悬停等） */
-    --fv-color-muted: #8a8a8a; /* 次要文字 */
+    --fv-color-muted: #6e6e6e; /* 次要文字：不要太浅，浅了整屏发灰 */
 
     /* ── 颜色：线 ── */
     --fv-color-border: #e8e8e6; /* 发丝线 */
@@ -83,9 +83,9 @@
     --fv-color-surface-hover: #2f2f2f;
     --fv-color-surface-active: #383838;
 
-    --fv-color-text: #dcdcdc;
-    --fv-color-text-strong: #f5f5f5;
-    --fv-color-muted: #9a9a9a;
+    --fv-color-text: #e3e3e3;
+    --fv-color-text-strong: #f7f7f7;
+    --fv-color-muted: #a3a3a3;
 
     --fv-color-border: #363636;
     --fv-color-border-strong: #4a4a4a;

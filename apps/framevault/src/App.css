@@ -20,7 +20,7 @@
   flex-direction: column;
   padding: var(--fv-space-4) var(--fv-space-3);
   background: var(--fv-color-surface);
-  color: var(--fv-color-muted);
+  color: var(--fv-color-text);
 }
 
 .sidebar h2 {
@@ -43,7 +43,7 @@
   border-radius: var(--fv-radius-sm);
   background: transparent;
   font-size: var(--fv-text-base);
-  color: var(--fv-color-muted);
+  color: var(--fv-color-text);
   text-align: left;
 }
 
@@ -75,7 +75,7 @@
   border: none;
   border-radius: var(--fv-radius-sm);
   background: transparent;
-  color: var(--fv-color-muted);
+  color: var(--fv-color-text);
 }
 
 .sidebar__icon:hover {

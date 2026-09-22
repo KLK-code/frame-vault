@@ -39,7 +39,7 @@
     border: none;
     border-radius: var(--fv-radius-sm);
     background: transparent;
-    color: var(--fv-color-muted);
+    color: var(--fv-color-text);
     font-size: var(--fv-text-base);
     text-align: left;
   }

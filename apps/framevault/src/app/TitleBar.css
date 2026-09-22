@@ -13,7 +13,7 @@
 
 .titlebar__title {
   font-size: var(--fv-text-sm);
-  color: var(--fv-color-muted);
+  color: var(--fv-color-text);
 }
 
 .titlebar__actions {

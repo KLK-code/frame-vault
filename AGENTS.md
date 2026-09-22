@@ -46,6 +46,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **`invoke` / `listen` / `convertFileSrc` / 插件调用只能出现在 `lib/api.ts`**。别的文件一律从这里 import。
 - 样式跟组件同目录同名；**组件不许 import 别人的样式文件**。
 - 依赖方向单向。外壳不许 import 主题视图的内部实现（只认 `FolderNode` / `SceneInfo` 这类契约类型）。
+- **平台差异只允许出现在两处**：后端 `commands/window.rs`（窗口 builder 的 `#[cfg(target_os = "macos")]` 分支）
+  与前端 `lib/platform.ts`（唯一的 OS 判断）。**别在别处写 `if (isMac)` / `#[cfg]`**——
+  每多一处，就多一处“只在一边编译过”的机会。真要加第三处，先改这一条。
 
 ## 3. 数据模型铁律
 

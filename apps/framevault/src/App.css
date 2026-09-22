@@ -91,6 +91,7 @@
   flex: 1;
   min-width: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: var(--fv-space-5) var(--fv-space-6);
   background: var(--fv-color-bg);
 }

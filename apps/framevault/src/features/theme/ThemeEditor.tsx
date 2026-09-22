@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { TOKEN_GROUPS } from "./tokenSchema";
 import { useColorScheme, useThemeOverrides, type ColorScheme } from "./useThemeOverrides";
+import { PRESETS } from "./presets";
+import { useAppearanceChoice } from "./useAppearance";
 import "./ThemeEditor.css";
 
 /** 尽量把任意颜色写法转成 #rrggbb，给 <input type="color"> 用 */
@@ -19,6 +21,7 @@ function toHex(value: string): string {
 export default function ThemeEditor() {
   const { overrides, set, reset, resetOne, exportCss } = useThemeOverrides();
   const { scheme, setScheme } = useColorScheme();
+  const { choice, setChoice } = useAppearanceChoice();
   const [status, setStatus] = useState("");
 
   /** 当前生效值：有覆盖用覆盖，没有就读 tokens 算出来的值 */
@@ -45,6 +48,33 @@ export default function ThemeEditor() {
 
   return (
     <div className="theme-editor">
+      <h3 className="settings__group-title">外观预设</h3>
+      <div className="settings__card">
+        <div className="settings__row">
+          <div className="settings__text">
+            <span className="settings__label">整套配色</span>
+            <span className="settings__desc">
+              换的是整个软件的样子（所有窗口）。「跟随主题」= 听当前场景主题的推荐；
+              下面单独调过的值始终优先。
+            </span>
+          </div>
+          <div className="theme-editor__control">
+            <select
+              className="theme-editor__select"
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+            >
+              <option value="">跟随主题</option>
+              {PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.desc}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <h3 className="settings__group-title">配色模式</h3>
       <div className="settings__card">
         <div className="settings__row">

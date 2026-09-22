@@ -26,6 +26,10 @@
     --fv-color-accent-soft: #e8f1fd; /* 选中底色 */
     --fv-color-accent-hover: #f0f5fc; /* 悬停淡色 */
 
+    /* ── 外壳：侧栏选中行（归外观管，不由当前场景是哪个主题决定）── */
+    --fv-nav-active-bg: var(--fv-color-accent-soft);
+    --fv-nav-active-fg: var(--fv-color-accent);
+
     /* ── 颜色：状态 ── */
     --fv-color-danger: #c0392b;
     --fv-color-danger-strong: #e81123; /* 关闭按钮悬停（Windows 习惯色） */
@@ -48,9 +52,9 @@
     --fv-titlebar-inset-mac: 80px;
 
     /* ── 圆角 ── */
-    --fv-radius-sm: 4px;
-    --fv-radius-md: 6px;
-    --fv-radius-lg: 10px;
+    --fv-radius-sm: 6px;
+    --fv-radius-md: 9px;
+    --fv-radius-lg: 16px;
 
     /* ── 间距（等比）── */
     --fv-space-1: 4px;
@@ -113,111 +117,5 @@
     --fv-color-on-accent: #172333;
 
     --fv-shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45);
-  }
-}
-
-/* 内置主题的默认外观。声明在 :root 上，使用户的内联 token 覆盖始终优先。
-   仅含主骨架的窗口匹配；设置与仓库管理独立窗口不受当前场景影响。 */
-@layer base {
-  :root:has(.app-root[data-scene]) {
-    --fv-radius-sm: 6px;
-    --fv-radius-md: 9px;
-    --fv-radius-lg: 16px;
-    --fv-color-focus-ring: var(--fv-color-accent);
-    --fv-color-selection: var(--fv-color-accent-soft);
-  }
-  :root:has(.app-root[data-scene="builtin.plain"]) {
-    color-scheme: light;
-    --fv-color-bg: #f7f4ef;
-    --fv-color-paper: #fffdfa;
-    --fv-color-surface: #f0ebe4;
-    --fv-color-surface-hover: #e9e1d7;
-    --fv-color-surface-active: #e1d7ca;
-    --fv-color-text: #39332e;
-    --fv-color-text-strong: #211f1c;
-    --fv-color-muted: #807568;
-    --fv-color-border: #e8e0d5;
-    --fv-color-border-strong: #d4c8b8;
-    --fv-color-accent: #7c5e46;
-    --fv-color-accent-soft: #ebe0d3;
-    --fv-color-accent-hover: #f2ebe2;
-    --fv-color-on-accent: #ffffff;
-    --fv-scene-banner: linear-gradient(110deg, #f1e9de, #faf7f2 75%);
-  }
-  :root:has(.app-root[data-scene="builtin.travel"]) {
-    color-scheme: light;
-    --fv-color-bg: #f0f8f8;
-    --fv-color-paper: #ffffff;
-    --fv-color-surface: #e5f2f2;
-    --fv-color-surface-hover: #d5eaea;
-    --fv-color-surface-active: #c5e1e1;
-    --fv-color-text: #253e43;
-    --fv-color-text-strong: #15343a;
-    --fv-color-muted: #637f83;
-    --fv-color-border: #d5e7e7;
-    --fv-color-border-strong: #b7d5d6;
-    --fv-color-accent: #167c80;
-    --fv-color-accent-soft: #cce9e8;
-    --fv-color-accent-hover: #e2f2f1;
-    --fv-color-on-accent: #ffffff;
-    --fv-scene-banner: linear-gradient(115deg, #cee9eb, #ecf7f5 80%);
-  }
-  :root[data-theme="dark"]:has(.app-root[data-scene="builtin.plain"]) {
-    color-scheme: dark;
-    --fv-color-bg: #24211e;
-    --fv-color-paper: #2b2723;
-    --fv-color-surface: #201d1b;
-    --fv-color-surface-hover: #36302a;
-    --fv-color-surface-active: #45392f;
-    --fv-color-text: #e7dfd5;
-    --fv-color-text-strong: #fff5e9;
-    --fv-color-muted: #b8a99a;
-    --fv-color-border: #40372f;
-    --fv-color-border-strong: #625344;
-    --fv-color-accent: #d5ad87;
-    --fv-color-accent-soft: #49392d;
-    --fv-color-accent-hover: #372e27;
-    --fv-color-on-accent: #261e17;
-    --fv-scene-banner: linear-gradient(115deg, #392d24, #24211e);
-  }
-  :root[data-theme="dark"]:has(.app-root[data-scene="builtin.travel"]) {
-    color-scheme: dark;
-    --fv-color-bg: #152729;
-    --fv-color-paper: #1c3033;
-    --fv-color-surface: #122225;
-    --fv-color-surface-hover: #263e42;
-    --fv-color-surface-active: #2e4e51;
-    --fv-color-text: #dbedec;
-    --fv-color-text-strong: #edfffd;
-    --fv-color-muted: #9bb8bb;
-    --fv-color-border: #2c4649;
-    --fv-color-border-strong: #436a6d;
-    --fv-color-accent: #77cfcb;
-    --fv-color-accent-soft: #294c4c;
-    --fv-color-accent-hover: #233d40;
-    --fv-color-on-accent: #102e30;
-    --fv-scene-banner: linear-gradient(115deg, #244345, #152729);
-  }
-  :root:has(.app-root[data-scene="builtin.challenge"]) {
-    color-scheme: dark;
-    --fv-color-bg: #1c1e21;
-    --fv-color-paper: #25272b;
-    --fv-color-surface: #191b1e;
-    --fv-color-surface-hover: #303237;
-    --fv-color-surface-active: #3a3c41;
-    --fv-color-text: #eeeae5;
-    --fv-color-text-strong: #ffffff;
-    --fv-color-muted: #aaa6a1;
-    --fv-color-border: #36373a;
-    --fv-color-border-strong: #505054;
-    --fv-color-accent: #ff7a35;
-    --fv-color-accent-soft: #493026;
-    --fv-color-accent-hover: #342720;
-    --fv-color-on-accent: #241a13;
-    --fv-color-danger: #ff9186;
-    --fv-color-scrim: rgba(0, 0, 0, 0.78);
-    --fv-scene-banner: linear-gradient(115deg, #423028, #242327 75%);
-    --fv-shadow-1: 0 2px 8px rgba(0, 0, 0, .18);
-    --fv-shadow-2: 0 6px 24px rgba(0, 0, 0, .45);
   }
 }

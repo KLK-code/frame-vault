@@ -165,14 +165,9 @@
 }
 
 .scene-row.is-active {
-  background: var(--fv-color-accent-soft);
-  color: var(--fv-color-accent);
+  background: var(--fv-nav-active-bg);
+  color: var(--fv-nav-active-fg);
   font-weight: 500;
-}
-
-.app-root:is([data-scene="builtin.travel"], [data-scene="builtin.challenge"]) .scene-row.is-active {
-  background: var(--fv-color-accent);
-  color: var(--fv-color-on-accent);
 }
 
 .scene-row > svg { flex-shrink: 0; }
@@ -215,8 +210,8 @@
   opacity: 1;
 }
 
-.app-root:is([data-scene="builtin.travel"], [data-scene="builtin.challenge"]) .scene-row-wrap:has(.is-active) .scene-row__more {
-  color: var(--fv-color-on-accent);
+.scene-row-wrap:has(.is-active) .scene-row__more {
+  color: var(--fv-nav-active-fg);
 }
 
 .scene-row__more:hover {

@@ -696,10 +696,10 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 | 挂在哪 | `:root[data-appearance="preset.x"]` —— **所有窗口、所有区域** | **舞台容器**（`data-scene`）—— 作用域碰不到外壳 |
 | 代码落点 | `src/tokens.css`（默认值）、`src/skins.css`（预设）、`features/theme/`（选择与实时覆盖） | `features/scene/scenes/*` + `vault/scene.rs` 登记同一个 id |
 
-**功能主题的「巧思」白名单**（只挂舞台容器）：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、`--fv-scene-accent`、主题视图自己的排版。
+**功能主题的「巧思」白名单**（只挂舞台容器）：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、主题视图自己的排版。
 **不许**改底色 / 文字色 / 字号 / 间距 / 圆角尺度（那是“整个软件”的骨架），**不许**给外壳（标题栏 / 侧栏 / 设置窗口）着色。
 
-**优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪套预设：用户选过 > 主题的 `suggestedSkin` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
+**优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪套预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
 
 **一句判定法**：换掉它，用户的**操作流程**会变吗？会 → 功能主题；只是“整个软件换个样子” → 外观主题。
 **第二条判定法**：这条样式会影响**别的区域**（标题栏 / 侧栏 / 设置窗口）吗？会 → 它属于外观，**不许**写在主题里。
@@ -845,7 +845,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
 
@@ -871,6 +871,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
+| 用脚本裁剪 CSS 段落后没跑构建 | `lightningcss` 报 `Invalid empty selector`，位置指向一个空行 —— 其实是多了一个 `}`（删段落时把 `@layer` 的收尾括号也留下了） | 删整段后**数一遍括号**，并且先跑 `pnpm build`：括号不平衡时 dev / build 都会报，但报错位置会误导 |
 | 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏 / 侧栏 / 设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的视觉只走巧思白名单（图标 / 文案 / banner / scene-accent） |
 | 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式 | 共享组件里不许出现主题 id；要区分的观感做成 token（如 `--fv-nav-active-bg`），由**外观预设**给值 |
 | 用一次整文件写回改文档 | 读到一半就写回，会把文件尾部**整段截断**（本文件就栽过一次） | 改文档用定位替换（`edit` / 按行 splice），别用"读全文再写回"；写完 `tail` 看一眼尾部 |

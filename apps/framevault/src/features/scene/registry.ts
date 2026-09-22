@@ -24,3 +24,8 @@ export const SCENES: Record<string, SceneUnit> = {
 export function sceneOf(id: string): SceneUnit | undefined {
   return SCENES[id];
 }
+
+/** 这个主题推荐哪套外观？认不出的主题返回 undefined（回落默认预设） */
+export function suggestedAppearanceOf(id: string | undefined): string | undefined {
+  return id ? SCENES[id]?.manifest.presentation?.suggestedAppearance : undefined;
+}

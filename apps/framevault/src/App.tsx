@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import TitleBar from "./app/TitleBar";
 import SceneHost from "./features/scene/SceneHost";
 import SceneTree from "./features/scene/SceneTree";
-import { sceneOf } from "./features/scene/registry";
+import { sceneOf, suggestedAppearanceOf } from "./features/scene/registry";
 import SceneIcon from "./features/scene/SceneIcon";
 import { useActiveFolder, useFolders } from "./features/scene/useFolders";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
@@ -10,6 +10,7 @@ import { confirm, openSettings } from "./lib/api";
 import { isMobileOS } from "./lib/platform";
 import { useCompact } from "./lib/useCompact";
 import MobileShell from "./app/MobileShell";
+import { useAppearance } from "./features/theme/useAppearance";
 import "./App.css";
 
 function IconSettings() {
@@ -46,6 +47,8 @@ function DesktopShell() {
   const dragging = useRef(false);
   const widthRef = useRef(sidebarWidth);
   const activeScene = active ? (scenes.find((s) => s.id === active.effectiveScene) ?? null) : null;
+  // 外观 = 用户选过 / 当前主题推荐 / 默认；在这里算出来并广播，所有窗口一致
+  useAppearance(suggestedAppearanceOf(active?.effectiveScene));
 
   function applyWidth(next: number, persist = false) {
     const clamped = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)));
@@ -92,7 +95,7 @@ function DesktopShell() {
   }
 
   return (
-    <div className="app-root" data-scene={active?.effectiveScene}>
+    <div className="app-root">
       <TitleBar title="FrameVault" />
 
       <main className="app">

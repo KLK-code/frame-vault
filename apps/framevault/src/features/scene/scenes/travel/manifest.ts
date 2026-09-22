@@ -2,7 +2,7 @@ import type { SceneManifest } from "../../manifest";
 
 const manifest: SceneManifest = {
   presentation: {
-    icon: "mountain", eyebrow: "COLLECT MOMENTS",
+    icon: "mountain", eyebrow: "COLLECT MOMENTS", suggestedAppearance: "preset.tide",
     subtitle: "收藏世界，也收藏自己",
     signature: "On the road", motto: "去看更大的世界，记录每一段旅程。",
   },

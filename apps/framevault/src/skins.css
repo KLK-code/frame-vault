@@ -1,0 +1,152 @@
+/* 外观预设（Appearance Preset，id 形如 preset.*）
+
+   = 一整套 --fv-* 的值，挂在 <html> 上，**所有窗口、所有区域**都读它。
+   （id 命名空间：内置 preset.*；第三方 vendor.*，M3 之后再放开。）
+
+   四条规矩（见 docs/theme-contract.md §1.1）：
+     1) 每套必须**浅色 + 深色都给全**，否则切深色会露馅；
+     2) 预设之间**只许分颜色**——字号 / 间距 / 圆角尺度 / 阴影这些"骨架"值不许变，
+        三套外观要像同一个产品，不是三个 App；
+     3) 认不出的 id 什么都不匹配，于是自然回落到 tokens.css 的 :root 默认值；
+     4) 用户在设置里手调的单个 token 内联在 <html> 上，优先级永远最高。
+
+   加一套预设 = 在这里加"浅 + 深"两个块，别的文件都不用动。 */
+@layer theme {
+  /* ── 暖纸 preset.paper：米白底 + 棕色主色，耐看、不抢内容 ── */
+  :root[data-appearance="preset.paper"] {
+    color-scheme: light;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #f7f4ef;
+    --fv-color-paper: #fffdfa;
+    --fv-color-surface: #f0ebe4;
+    --fv-color-surface-hover: #e9e1d7;
+    --fv-color-surface-active: #e1d7ca;
+    --fv-color-text: #39332e;
+    --fv-color-text-strong: #211f1c;
+    --fv-color-muted: #807568;
+    --fv-color-border: #e8e0d5;
+    --fv-color-border-strong: #d4c8b8;
+    --fv-color-accent: #7c5e46;
+    --fv-color-accent-soft: #ebe0d3;
+    --fv-color-accent-hover: #f2ebe2;
+    --fv-color-on-accent: #ffffff;
+    --fv-scene-banner: linear-gradient(110deg, #f1e9de, #faf7f2 75%);
+  }
+  :root[data-appearance="preset.paper"][data-theme="dark"] {
+    color-scheme: dark;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #24211e;
+    --fv-color-paper: #2b2723;
+    --fv-color-surface: #201d1b;
+    --fv-color-surface-hover: #36302a;
+    --fv-color-surface-active: #45392f;
+    --fv-color-text: #e7dfd5;
+    --fv-color-text-strong: #fff5e9;
+    --fv-color-muted: #b8a99a;
+    --fv-color-border: #40372f;
+    --fv-color-border-strong: #625344;
+    --fv-color-accent: #d5ad87;
+    --fv-color-accent-soft: #49392d;
+    --fv-color-accent-hover: #372e27;
+    --fv-color-on-accent: #261e17;
+    --fv-scene-banner: linear-gradient(115deg, #392d24, #24211e);
+  }
+
+  /* ── 青碧 preset.tide：海边那种青绿，冷、清爽 ── */
+  :root[data-appearance="preset.tide"] {
+    color-scheme: light;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #f0f8f8;
+    --fv-color-paper: #ffffff;
+    --fv-color-surface: #e5f2f2;
+    --fv-color-surface-hover: #d5eaea;
+    --fv-color-surface-active: #c5e1e1;
+    --fv-color-text: #253e43;
+    --fv-color-text-strong: #15343a;
+    --fv-color-muted: #637f83;
+    --fv-color-border: #d5e7e7;
+    --fv-color-border-strong: #b7d5d6;
+    --fv-color-accent: #167c80;
+    --fv-color-accent-soft: #cce9e8;
+    --fv-color-accent-hover: #e2f2f1;
+    --fv-color-on-accent: #ffffff;
+    --fv-scene-banner: linear-gradient(115deg, #cee9eb, #ecf7f5 80%);
+    /* 这套主色够饱和：侧栏选中行用实心反白，比浅底更清楚 */
+    --fv-nav-active-bg: var(--fv-color-accent);
+    --fv-nav-active-fg: var(--fv-color-on-accent);
+  }
+  :root[data-appearance="preset.tide"][data-theme="dark"] {
+    color-scheme: dark;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #152729;
+    --fv-color-paper: #1c3033;
+    --fv-color-surface: #122225;
+    --fv-color-surface-hover: #263e42;
+    --fv-color-surface-active: #2e4e51;
+    --fv-color-text: #dbedec;
+    --fv-color-text-strong: #edfffd;
+    --fv-color-muted: #9bb8bb;
+    --fv-color-border: #2c4649;
+    --fv-color-border-strong: #436a6d;
+    --fv-color-accent: #77cfcb;
+    --fv-color-accent-soft: #294c4c;
+    --fv-color-accent-hover: #233d40;
+    --fv-color-on-accent: #102e30;
+    --fv-scene-banner: linear-gradient(115deg, #244345, #152729);
+    --fv-nav-active-bg: var(--fv-color-accent);
+    --fv-nav-active-fg: var(--fv-color-on-accent);
+  }
+
+  /* ── 炭火 preset.ember：橙红主色，力量感（浅色套是这轮新配的） ── */
+  :root[data-appearance="preset.ember"] {
+    color-scheme: light;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #fdf7f2;
+    --fv-color-paper: #ffffff;
+    --fv-color-surface: #f9efe7;
+    --fv-color-surface-hover: #f4e5d8;
+    --fv-color-surface-active: #eed9c6;
+    --fv-color-text: #3a2f28;
+    --fv-color-text-strong: #1f1713;
+    --fv-color-muted: #8a7466;
+    --fv-color-border: #f0e0d2;
+    --fv-color-border-strong: #dfc7b2;
+    /* 浅底上要压得住才够对比（≥4.5:1），所以比深色套的 #ff7a35 更深 */
+    --fv-color-accent: #c9500f;
+    --fv-color-accent-soft: #fde4d6;
+    --fv-color-accent-hover: #fdf0e8;
+    --fv-color-on-accent: #ffffff;
+    --fv-scene-banner: linear-gradient(115deg, #fbe0cd, #fdf8f3 78%);
+    --fv-nav-active-bg: var(--fv-color-accent);
+    --fv-nav-active-fg: var(--fv-color-on-accent);
+  }
+  :root[data-appearance="preset.ember"][data-theme="dark"] {
+    color-scheme: dark;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #1c1e21;
+    --fv-color-paper: #25272b;
+    --fv-color-surface: #191b1e;
+    --fv-color-surface-hover: #303237;
+    --fv-color-surface-active: #3a3c41;
+    --fv-color-text: #eeeae5;
+    --fv-color-text-strong: #ffffff;
+    --fv-color-muted: #aaa6a1;
+    --fv-color-border: #36373a;
+    --fv-color-border-strong: #505054;
+    --fv-color-accent: #ff7a35;
+    --fv-color-accent-soft: #493026;
+    --fv-color-accent-hover: #342720;
+    --fv-color-on-accent: #241a13;
+    --fv-color-danger: #ff9186;
+    --fv-color-scrim: rgba(0, 0, 0, 0.78);
+    --fv-scene-banner: linear-gradient(115deg, #423028, #242327 75%);
+    --fv-nav-active-bg: var(--fv-color-accent);
+    --fv-nav-active-fg: var(--fv-color-on-accent);
+  }
+}

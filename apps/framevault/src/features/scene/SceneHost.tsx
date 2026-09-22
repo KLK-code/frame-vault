@@ -33,8 +33,9 @@ export default function SceneHost({ folder, scene, onSceneConfigChange }: Props)
   const View = sceneOf(folder.effectiveScene)?.View;
   const presentation = sceneOf(folder.effectiveScene)?.manifest.presentation;
 
+  // data-scene 挂在**舞台容器**上：主题的样式作用域碰不到外壳（标题栏 / 侧栏 / 设置窗口）
   return (
-    <div className="scene-host">
+    <div className="scene-host" data-scene={folder.effectiveScene}>
       <header className="scene-host__head">
         <div className="scene-host__intro">
           <span className="scene-host__eyebrow"><SceneIcon name={presentation?.icon} size={16} />{presentation?.eyebrow ?? "FRAMEVAULT"}</span>

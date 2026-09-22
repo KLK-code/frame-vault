@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import SceneHost from "../features/scene/SceneHost";
 import SceneMedia from "../features/scene/SceneMedia";
 import SceneTree from "../features/scene/SceneTree";
+import { suggestedAppearanceOf } from "../features/scene/registry";
 import { useActiveFolder, useFolders } from "../features/scene/useFolders";
+import { useAppearance } from "../features/theme/useAppearance";
 import SettingsPanel from "../features/settings/SettingsPanel";
 import VaultManagerPanel from "../features/vault/VaultManagerPanel";
 import { confirm, listVaults } from "../lib/api";
@@ -57,6 +59,8 @@ export default function MobileShell() {
   const [sheet, setSheet] = useState<Sheet>(null);
 
   const activeScene = active ? (scenes.find((s) => s.id === active.effectiveScene) ?? null) : null;
+  // 外观 = 用户选过 / 当前主题推荐 / 默认（和桌面骨架同一套规则）
+  useAppearance(suggestedAppearanceOf(active?.effectiveScene));
 
   async function handleDelete(folder: { id: string; name: string }) {
     const ok = await confirm(
@@ -68,7 +72,7 @@ export default function MobileShell() {
   }
 
   return (
-    <div className="app-root" data-scene={active?.effectiveScene}>
+    <div className="app-root">
       {/*
         桌面窗口必须保留自绘标题栏：Windows 上窗口是 decorations: false，
         它是**唯一**能拖动 / 最小化 / 关闭的地方。去掉就变成"窗口卡死在那儿"。

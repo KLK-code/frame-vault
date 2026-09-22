@@ -15,11 +15,11 @@
 **“皮肤 / Skin” 不是独立概念**：它就是外观主题的**手段 ②（组件规则）**，稳定性较弱。
 写主题请优先用手段 ①；手段 ② 用到的类名如果不在公开表里，随时可能变。
 
-**功能主题的「巧思」白名单**（只挂舞台容器，碰不到标题栏 / 侧栏 / 设置窗口）：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、`--fv-scene-accent`、主题视图自己的排版。除此之外一律归外观主题。
+**功能主题的「巧思」白名单**（只挂舞台容器，碰不到标题栏 / 侧栏 / 设置窗口）：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、主题视图自己的排版。除此之外一律归外观主题。
 
 ## 1. 公开 token 表（可安全覆盖）
 
-共 **41** 个变量，其中 **18** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
+共 **49** 个变量，其中 **19** 个在深色主题里也定义了一份（主题必须两套都给，否则切到深色会露馅）。
 
 | 变量 | 默认值 | 用途 | 深色主题覆盖 |
 |---|---|---|---|
@@ -41,6 +41,12 @@
 | `--fv-color-focus-ring` | `#086ddd` | 键盘聚焦环 | ✅ |
 | `--fv-color-selection` | `#d7e6fb` | 文本选中底色 | ✅ |
 | `--fv-color-scrim` | `rgba(0, 0, 0, 0.62)` | 大图 / 对话框背后的遮罩 | ✅ |
+| `--fv-nav-active-bg` | `var(--fv-color-accent-soft)` | 侧栏选中行底色（外壳风格，归外观管） | — |
+| `--fv-nav-active-fg` | `var(--fv-color-accent)` | 侧栏选中行文字 | — |
+| `--fv-color-paper` | `var(--fv-color-bg)` | 记录纸面 / 输入区底色 | — |
+| `--fv-color-on-accent` | `#ffffff` | 实心主色按钮上的文字 | ✅ |
+| `--fv-color-on-scrim` | `#ffffff` | 遮罩（大图 / 对话框）上的文字 | — |
+| `--fv-scene-banner` | `linear-gradient(120deg, var(--fv-color-accent-soft), var(--fv-color-bg))` | 场景横幅渐变（功能主题的巧思之一） | — |
 | `--fv-titlebar-height` | `32px` | — | — |
 | `--fv-titlebar-inset-mac` | `80px` | 仅 macOS：顶栏左侧让给红黄绿的位置（与 `commands/window.rs` 的 `TRAFFIC_LIGHT` 必须同时改） | — |
 | `--fv-radius-sm` | `4px` | — | — |
@@ -55,11 +61,13 @@
 | `--fv-space-7` | `48px` | — | — |
 | `--fv-font-sans` | `"MiSans", "HarmonyOS Sans SC", system-ui, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif` | — | — |
 | `--fv-font-mono` | `ui-monospace, "Cascadia Mono", Consolas, monospace` | — | — |
+| `--fv-font-display` | `"Georgia", "STKaiti", "KaiTi", serif` | 标题 / 签名用的衬线字体 | — |
 | `--fv-text-xs` | `12px` | — | — |
 | `--fv-text-sm` | `13px` | — | — |
 | `--fv-text-base` | `15px` | — | — |
 | `--fv-text-lg` | `17px` | — | — |
 | `--fv-text-xl` | `22px` | — | — |
+| `--fv-text-hero` | `34px` | 场景签名那种超大字号 | — |
 | `--fv-line-height` | `1.6` | — | — |
 | `--fv-shadow-1` | `0 1px 2px rgba(0, 0, 0, 0.06)` | — | — |
 | `--fv-shadow-2` | `0 6px 24px rgba(0, 0, 0, 0.1)` | — | ✅ |
@@ -81,13 +89,15 @@
 | 规矩 | 细节 |
 |---|---|
 | 两套色值 | **浅色 + 深色都必须给全**（沿用第 1 节第 3 条：不给就会在切深色时露馅） |
-| 只许分颜色 | 允许变：`--fv-color-*`、`--fv-scene-banner`、`--fv-scene-accent`、以及外壳层少数变量（如侧栏选中行 `--fv-nav-active-bg` / `--fv-nav-active-fg`）；**骨架值不许变**：字号、间距、圆角尺度、阴影 —— 三套外观要像**同一个产品**，不是三个 App |
+| 只许分颜色 | 允许变：`--fv-color-*`、`--fv-color-focus-ring` / `--fv-color-selection`、`--fv-scene-banner`、以及外壳层少数变量（侧栏选中行 `--fv-nav-active-bg` / `--fv-nav-active-fg`）；**骨架值不许变**：字号、间距、圆角尺度、阴影 —— 三套外观要像**同一个产品**，不是三个 App |
 | 对比度 | 正文 `--fv-color-text` ≥ 4.5:1，次要文字 `--fv-color-muted` ≥ 3:1（同第 1 节规则 0） |
 | id 命名空间 | 内置 `preset.*`；第三方 `vendor.*`（M3 之后再放开） |
 | 认不出来 | 回退默认预设，**不白屏、不报错打断** |
-| 优先级 | 用户在设置里的**单值覆盖 > 预设 > `:root` 默认**；选哪套预设：**用户选过 > 当前主题的 `suggestedSkin` 推荐 > 默认预设** |
+| 优先级 | 用户在设置里的**单值覆盖 > 预设 > `:root` 默认**；选哪套预设：**用户选过 > 当前主题的 `suggestedAppearance` 推荐 > 默认预设** |
 
-功能主题可以在 `manifest.presentation.suggestedSkin` 里**推荐**一套预设（纯数据），但**不能强制**。
+功能主题可以在 `manifest.presentation.suggestedAppearance` 里**推荐**一套预设（纯数据），但**不能强制**。
+
+内置三套（id / 名字 / 代码落点三处一致）：`preset.paper` 暖纸、`preset.tide` 青碧、`preset.ember` 炭火 —— 值写在 `src/skins.css`，列表写在 `features/theme/presets.ts`。
 
 ## 2. 公开 selector 表（承诺稳定的类名）
 

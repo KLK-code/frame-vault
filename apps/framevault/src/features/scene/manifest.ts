@@ -32,6 +32,8 @@ export type SceneManifest = {
   /** 纯展示声明，宿主与侧栏共享，不包含组件或业务规则。 */
   presentation?: {
     icon: "book" | "mountain" | "bolt";
+    /** 推荐的**外观预设** id（如 preset.tide）。只是推荐：用户选过外观就听用户的 */
+    suggestedAppearance?: string;
     eyebrow: string;
     subtitle: string;
     signature: string;

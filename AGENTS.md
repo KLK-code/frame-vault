@@ -136,8 +136,8 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - 三个内置主题共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除），仍由 `useSceneData` 提供数据。`manifest.presentation` 仅声明图标名与文案；外壳只经注册表读取。普通日记是 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`。
 - **外观与功能主题靠 CSS 作用域分开，不许互相引用**：
   - **外观主题**（一套值 = 一个预设）挂 `:root[data-appearance="preset.x"]`，**所有窗口、所有区域**都读它；用户手调的单值覆盖优先级最高（内联在 `documentElement` 上）。**外壳**（标题栏 / 侧栏 / 选中行 / 设置窗口）的风格属于外观，**不许**跟着“当前场景是哪个主题”变。
-  - **功能主题的巧思**只挂它自己的**舞台容器**（`data-scene` 在舞台那一层，**不在** `.app-root`），所以主题样式在作用域上碰不到外壳；允许的只有白名单：图标、`manifest.presentation` 的文案、`--fv-scene-banner`、`--fv-scene-accent`（舞台内少量点缀），以及主题视图自己的排版。
-  - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedSkin` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
+  - **功能主题的巧思**只挂它自己的**舞台容器**（`data-scene` 在舞台那一层，**不在** `.app-root`），所以主题样式在作用域上碰不到外壳；允许的只有白名单：图标、`manifest.presentation` 的文案、`--fv-scene-banner`，以及主题视图自己的排版。
+  - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
   - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / scene-accent），字号、间距、圆角尺度、阴影这些“骨架”值三套必须一致 —— 三套外观要像**同一个产品**，不是三个 App。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；

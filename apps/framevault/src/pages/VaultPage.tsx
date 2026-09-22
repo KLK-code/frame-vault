@@ -3,7 +3,6 @@ import {
   addVault,
   listVaults,
   loadEntry,
-  openVaultManager,
   pickFolder,
   saveEntry,
   type Entry,
@@ -68,7 +67,6 @@ export default function VaultPage() {
 
       <div className="row">
         <button onClick={handlePickVault}>选择仓库文件夹</button>
-        <button onClick={() => openVaultManager()}>管理仓库…（独立窗口）</button>
         <button onClick={handleSave} disabled={!vaultPath}>
           保存一条记录
         </button>

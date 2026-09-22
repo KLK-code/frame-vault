@@ -285,12 +285,13 @@ src/
 │   ├── vault/
 │   │   ├── VaultPage.tsx
 │   │   └── VaultPage.css
-│   ├── vault-manager/
-│   │   ├── VaultManagerPage.tsx
-│   │   └── VaultManagerPage.css
 │   └── Placeholder.tsx
 ├── features/                 ── 业务块：被 ≥2 个页面用到才升级到这里 ──
 │   ├── vault/
+│   │   ├── VaultSwitcher.tsx      悬浮菜单：切换 / 添加 / 管理仓库…
+│   │   ├── VaultSwitcher.css
+│   │   ├── VaultManagerPanel.tsx  独立窗口里的管理面板（只被窗口用）
+│   │   ├── VaultManagerPanel.css
 │   │   ├── VaultList.tsx
 │   │   ├── VaultRow.tsx
 │   │   └── useVaults.ts      仓库数据 hook（列表 + 增删切换）
@@ -323,6 +324,11 @@ app/  ──▶ pages/ ──▶ features/ ──▶ components/
   └────────────┴────────────┴──▶ lib/（api / types / useAsync）
   所有层都可以用 styles/ 里的变量，但没人 import 别人的样式文件
 ```
+
+**外壳已经实现的交互**（都属于「视图与面板开关」类状态，存 `localStorage`，**不进 Vault**——见 §14）：
+
+- **侧栏宽度可拖动**：分隔条用 Pointer 事件（鼠标和触摸通用），夹在 160~480px 之间；双击复位；聚焦后按 ← / → 也能调；**松手才写 localStorage**（不要每帧写）。
+- **仓库切换悬浮菜单**：侧栏底部的小按钮 → 向上弹出菜单（切换 / 添加 / 管理仓库…），点菜单外面或按 Esc 关闭。管理仓库的**唯一入口**在这个菜单里，点开才是独立窗口。
 
 ### 4.3 四条规则（这才是"不乱"的关键）
 
@@ -698,7 +704,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **后端**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出）；`state.rs`（仓库注册表 + `vaults.json` 持久化）；`commands.rs`（8 个命令）；`vault.rs`（`Entry` 模型、原子写入、4 个单元测试）；`examples/demo.rs`。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（侧栏 + 页面注册表）；`VaultManagerWindow.tsx`（第二窗口）；`lib/api.ts`（全部命令包装）；`lib/pages.tsx`（注册表）；`pages/{Placeholder,VaultPage,VaultManagerPage}`；`tokens.css`；`styles/reset.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：**可拖动侧栏** + 导航 + 页面注册表）；`VaultManagerWindow.tsx`（第二窗口外壳）；`features/vault/VaultSwitcher.tsx`（仓库切换悬浮菜单）；`features/vault/VaultManagerPanel.tsx`（窗口内的管理面板）；`lib/api.ts`（全部命令包装）；`lib/pages.tsx`（注册表）；`pages/{Placeholder,VaultPage}`；`tokens.css`；`styles/reset.css`。
 
 **验证状态**：`cargo test` 4 passed；`cargo check` 干净；`tsc --noEmit` 干净。
 

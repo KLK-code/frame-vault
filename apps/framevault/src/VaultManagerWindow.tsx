@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { closeVaultManager } from "./lib/api";
-import VaultManagerPage from "./pages/VaultManagerPage";
+import VaultManagerPanel from "./features/vault/VaultManagerPanel";
 import "./VaultManagerWindow.css";
 
 export default function VaultManagerWindow() {
@@ -21,7 +21,7 @@ export default function VaultManagerWindow() {
       </div>
 
       <div className="manager-window__body">
-        <VaultManagerPage />
+        <VaultManagerPanel />
       </div>
     </main>
   );

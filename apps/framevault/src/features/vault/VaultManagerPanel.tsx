@@ -6,10 +6,10 @@ import {
   pickFolder,
   switchVault,
   type VaultInfo,
-} from "../lib/api";
-import "./VaultManagerPage.css";
+} from "../../lib/api";
+import "./VaultManagerPanel.css";
 
-export default function VaultManagerPage() {
+export default function VaultManagerPanel() {
   const [vaults, setVaults] = useState<VaultInfo[]>([]);
   const [status, setStatus] = useState("");
 

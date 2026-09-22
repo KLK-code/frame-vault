@@ -4,23 +4,31 @@
   height: 100dvh; /* 手机地址栏不会顶掉视口高度 */
 }
 
+/* 宽度由 App.tsx 的 inline style 给，这里不要写死 */
 .sidebar {
-  width: 220px;
-  padding: 24px;
-  background: #ffffff;
-  border-right: 1px solid #e3e3e3;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--fv-space-5);
+  background: var(--fv-color-surface);
+  border-right: 1px solid var(--fv-color-border);
+}
+
+.sidebar h2 {
+  margin: 0 0 var(--fv-space-5);
+  font-size: 18px;
 }
 
 .sidebar nav {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--fv-space-2);
 }
 
 .sidebar nav button {
   padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--fv-radius-md);
   background: transparent;
   font-size: 15px;
   text-align: left;
@@ -28,24 +36,50 @@
 }
 
 .sidebar nav button:hover {
-  background: #f0f5fc;
-  border-color: transparent;
+  background: var(--fv-color-bg);
 }
 
 .sidebar nav button.active {
-  background: #e8f1fd;
-  color: #086ddd;
-  border-color: transparent;
+  background: var(--fv-color-bg);
+  border-color: var(--fv-color-border);
   font-weight: 600;
+}
+
+/* ── 可拖动的分隔条 ── */
+.app__divider {
+  flex: 0 0 5px;
+  position: relative;
+  cursor: col-resize;
+}
+
+.app__divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  background: var(--fv-color-accent);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.app__divider:hover::after,
+.app__divider:focus-visible::after,
+.app__divider:active::after {
+  opacity: 0.5;
+}
+
+.app__divider:focus-visible {
+  outline: none;
 }
 
 .content {
   flex: 1;
-  padding: 32px;
+  min-width: 0;
+  padding: var(--fv-space-7);
+  overflow: auto;
 }
 
 .content h1 {
-  margin: 0 0 12px;
+  margin: 0 0 var(--fv-space-3);
   font-size: 28px;
 }
 
@@ -63,4 +97,42 @@
   border-radius: var(--fv-radius-md);
   overflow: auto;
   font-size: 13px;
+}
+
+/* ── 窄屏（手机）：侧栏变底部标签栏，分隔条隐藏 ── */
+@media (max-width: 640px) {
+  .app {
+    flex-direction: column-reverse;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    padding: var(--fv-space-2);
+    padding-bottom: calc(var(--fv-space-2) + env(safe-area-inset-bottom));
+    border-right: none;
+    border-top: 1px solid var(--fv-color-border);
+  }
+
+  .sidebar h2 {
+    display: none;
+  }
+
+  .sidebar nav {
+    flex-direction: row;
+    gap: 0;
+  }
+
+  .sidebar nav button {
+    flex: 1;
+    min-height: 48px;
+    text-align: center;
+  }
+
+  .app__divider {
+    display: none;
+  }
+
+  .content {
+    padding: var(--fv-space-5);
+  }
 }

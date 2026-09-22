@@ -105,7 +105,13 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   （取记录 / 取媒体 / 媒体归属 / "这条按哪天算" / 刷新 / 忙碌与错误 / 建记录 / 改文字 / 追加照片）。
   **主题不许自己再写一遍"取记录 + 取媒体 + 过滤 + 刷新"**——那是能力散落的开始，
   也是"这个主题有这功能、那个主题没有"的来源。主题能决定的只有：显示哪些、什么顺序、点哪里触发哪个能力。
-- **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）与 `MediaLightbox.tsx`（大图 / 视频）已经抽出来了，新主题直接复用，**别写第三份**。
+- **主题是一个自治单元**：一个目录 = 一份声明（`manifest.ts`）+ 一个视图（`PlainScene.tsx` 之类）+ 自己的样式，`index.ts` 导出 `SceneUnit`。
+  注册表只做汇总（id → 单元），**不认识主题内部**。将来主题包分发时，`manifest` 原样变成 `manifest.json`。
+- **manifest 必须是纯数据**：不放函数、不放 React 组件——**它是"将来会被 Rust 读、会被第三方写"的东西**。
+  主题只声明"我要什么字段 / 什么配置"，表单由核心的 `SceneFields` 渲染，**主题不许自己手写那套 input + label**。
+- **主题自己的字段按主题 id 命名空间存放**：`entry.fields["builtin.plain"].text`。
+  读的时候要兼容老数据（早期直接写在 `fields` 顶层的 key），写的时候只替换自己那一个命名空间。
+- **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）已经抽出来了，新主题直接复用，**别写第四份**。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
 - 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。
 - 状态分区（README 工程约定最后一条）：持久化用户数据（Rust）/ 当前选择（`useState`）/ 视图与面板开关（`useState` + localStorage）/ 派生数据（Rust 缓存）。

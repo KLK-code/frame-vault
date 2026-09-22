@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { assetUrl, type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
+import SceneFields from "../../SceneFields";
 import { displayableSrc, formatBytes, formatDay, localDay } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
 import { useSceneData } from "../../useSceneData";
 import { computeChallenge, relativeDay } from "./challengeStats";
+import manifest from "./manifest";
 import "./ChallengeScene.css";
 
 /** 存在 folder.json 的 sceneConfig 里；核心（Rust）不解释它的内容 */
@@ -34,16 +36,18 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
   const [preview, setPreview] = useState<MediaItem | null>(null);
   const [draftNote, setDraftNote] = useState("");
   const [editing, setEditing] = useState(false);
-  const [draftTarget, setDraftTarget] = useState(targetDays > 0 ? String(targetDays) : "");
-  const [draftRules, setDraftRules] = useState(rules);
+  /** 设置表单的值：按 manifest.configSchema 的 key 存，主题不关心具体是哪些字段 */
+  const [draftConfig, setDraftConfig] = useState<Record<string, unknown>>({});
 
   const today = localDay(new Date().toISOString()) ?? "";
 
   // 保存完（或外部改了配置）就把表单拉回最新值；正在编辑时不打扰
   useEffect(() => {
     if (editing) return;
-    setDraftTarget(targetDays > 0 ? String(targetDays) : "");
-    setDraftRules(rules);
+    setDraftConfig({
+      targetDays: targetDays > 0 ? targetDays : "",
+      rules,
+    });
   }, [editing, targetDays, rules]);
 
   const entryById = useMemo(
@@ -100,11 +104,11 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
   }
 
   async function saveConfig() {
-    const target = Math.round(Number(draftTarget));
+    const target = Math.round(Number(draftConfig.targetDays));
     const next: ChallengeConfig = {
       ...config,
       targetDays: Number.isFinite(target) && target > 0 ? target : 0,
-      rules: draftRules.trim(),
+      rules: String(draftConfig.rules ?? "").trim(),
     };
     const ok = await onSceneConfigChange(next);
     if (ok) setEditing(false);
@@ -169,25 +173,12 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
 
       {editing && (
         <div className="challenge__settings">
-          <label className="challenge__field">
-            <span>目标天数</span>
-            <input
-              type="number"
-              min={1}
-              placeholder="30"
-              value={draftTarget}
-              onChange={(e) => setDraftTarget(e.target.value)}
-            />
-          </label>
-          <label className="challenge__field">
-            <span>挑战规则</span>
-            <textarea
-              rows={3}
-              placeholder="每天至少跑 1 公里"
-              value={draftRules}
-              onChange={(e) => setDraftRules(e.target.value)}
-            />
-          </label>
+          <SceneFields
+            fields={manifest.configSchema ?? []}
+            values={draftConfig}
+            onChange={(key, value) => setDraftConfig((prev) => ({ ...prev, [key]: value }))}
+            idPrefix="challenge-config"
+          />
           <div className="challenge__settings-actions">
             <button className="is-primary" onClick={() => void saveConfig()} disabled={data.busy === "new"}>
               保存

@@ -126,19 +126,6 @@
   background: var(--fv-color-bg);
 }
 
-.challenge__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--fv-space-1);
-}
-
-.challenge__field span {
-  color: var(--fv-color-muted);
-  font-size: var(--fv-text-xs);
-}
-
-.challenge__field input,
-.challenge__field textarea,
 .challenge__compose input {
   padding: 7px 10px;
   border: 1px solid var(--fv-color-border-strong);

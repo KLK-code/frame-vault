@@ -1,5 +1,5 @@
 import type { FolderNode, SceneInfo } from "../../lib/api";
-import { SCENE_VIEWS } from "./registry";
+import { sceneOf } from "./registry";
 import PlainScene from "./scenes/plain/PlainScene";
 import "./SceneHost.css";
 
@@ -29,7 +29,7 @@ export default function SceneHost({ folder, scene, onSceneConfigChange }: Props)
     );
   }
 
-  const View = SCENE_VIEWS[folder.effectiveScene];
+  const View = sceneOf(folder.effectiveScene)?.View;
 
   return (
     <div className="scene-host">

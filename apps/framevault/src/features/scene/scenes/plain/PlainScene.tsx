@@ -1,43 +1,44 @@
 import { useState } from "react";
 import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
+import SceneFields from "../../SceneFields";
+import { fieldText, readField, writeFields } from "../../manifest";
 import { displayableSrc, formatBytes, formatTime } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
 import { useSceneData } from "../../useSceneData";
+import manifest from "./manifest";
 import "./PlainScene.css";
 
-/** 普通记录主题自己的约定：正文放在 fields.text 里（核心不解释 fields 的内容） */
-function bodyOf(entry: Entry): string {
-  const text = entry.fields?.text;
-  return typeof text === "string" ? text : "";
-}
-
 /**
- * 内置"普通记录"：一条记录 = 标题 + 正文 + 若干照片/视频。
+ * 内置"普通记录"：一条记录 = 标题 + 正文（声明出来的字段）+ 若干照片/视频。
  *
- * 这个组件**只做展示与编排**：数据读写、归属、刷新、忙碌状态全部来自 `useSceneData`
- * （底层能力）。所以"一条记录能挂多张照片、文字能反复改"不是这个主题特有的功能，
- * 而是所有主题共用的能力——挑战主题同样有，只是它选择了别的画法。
+ * 这个组件**只做展示与编排**：数据读写走 `useSceneData`，表单走 `SceneFields`（按 manifest 生成）。
+ * 所以"一条记录能挂多张照片、文字能反复改"不是这个主题特有的功能，而是所有主题共用的能力。
  */
 export default function PlainScene({ folder, scene }: SceneViewProps) {
   const data = useSceneData(folder);
+  const fields = manifest.entryFields ?? [];
+
   const [title, setTitle] = useState("");
   const [preview, setPreview] = useState<MediaItem | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
-  const [draftText, setDraftText] = useState("");
+  const [draftFields, setDraftFields] = useState<Record<string, unknown>>({});
 
   function startEdit(entry: Entry) {
     setEditingId(entry.id);
     setDraftTitle(entry.title);
-    setDraftText(bodyOf(entry));
+    // 按声明逐个取值——主题不写"哪几个字段"，因为字段是声明出来的
+    setDraftFields(
+      Object.fromEntries(fields.map((field) => [field.key, readField(entry, scene.id, field.key)])),
+    );
   }
 
   async function saveEdit(entry: Entry) {
-    // fields 是整体替换，所以要把旧值摊开再改我们关心的那一个键
+    // fields 是整体替换，所以只替换本主题的命名空间，别的主题的字段原样带走
     const ok = await data.edit(entry, {
       title: draftTitle.trim(),
-      fields: { ...entry.fields, text: draftText },
+      fields: writeFields(entry, scene.id, draftFields),
     });
     if (ok) setEditingId(null);
   }
@@ -78,9 +79,18 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
         <ul className="plain-scene__list">
           {data.entries.map((entry) => {
             const items = data.mediaOf(entry.id);
-            const body = bodyOf(entry);
             const isEditing = editingId === entry.id;
             const edited = Boolean(entry.updatedAt) && entry.updatedAt !== entry.createdAt;
+
+            const declared = fields.map((field) => ({
+              field,
+              text: fieldText(readField(entry, scene.id, field.key)).trim(),
+            }));
+            const body = declared
+              .filter((item) => item.field.type === "textarea" && item.text)
+              .map((item) => item.text)
+              .join("\n");
+            const inline = declared.filter((item) => item.field.type !== "textarea" && item.text);
 
             return (
               <li key={entry.id} className="entry">
@@ -92,12 +102,11 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
                       placeholder="标题（可留空）"
                       onChange={(e) => setDraftTitle(e.target.value)}
                     />
-                    <textarea
-                      className="entry__edit-text"
-                      rows={4}
-                      value={draftText}
-                      placeholder="正文…"
-                      onChange={(e) => setDraftText(e.target.value)}
+                    <SceneFields
+                      fields={fields}
+                      values={draftFields}
+                      onChange={(key, value) => setDraftFields((prev) => ({ ...prev, [key]: value }))}
+                      idPrefix={`${entry.id}-edit`}
                     />
                     <div className="entry__edit-actions">
                       <button
@@ -162,6 +171,10 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
                         {data.busy === entry.id ? "导入中…" : "＋ 加照片…"}
                       </button>
                       <span className="entry__meta">
+                        {inline
+                          .map((item) => `${item.field.label} ${item.text}${item.field.unit ?? ""}`)
+                          .join(" · ")}
+                        {inline.length > 0 && items.length > 0 && " · "}
                         {items.length > 0 && `${items.length} 张`}
                         {edited && ` · 改于 ${formatTime(entry.updatedAt)}`}
                       </span>

@@ -364,8 +364,8 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 //   MediaLightbox.tsx  点开大图 / 播视频
 // 新主题直接复用，别再写第三份。
 //
-// 主题自留字段的约定各管各的：普通记录把**正文**放在 entry.fields.text（多行），
-// 挑战把说明放在 entry.title。核心不解释 fields 的内容——换主题不受影响。
+// 主题自己的字段按主题 id 命名空间存放：entry.fields["builtin.plain"].text
+// 读取时兼容老数据（早期直接写在 fields 顶层），写入时只替换自己那一个命名空间。
 ```
 
 **底层能力（主题必须用它，不许自己重造）**：`features/scene/useSceneData.ts`
@@ -377,6 +377,17 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | `pickPhotos()` / `importPhotos(entryId, files)` | 原语：选文件、把文件导进某条记录（挑战用这两个自己编排"一张照片一条记录"） |
 | `attachPhotos(entryId)` / `createWithPhotos(title)` | 便利组合：往已有记录加照片 / 新建一条并放照片 |
 | `busy` / `error` / `reload()` | 忙碌与错误状态、手动刷新 |
+
+**声明式渲染（主题怎么带来自己的"特殊功能"）**：主题在 `manifest.ts` 里声明，核心负责画出来。
+
+| 声明 | 作用 | 现在的例子 |
+|---|---|---|
+| `entryFields` | 这个主题的记录上有什么字段（核心生成录入控件与展示） | 普通记录的「正文」 |
+| `configSchema` | 这个场景的设置表单形状（存 `folder.sceneConfig`） | 挑战的「目标天数」「规则」 |
+
+**要加"距离 / 时长"这类主题特有字段？在 manifest 里加两行声明即可**——不用改核心，也不用改别的主题。
+这是"通用能力 vs 主题特有"的分界：**通用能力进 `useSceneData`；主题特有的一律先走声明**；
+真到了声明表达不出来的那天（要跑自己的算法），才上主机 API + 权限声明（M3 之后，见 §11.6）。
 
 **规则**：主题只决定"显示哪些、按什么顺序、点哪里触发哪个能力"。**不许在主题里再写一遍取数据 + 过滤 + 刷新**——
 普通记录与挑战能同时具备"改文字 / 追加照片"，就是因为能力只有一份。
@@ -775,7 +786,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，23 个命令）：`vault.rs`（7 个）、`folder.rs`（8 个）、`entry.rs`（5 个）、`media.rs`（2 个，导入是 `async`）、`window.rs`（4 个，全部 `async`）。另外命令层还负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / **`useSceneData` 底层能力** / `mediaFormat` / `MediaLightbox` / 内置普通记录与挑战两个主题）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / **`useSceneData` 底层能力** / `manifest.ts` 主题声明契约 / `SceneFields` 声明→表单 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`（各自 `manifest.ts` + `index.ts` + 视图））；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 24 passed（记录 2 条新增：局部更新不许改归属与创建时间、只给一半参数时另一半必须原样保留；媒体 10 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录 / EXIF 时间归一化 / 没有 EXIF 就留空；场景 2 条：id 不重复、每个场景都有名字与描述）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 277 KB / CSS 27 KB）。
 

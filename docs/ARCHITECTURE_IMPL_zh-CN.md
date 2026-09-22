@@ -512,7 +512,13 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 
 这个阶段明确不做：自建 Document Model（等有第二个消费者）、`remark-rehype` / `rehype-react`（直连 React，少两个依赖且不产生 HTML）、`remark-directive` 自定义块（等真有主题要用）、语法高亮。
 
-公开类名见 `docs/theme-contract.md` §2 的「Markdown 正文」一行。
+**输入侧（同一层）**：`MarkdownField.tsx` = textarea + 语法工具栏 + 编辑 / 预览切换。
+它是`SceneFields` 渲染多行字段时用的控件，所以**所有主题自动都有**；产出仍然只是一个 Markdown 字符串。
+
+三个坑（都写在代码注释里，也进了附录 B）：工具栏按钮要在 `onMouseDown` 里 `preventDefault`（否则手机键盘当场收起）；
+插入用 `setRangeText` 而不是自己拼字符串（自己拼会清掉浏览器撤销栈）；中文输入法 `composition` 期间不碰选区。
+
+公开类名见 `docs/theme-contract.md` §2 的「Markdown 输入控件」「Markdown 正文」两行。
 
 ## 5. 前后端契约（最重要的一节）
 
@@ -871,7 +877,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 解析唯一出口 + 渲染注册表 + 正文组件）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 渲染 + 注册表 + 输入控件 `MarkdownField`）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
 
@@ -897,6 +903,9 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
+| 工具栏插入用自己拼字符串 | 每次点按钮都重设 textarea 的 value，**浏览器的撤销栈被清空** —— 用户按 Ctrl+Z 一次丢掉整段 | 用 `textarea.setRangeText()` 改内容，再 `dispatchEvent(new Event('input', { bubbles: true }))` 让 React 收到；
+| 工具栏按钮不阻止默认行为 | 点按钮时 textarea 失焦，**手机键盘立刻收起**，插完还得再点一次输入框 | 按钮加 `onMouseDown={(e) => e.preventDefault()}` |
+| 输入法组合期间改选区 | 中文拼音还没上屏就被截断（用户以为输入法坏了） | 用 `compositionstart / compositionend` 标记，组合期间工具栏不动作 |
 | 把 Markdown 渲染塞进 p 标签 | 标题 / 列表 / 引用都是块级元素，浏览器会自动闭合外层 p —— DOM 跟写的不一样，排版莫名其妙 | 渲染容器用 div：正文那处已从 p 换成 div（样式仍挂在外层 div 上） |
 | 用脚本裁剪 CSS 段落后没跑构建 | `lightningcss` 报 `Invalid empty selector`，位置指向一个空行 —— 其实是多了一个 `}`（删段落时把 `@layer` 的收尾括号也留下了） | 删整段后**数一遍括号**，并且先跑 `pnpm build`：括号不平衡时 dev / build 都会报，但报错位置会误导 |
 | 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏 / 侧栏 / 设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的视觉只走巧思白名单（图标 / banner） |

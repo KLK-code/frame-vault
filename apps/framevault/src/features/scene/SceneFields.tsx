@@ -1,4 +1,5 @@
 import { fieldText, type FieldDecl } from "./manifest";
+import MarkdownField from "./markdown/MarkdownField";
 import "./SceneFields.css";
 
 type Props = {
@@ -32,13 +33,12 @@ export default function SceneFields({ fields, values, onChange, idPrefix }: Prop
             </label>
 
             {field.type === "textarea" ? (
-              <textarea
+              // 多行字段一律是 Markdown：工具栏 + 编辑/预览由核心提供，主题不用自己写
+              <MarkdownField
                 id={id}
-                className="field__control"
-                rows={4}
-                placeholder={field.placeholder}
                 value={fieldText(value)}
-                onChange={(e) => onChange(field.key, e.target.value)}
+                placeholder={field.placeholder}
+                onChange={(next) => onChange(field.key, next)}
               />
             ) : field.type === "select" ? (
               <select

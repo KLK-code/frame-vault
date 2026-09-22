@@ -5,6 +5,13 @@
      3) 触摸目标的下限参考 iOS 44pt / Android 48dp。 */
 @layer components {
   @media (max-width: 640px) {
+    /* Markdown 输入工具栏：手机上的按钮要够大（用复合选择器压过组件里的默认高度） */
+    .md-field .md-field__btn,
+    .md-field .md-field__mode {
+      min-width: 40px;
+      height: 40px;
+    }
+
     /* ── 触摸目标：小按钮放大，行内按钮加内边距 ── */
     .entry__actions button,
     .challenge__note-actions button,

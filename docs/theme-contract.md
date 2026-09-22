@@ -120,6 +120,7 @@
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
 | 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
+| Markdown 输入控件 | `.md-field`、`.md-field__head`、`.md-field__bar`、`.md-field__btn`、`.md-field__modes`、`.md-field__mode`、`.md-field__input`、`.md-field__preview`、`.md-field__empty` |
 | Markdown 正文 | `.md`、`.md__h` 与 `.md__h--1`…`.md__h--6`、`.md__p`、`.md__quote`、`.md__list`、`.md__list--ordered`、`.md__item`、`.md__item--task`、`.md__item-body`、`.md__check`、`.md__pre`、`.md__code`、`.md__inline-code`、`.md__strong`、`.md__em`、`.md__del`、`.md__hr`、`.md__link`、`.md__link-blocked`、`.md__table-wrap`、`.md__table`、`.md__cell`、`.md__cell--head`、`.md__cell--center`、`.md__cell--right`、`.md__notice` |
 
 **没写进上表的都不承诺。** 尤其是网格的**列宽数值**（`.entry__media` / `.wall` / `.photo-grid` 用的 `minmax(最小, 上限)`）属于实现细节：

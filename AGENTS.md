@@ -140,6 +140,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
   - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / `--fv-nav-active-*`），字号、间距、圆角尺度、阴影这些“骨架”值三套必须一致 —— 三套外观要像**同一个产品**，不是三个 App。
 - **Markdown 是核心能力，不是主题私有**：解析只许走 `src/markdown/parse.ts`（别处不许 import `remark` / `unified`）；渲染走 `features/scene/markdown/`（`registry.ts` 是将来加自定义块的扩展点）；**主题不许自己写渲染器**。规矩：原始 HTML 不渲染（给可见提示）、软换行按换行显示、认不出的节点降级显示、**只读不回写**。
+  **输入控件也在核心**：`SceneFields` 渲染多行字段时用的是 `MarkdownField`（工具栏 + 编辑/预览），所以每个主题自动都有；**主题不许自己写工具栏或预览**。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
   只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
@@ -202,6 +203,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |
 | 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏、侧栏、设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的外观只走巧思白名单 |
 | 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式，最难查 | 共享组件里不许出现主题 id；需要区分的观感做成 token（如 `--fv-nav-active-bg` / `--fv-nav-active-fg`），由**外观预设**给值 |
+| 工具栏插入用自己拼字符串 | 每次点按钮都重设 textarea 的值，**撤销栈被清空**：Ctrl+Z 一次丢掉整段 | 用 `setRangeText()` 插内容 + `dispatchEvent(new Event('input', {bubbles:true}))` 让 React 同步 |
+| 工具栏按钮不阻止默认行为 | 点按钮时输入框失焦，**手机键盘当场收起** | 按钮加 `onMouseDown={(e) => e.preventDefault()}` |
+| 输入法组合期间动选区 | 中文拼音串被截断，用户以为输入法坏了 | `compositionstart / compositionend` 期间工具栏不动作 |
 | 把 Markdown 渲染塞进 p 标签 | 标题 / 列表是块级元素，浏览器自动闭合外层 p，DOM 与预期不符、排版莫名 | 容器用 div（正文那处已改）；同理别把块级元素放进 p |
 | 跨窗口状态**整份回写** | 主骨架每次重算外观都会写一次盘，把设置窗口刚改的变量 / 刚选的选择冲回旧值 —— 表现为「改了没反应」「切了没用」 | **每个字段只有一个 owner**：overrides / scheme / appearance 只有设置窗口写，applied 只有主骨架写；写盘一律 **patch 合并**（只带自己那一项），广播出去的才是合并后的完整快照 |
 
@@ -237,7 +241,7 @@ apps/framevault/
 │   │   │                       SceneMedia.tsx（场景照片墙，手机“照片”页）
 │   │   │                       scenes/plain（普通记录）/ scenes/challenge（挑战打卡墙）
 │   │   │                       scenes/travel（旅行）/ SceneComposer / EntryTimeline / SceneIcon
-│   │   │                       markdown/（MarkdownView 渲染 + registry 注册表 + blocks 正文组件）
+│   │   │                       markdown/（MarkdownView 渲染 + MarkdownField 输入 + registry 注册表 + blocks 组件）
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：预设选择 + token schema + 实时编辑 + 跨窗口同步

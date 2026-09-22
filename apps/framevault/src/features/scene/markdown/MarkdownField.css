@@ -1,0 +1,58 @@
+@layer components {
+  /* Markdown 输入控件：工具栏 + 编辑 / 预览 */
+  .md-field { display: grid; gap: var(--fv-space-2); }
+
+  .md-field__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fv-space-2);
+    flex-wrap: wrap;
+  }
+  .md-field__bar { display: flex; gap: var(--fv-space-1); flex-wrap: wrap; }
+
+  .md-field__btn {
+    min-width: 30px;
+    height: 26px;
+    padding: 0 var(--fv-space-1);
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-sm);
+    background: var(--fv-color-surface);
+    color: var(--fv-color-text);
+    font-family: var(--fv-font-mono);
+    font-size: var(--fv-text-xs);
+    line-height: 1;
+    cursor: pointer;
+  }
+  .md-field__btn:hover { background: var(--fv-color-surface-hover); }
+  .md-field__btn:active { background: var(--fv-color-surface-active); }
+
+  .md-field__modes { display: flex; gap: var(--fv-space-1); }
+  .md-field__mode {
+    height: 26px;
+    padding: 0 var(--fv-space-3);
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-sm);
+    background: transparent;
+    color: var(--fv-color-muted);
+    font-size: var(--fv-text-xs);
+    cursor: pointer;
+  }
+  .md-field__mode.is-active {
+    background: var(--fv-color-accent-soft);
+    border-color: var(--fv-color-accent);
+    color: var(--fv-color-accent);
+    font-weight: 500;
+  }
+
+  .md-field__input { font-family: inherit; }
+
+  .md-field__preview {
+    min-height: 96px;
+    padding: var(--fv-space-3);
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-md);
+    background: var(--fv-color-paper);
+  }
+  .md-field__empty { margin: 0; color: var(--fv-color-muted); font-size: var(--fv-text-sm); }
+}

@@ -199,7 +199,7 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 >
                   删除
                 </button>
-                <span className="writing__hint">所见即所得：标题、列表、引用直接就是排好的样子，改完记得保存</span>
+                <span className="writing__hint">所见即所得：标题、列表、引用直接就是排好的样子，粘一整篇 Markdown 进来也会自动排版。改完记得保存</span>
               </div>
 
               {photos.length > 0 && (

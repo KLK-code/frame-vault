@@ -7,6 +7,7 @@ import {
   newId,
   pickMediaFiles,
   saveEntry,
+  updateEntry,
   type Entry,
   type MediaItem,
 } from "../../../../lib/api";
@@ -15,19 +16,33 @@ import { displayableSrc, formatBytes, formatTime } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
 import "./PlainScene.css";
 
+/** 普通记录主题自己的约定：正文放在 fields.text 里（核心不解释 fields 的内容） */
+function bodyOf(entry: Entry): string {
+  const text = entry.fields?.text;
+  return typeof text === "string" ? text : "";
+}
+
 /**
- * 内置"普通记录"：一条记录 = 一个标题 + 时间 + 若干照片/视频。
+ * 内置"普通记录"：一条记录 = 标题 + 正文 + 若干照片/视频。
  *
- * 它同时是主题的**最小示例**——别的主题照着这个骨架写就行：
- * 从 props 拿到场景 → 自己决定列出什么、怎么录入 → 数据都存进 entry.fields。
+ * 两条刻意的自由：
+ * 1. **一条记录可以挂任意多张照片**——加照片的入口就在每条记录自己身上，不用回到顶部；
+ * 2. **文字随时能改**——标题和正文都是可编辑的，不是建完就定死。
+ *
+ * 它同时是主题的**最小示例**：从 props 拿到场景 → 自己决定列出什么、怎么录入
+ * → 自己的约定存进 entry.fields。
  */
 export default function PlainScene({ folder, scene }: SceneViewProps) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyEntry, setBusyEntry] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<MediaItem | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftText, setDraftText] = useState("");
 
   const reload = useCallback(async () => {
     try {
@@ -48,7 +63,11 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
     void reload();
   }, [reload]);
 
-  /** 新建一条纯文字记录 */
+  function mediaOf(entryId: string): MediaItem[] {
+    return media.filter((item) => item.entryId === entryId);
+  }
+
+  /** 新建一条记录：只写标题，正文和照片都可以之后再补 */
   async function addText() {
     const text = title.trim();
     if (!text || busy) return;
@@ -66,11 +85,8 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
     }
   }
 
-  /**
-   * 导入照片/视频：**一次导入 = 一条记录**（今天爬山 = 12 张照片挂在同一条记录下）。
-   * 标题用输入框里的字，没写字就用日期，免得出现一堆"未命名"。
-   */
-  async function importPhotos() {
+  /** 新建时顺手导入照片：这些照片进同一条记录 */
+  async function addWithPhotos() {
     if (busy) return;
     const files = await pickMediaFiles();
     if (files.length === 0) return;
@@ -78,8 +94,7 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
     setBusy(true);
     try {
       const entryId = await newId();
-      const heading = title.trim() || `${new Date().toLocaleDateString("zh-CN")} 的照片`;
-      await saveEntry(entryId, heading, { folderId: folder.id });
+      await saveEntry(entryId, title.trim(), { folderId: folder.id });
       for (const file of files) {
         await importMedia(file, entryId);
       }
@@ -92,8 +107,46 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
     }
   }
 
-  function mediaOf(entryId: string): MediaItem[] {
-    return media.filter((item) => item.entryId === entryId);
+  /** 往**已有**记录里继续加照片——这是之前缺的那条路 */
+  async function attachPhotos(entryId: string) {
+    if (busyEntry) return;
+    const files = await pickMediaFiles();
+    if (files.length === 0) return;
+
+    setBusyEntry(entryId);
+    try {
+      for (const file of files) {
+        await importMedia(file, entryId);
+      }
+      await reload();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusyEntry(null);
+    }
+  }
+
+  function startEdit(entry: Entry) {
+    setEditingId(entry.id);
+    setDraftTitle(entry.title);
+    setDraftText(bodyOf(entry));
+  }
+
+  async function saveEdit(entry: Entry) {
+    setBusyEntry(entry.id);
+    try {
+      // fields 是整体替换，所以要把旧值摊开再改我们关心的那一个键
+      await updateEntry(entry.id, {
+        title: draftTitle.trim(),
+        fields: { ...entry.fields, text: draftText },
+      });
+      setEditingId(null);
+      await reload();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusyEntry(null);
+    }
   }
 
   return (
@@ -107,8 +160,8 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
             if (e.key === "Enter") void addText();
           }}
         />
-        <button className="is-ghost" onClick={() => void importPhotos()} disabled={busy}>
-          导入照片…
+        <button className="is-ghost" onClick={() => void addWithPhotos()} disabled={busy}>
+          新建并放照片…
         </button>
         <button onClick={() => void addText()} disabled={busy || !title.trim()}>
           记录
@@ -118,43 +171,102 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
       {error && <p className="plain-scene__error">{error}</p>}
 
       {entries.length === 0 ? (
-        <p className="plain-scene__empty">这个场景还没有记录。写点什么，或者直接导入照片。</p>
+        <p className="plain-scene__empty">
+          这个场景还没有记录。写点什么，或者直接导入照片。
+        </p>
       ) : (
         <ul className="plain-scene__list">
           {entries.map((entry) => {
             const items = mediaOf(entry.id);
+            const body = bodyOf(entry);
+            const isEditing = editingId === entry.id;
+            const edited = Boolean(entry.updatedAt) && entry.updatedAt !== entry.createdAt;
+
             return (
               <li key={entry.id} className="entry">
-                <div className="entry__head">
-                  <span className="entry__title">{entry.title}</span>
-                  <time className="entry__time" dateTime={entry.createdAt}>
-                    {formatTime(entry.createdAt)}
-                  </time>
-                </div>
+                {isEditing ? (
+                  <div className="entry__edit">
+                    <input
+                      className="entry__edit-title"
+                      value={draftTitle}
+                      placeholder="标题（可留空）"
+                      onChange={(e) => setDraftTitle(e.target.value)}
+                    />
+                    <textarea
+                      className="entry__edit-text"
+                      rows={4}
+                      value={draftText}
+                      placeholder="正文…（这段会存进这条记录自己的字段里）"
+                      onChange={(e) => setDraftText(e.target.value)}
+                    />
+                    <div className="entry__edit-actions">
+                      <button
+                        className="is-primary"
+                        onClick={() => void saveEdit(entry)}
+                        disabled={busyEntry === entry.id}
+                      >
+                        保存
+                      </button>
+                      <button onClick={() => setEditingId(null)}>取消</button>
+                      <button
+                        className="is-quiet"
+                        onClick={() => void attachPhotos(entry.id)}
+                        disabled={busyEntry === entry.id}
+                      >
+                        ＋ 也加照片…
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="entry__head">
+                      <h3 className="entry__title">{entry.title || "（没写标题）"}</h3>
+                      <time className="entry__time" dateTime={entry.createdAt}>
+                        {formatTime(entry.createdAt)}
+                      </time>
+                    </div>
 
-                {items.length > 0 && (
-                  <ul className="entry__media">
-                    {items.map((item) => {
-                      const src = displayableSrc(item);
-                      return (
-                        <li key={item.id}>
-                          <button
-                            className="thumb"
-                            title={`${item.name} · ${formatBytes(item.bytes)}`}
-                            onClick={() => setPreview(item)}
-                          >
-                            {src ? (
-                              <img loading="lazy" src={assetUrl(src)} alt={item.name} />
-                            ) : (
-                              <span className="thumb__fallback">
-                                {item.mime.startsWith("video/") ? "▶" : "?"} {item.ext.toUpperCase()}
-                              </span>
-                            )}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                    {body && <p className="entry__body">{body}</p>}
+
+                    {items.length > 0 && (
+                      <ul className="entry__media">
+                        {items.map((item) => {
+                          const src = displayableSrc(item);
+                          return (
+                            <li key={item.id}>
+                              <button
+                                className="thumb"
+                                title={`${item.name} · ${formatBytes(item.bytes)}`}
+                                onClick={() => setPreview(item)}
+                              >
+                                {src ? (
+                                  <img loading="lazy" src={assetUrl(src)} alt={item.name} />
+                                ) : (
+                                  <span className="thumb__fallback">
+                                    {item.mime.startsWith("video/") ? "▶" : "?"} {item.ext.toUpperCase()}
+                                  </span>
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+
+                    <div className="entry__actions">
+                      <button onClick={() => startEdit(entry)}>改文字</button>
+                      <button
+                        onClick={() => void attachPhotos(entry.id)}
+                        disabled={busyEntry === entry.id}
+                      >
+                        {busyEntry === entry.id ? "导入中…" : "＋ 加照片…"}
+                      </button>
+                      <span className="entry__meta">
+                        {items.length > 0 && `${items.length} 张`}
+                        {edited && ` · 改于 ${formatTime(entry.updatedAt)}`}
+                      </span>
+                    </div>
+                  </>
                 )}
               </li>
             );

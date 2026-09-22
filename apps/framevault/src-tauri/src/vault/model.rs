@@ -68,6 +68,26 @@ impl Entry {
             self.updated_at = now.to_string();
         }
     }
+
+    /// 局部更新：**只改给到的部分**。
+    ///
+    /// 归属（`folder_id` / `scene`）与 `created_at` 一律不动——"改文字"不该顺带把
+    /// 记录搬到别处，也不该改掉它的出生日期。`fields` 是整体替换，不做深合并：
+    /// 深合并在两边都只改一半时最容易产生"我明明删了怎么还在"的怪事。
+    pub fn apply_update(
+        &mut self,
+        title: Option<&str>,
+        fields: Option<serde_json::Value>,
+        now: &str,
+    ) {
+        if let Some(title) = title {
+            self.title = title.to_string();
+        }
+        if let Some(fields) = fields {
+            self.fields = fields;
+        }
+        self.touch(now);
+    }
 }
 
 /// Vault 的身份文件（vault.json）—— **有它才算 Vault 根目录**
@@ -83,6 +103,39 @@ pub struct VaultMeta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_keeps_ownership_and_created_at() {
+        let mut entry = Entry::new("e1", "旧标题", "2026-01-01T00:00:00Z")
+            .in_folder(Some("f1".into()), "builtin.plain".into());
+
+        entry.apply_update(
+            Some("新标题"),
+            Some(serde_json::json!({ "text": "今天跑了 5 公里" })),
+            "2026-02-02T08:00:00Z",
+        );
+
+        assert_eq!(entry.title, "新标题");
+        assert_eq!(entry.fields["text"], "今天跑了 5 公里");
+        assert_eq!(entry.folder_id.as_deref(), Some("f1"), "改文字不许把记录搬走");
+        assert_eq!(entry.scene.as_deref(), Some("builtin.plain"));
+        assert_eq!(entry.created_at, "2026-01-01T00:00:00Z", "出生日期不许改");
+        assert_eq!(entry.updated_at, "2026-02-02T08:00:00Z");
+    }
+
+    #[test]
+    fn update_with_missing_parts_leaves_them_alone() {
+        let mut entry = Entry::new("e1", "标题", "2026-01-01T00:00:00Z");
+        entry.fields = serde_json::json!({ "text": "正文" });
+
+        // 只改标题，fields 必须原样保留
+        entry.apply_update(Some("改过的标题"), None, "2026-02-02T08:00:00Z");
+        assert_eq!(entry.fields["text"], "正文");
+
+        // 空时间戳不许把 updated_at 抹成空字符串
+        entry.apply_update(None, None, "");
+        assert_eq!(entry.updated_at, "2026-02-02T08:00:00Z");
+    }
 
     #[test]
     fn json_fields_are_camel_case() {

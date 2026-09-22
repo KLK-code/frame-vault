@@ -60,6 +60,7 @@ pub fn run() {
             // 记录
             commands::entry::new_id,
             commands::entry::save_entry,
+            commands::entry::update_entry,
             commands::entry::load_entry,
             commands::entry::list_entries,
             commands::entry::read_vault_meta,

@@ -78,9 +78,110 @@
 .entry__title {
   flex: 1;
   min-width: 0;
+  margin: 0;
   overflow-wrap: anywhere;
   color: var(--fv-color-text);
   font-size: var(--fv-text-base);
+  font-weight: 600;
+}
+
+/* 正文：多行、保留换行，读起来像日记不像表格 */
+.entry__body {
+  margin: 0;
+  color: var(--fv-color-text);
+  font-size: var(--fv-text-base);
+  line-height: var(--fv-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 每条记录自己的操作：加照片 / 改文字 —— 不用回到顶部那个输入框 */
+.entry__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+}
+
+.entry__actions button {
+  padding: 3px 10px;
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-family: inherit;
+  font-size: var(--fv-text-xs);
+}
+
+.entry__actions button:hover:not(:disabled) {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent-hover);
+  color: var(--fv-color-accent);
+}
+
+.entry__actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.entry__meta {
+  margin-left: auto;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 编辑中：标题 + 正文 + 保存 ── */
+.entry__edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-2);
+}
+
+.entry__edit-title,
+.entry__edit-text {
+  padding: 7px 10px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-base);
+  resize: vertical;
+}
+
+.entry__edit-title {
+  font-weight: 600;
+}
+
+.entry__edit-text {
+  line-height: var(--fv-line-height);
+}
+
+.entry__edit-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+}
+
+.entry__edit-actions button {
+  padding: 6px 16px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.entry__edit-actions button.is-primary {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-bg);
+}
+
+.entry__edit-actions button.is-quiet {
+  border-color: transparent;
+  color: var(--fv-color-muted);
 }
 
 .entry__time {

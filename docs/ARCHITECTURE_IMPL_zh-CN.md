@@ -363,6 +363,9 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 //   mediaFormat.ts     格式化 + "这个格式 WebView 能不能显示"
 //   MediaLightbox.tsx  点开大图 / 播视频
 // 新主题直接复用，别再写第三份。
+//
+// 主题自留字段的约定各管各的：普通记录把**正文**放在 entry.fields.text（多行），
+// 挑战把说明放在 entry.title。核心不解释 fields 的内容——换主题不受影响。
 ```
 
 四条约定：
@@ -439,6 +442,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份） | ✅ |
 | `new_id` | — | `string` | 发一个 UUIDv7 记录 id（前端不自己拼时间戳 id） | ✅ |
 | `save_entry` | `id` / `title` / `createdAt?` / `updatedAt?` / `folderId?` | `Entry` | 写一条记录（主题**由所属场景解析**后快照进 `scene`） | ✅ |
+| `update_entry` | `id` / `title?` / `fields?` / `updatedAt?` | `Entry` | 编辑已有记录：**只改给到的部分**，归属与创建时间不动（`fields` 整体替换，不深合并） | ✅ |
 | `load_entry` | `id` | `Entry` | 读一条记录 | ✅ |
 | `list_entries` | `folderId?` | `Entry[]` | 列记录（新的在前；给了 `folderId` 就只看那个场景；坏数据跳过） | ✅ |
 | `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份） | ✅ |
@@ -694,7 +698,6 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | 命令 | 参数 | 返回 | 用途 |
 |---|---|---|---|
 | `delete_entry` | `id` | `void` | 删除记录（写 tombstone，同步时别的设备才知道“这是删了”） |
-| `update_entry` | `id` / `title?` / `fields?` | `Entry` | 只改字段、不动归属（批量编辑用） |
 | `set_entry_pinned` / `reorder_entries` | `id` / `…` | `Entry[]` | 记录级排序与置顶 |
 | `sync_now` / `sync_status` | — | `SyncReport` / `SyncState` | 手动同步 / 查状态（M4） |
 
@@ -758,7 +761,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / 内置普通记录）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
-**验证状态**：`cargo test` 22 passed（媒体 10 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录 / EXIF 时间归一化 / 没有 EXIF 就留空；场景 2 条：id 不重复、每个场景都有名字与描述）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 277 KB / CSS 27 KB）。
+**验证状态**：`cargo test` 24 passed（记录 2 条新增：局部更新不许改归属与创建时间、只给一半参数时另一半必须原样保留；媒体 10 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录 / EXIF 时间归一化 / 没有 EXIF 就留空；场景 2 条：id 不重复、每个场景都有名字与描述）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 277 KB / CSS 27 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 

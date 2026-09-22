@@ -62,6 +62,29 @@ pub fn save_entry(
     Ok(entry)
 }
 
+/// 编辑一条已有的记录：只给到的部分会被改，归属与创建时间不动。
+///
+/// `fields` 是**整体替换**（不是深合并）：主题自己负责把旧值一起传上来。
+#[tauri::command]
+pub fn update_entry(
+    state: State<'_, AppState>,
+    id: String,
+    title: Option<String>,
+    fields: Option<serde_json::Value>,
+    updated_at: Option<String>,
+) -> AppResult<Entry> {
+    let vault_dir = active_vault(&state)?;
+
+    let mut entry = vault::read_entry(&vault_dir, &id)?;
+    entry.apply_update(
+        title.as_deref(),
+        fields,
+        updated_at.as_deref().unwrap_or(""),
+    );
+    write_entry(&vault_dir, &entry)?;
+    Ok(entry)
+}
+
 #[tauri::command]
 pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<Entry> {
     let vault_dir = active_vault(&state)?;

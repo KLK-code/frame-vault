@@ -164,6 +164,22 @@ export const saveEntry = (
   });
 };
 
+/**
+ * 编辑一条已有记录：只给到的部分会被改，**归属与创建时间不会动**。
+ * `fields` 是整体替换（不是深合并），所以要改主题自留字段时得把旧值一起传上来。
+ */
+export const updateEntry = (
+  id: string,
+  patch: { title?: string; fields?: Record<string, unknown> },
+  updatedAt = new Date().toISOString(),
+) =>
+  invoke<Entry>("update_entry", {
+    id,
+    title: patch.title ?? null,
+    fields: patch.fields ?? null,
+    updatedAt,
+  });
+
 export const loadEntry = (id: string) => invoke<Entry>("load_entry", { id });
 
 /** 列出记录（新的在前）；给了 folderId 就只看那个场景里的 */

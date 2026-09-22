@@ -582,6 +582,12 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 选哪套由 `lib/useCompact.ts`（视口宽度，响应式）与 `lib/platform.ts` 的 `isMobileOS`（能不能开第二个窗口）共同决定。
 窄屏的横切调整集中在 `styles/compact.css`，**全部包在媒体查询里**，桌面端不受影响。
 
+**骨架之上永远有"窗口外壳"。** 自绘标题栏（`app/TitleBar.tsx`）不是骨架的一部分，而是**窗口**的一部分：
+Windows 的窗口是 `decorations: false`，那块标题栏是唯一能拖动 / 最小化 / 关闭的地方；
+macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自己管窗口）外，每套骨架都要在最上面渲染它**，
+整屏弹层也必须只盖"骨架那一片"（`position: absolute` 相对骨架），别用 `fixed; inset: 0` 把标题栏一起盖掉 ——
+否则会出现"窗口拖不动、关不掉"这种只有强杀进程才能出来的故障。
+
 **为什么不让前端判平台**：一旦 UI 里散落 `if (isAndroid)`，加第三个平台就要重写一遍。**能力探测**让新增平台只多一个 provider 实现。
 
 ---
@@ -818,6 +824,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 忘了开 asset 协议 / 忘了放行目录 | 照片全是碎图 | Cargo 开 `protocol-asset` + `assetProtocol.enable` + 运行时 `allow_directory(vault)` |
 | 把 HEIC 直接塞进 `<img>` | 网格里一片碎图（iPhone 直出就是 HEIC） | 先生成缩略图；解不开就查扩展名给占位 + 原文件路径 |
 | 把导入日当成拍摄日 | 从相册导旧照片，日期全是"今天" | 读 EXIF `DateTimeOriginal` 存 `takenAt`；读不到才退回 `addedAt` |
+| 给骨架做分支时漏了"窗口外壳" | 窗口**拖不动、关不掉**，只能强杀进程 —— 而且只在"窄窗口 + 桌面平台"同时成立时才出现 | 自绘标题栏（`TitleBar`）属于**窗口外壳**，不属于任何一套骨架：Windows 的窗口是 `decorations: false`，没它就等于没边框。规则：**除真移动端（系统自己管窗口）外，每套骨架都必须在最上面渲染 TitleBar**；整屏弹层要用 `position: absolute` 盖在骨架内，别用 `fixed; inset: 0` 把标题栏一起盖掉 |
 | 在移动端调 `open_vault_manager` / `open_settings` | 第二个窗口开不出来，调用失败或毫无反应 | **Android / iOS 只有一个 WebView 窗口**：移动端必须做成内嵌页面（见 `app/MobileShell.tsx`） |
 | 把删除做成真删文件 | 同步时另一台设备把记录"复活"，用户也没法反悔 | 写**墓碑**（`deletedAt`），列表默认不显示；真删盘留给将来的"清理回收站" |
 | 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |

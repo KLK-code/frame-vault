@@ -6,6 +6,8 @@ import { useActiveFolder, useFolders } from "../features/scene/useFolders";
 import SettingsPanel from "../features/settings/SettingsPanel";
 import VaultManagerPanel from "../features/vault/VaultManagerPanel";
 import { confirm, listVaults } from "../lib/api";
+import { isMobileOS } from "../lib/platform";
+import TitleBar from "./TitleBar";
 import "./MobileShell.css";
 
 type Tab = "record" | "photos" | "settings";
@@ -66,8 +68,16 @@ export default function MobileShell() {
   }
 
   return (
-    <div className="mobile">
-      <header className="mobile__bar">
+    <div className="app-root">
+      {/*
+        桌面窗口必须保留自绘标题栏：Windows 上窗口是 decorations: false，
+        它是**唯一**能拖动 / 最小化 / 关闭的地方。去掉就变成"窗口卡死在那儿"。
+        只有真正的移动端（系统自己管窗口）才不渲染它。
+      */}
+      {!isMobileOS && <TitleBar title="FrameVault" />}
+
+      <div className="mobile">
+        <header className="mobile__bar">
         <button className="mobile__scene" onClick={() => setSheet("scenes")}>
           <span className="mobile__scene-name">{active?.name ?? "选择场景"}</span>
           {activeScene && <span className="mobile__scene-theme">{activeScene.name}</span>}
@@ -152,6 +162,7 @@ export default function MobileShell() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

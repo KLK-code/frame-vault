@@ -1,19 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  assetUrl,
-  importMedia,
-  listEntries,
-  listMedia,
-  newId,
-  pickMediaFiles,
-  saveEntry,
-  updateEntry,
-  type Entry,
-  type MediaItem,
-} from "../../../../lib/api";
+import { useState } from "react";
+import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
 import { displayableSrc, formatBytes, formatTime } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
+import { useSceneData } from "../../useSceneData";
 import "./PlainScene.css";
 
 /** 普通记录主题自己的约定：正文放在 fields.text 里（核心不解释 fields 的内容） */
@@ -25,106 +15,17 @@ function bodyOf(entry: Entry): string {
 /**
  * 内置"普通记录"：一条记录 = 标题 + 正文 + 若干照片/视频。
  *
- * 两条刻意的自由：
- * 1. **一条记录可以挂任意多张照片**——加照片的入口就在每条记录自己身上，不用回到顶部；
- * 2. **文字随时能改**——标题和正文都是可编辑的，不是建完就定死。
- *
- * 它同时是主题的**最小示例**：从 props 拿到场景 → 自己决定列出什么、怎么录入
- * → 自己的约定存进 entry.fields。
+ * 这个组件**只做展示与编排**：数据读写、归属、刷新、忙碌状态全部来自 `useSceneData`
+ * （底层能力）。所以"一条记录能挂多张照片、文字能反复改"不是这个主题特有的功能，
+ * 而是所有主题共用的能力——挑战主题同样有，只是它选择了别的画法。
  */
 export default function PlainScene({ folder, scene }: SceneViewProps) {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [media, setMedia] = useState<MediaItem[]>([]);
+  const data = useSceneData(folder);
   const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [busyEntry, setBusyEntry] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<MediaItem | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftText, setDraftText] = useState("");
-
-  const reload = useCallback(async () => {
-    try {
-      const [list, all] = await Promise.all([listEntries(folder.id), listMedia(null)]);
-      setEntries(list);
-      // 媒体在磁盘上是全局扁平的，只带一个 entryId；
-      // "属于本场景"这件事在这里算出来——和场景归类一样，分组是展示层的活。
-      const mine = new Set(list.map((entry) => entry.id));
-      setMedia(all.filter((item) => item.entryId && mine.has(item.entryId)));
-      setError(null);
-    } catch (err) {
-      setError(String(err));
-    }
-  }, [folder.id]);
-
-  // 换场景就重新拉一次
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  function mediaOf(entryId: string): MediaItem[] {
-    return media.filter((item) => item.entryId === entryId);
-  }
-
-  /** 新建一条记录：只写标题，正文和照片都可以之后再补 */
-  async function addText() {
-    const text = title.trim();
-    if (!text || busy) return;
-
-    setBusy(true);
-    try {
-      const id = await newId();
-      await saveEntry(id, text, { folderId: folder.id });
-      setTitle("");
-      await reload();
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** 新建时顺手导入照片：这些照片进同一条记录 */
-  async function addWithPhotos() {
-    if (busy) return;
-    const files = await pickMediaFiles();
-    if (files.length === 0) return;
-
-    setBusy(true);
-    try {
-      const entryId = await newId();
-      await saveEntry(entryId, title.trim(), { folderId: folder.id });
-      for (const file of files) {
-        await importMedia(file, entryId);
-      }
-      setTitle("");
-      await reload();
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /** 往**已有**记录里继续加照片——这是之前缺的那条路 */
-  async function attachPhotos(entryId: string) {
-    if (busyEntry) return;
-    const files = await pickMediaFiles();
-    if (files.length === 0) return;
-
-    setBusyEntry(entryId);
-    try {
-      for (const file of files) {
-        await importMedia(file, entryId);
-      }
-      await reload();
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setBusyEntry(null);
-    }
-  }
 
   function startEdit(entry: Entry) {
     setEditingId(entry.id);
@@ -133,20 +34,12 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
   }
 
   async function saveEdit(entry: Entry) {
-    setBusyEntry(entry.id);
-    try {
-      // fields 是整体替换，所以要把旧值摊开再改我们关心的那一个键
-      await updateEntry(entry.id, {
-        title: draftTitle.trim(),
-        fields: { ...entry.fields, text: draftText },
-      });
-      setEditingId(null);
-      await reload();
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setBusyEntry(null);
-    }
+    // fields 是整体替换，所以要把旧值摊开再改我们关心的那一个键
+    const ok = await data.edit(entry, {
+      title: draftTitle.trim(),
+      fields: { ...entry.fields, text: draftText },
+    });
+    if (ok) setEditingId(null);
   }
 
   return (
@@ -157,27 +50,34 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
           placeholder={`记点什么…（${scene.name}）`}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") void addText();
+            if (e.key === "Enter") void data.create(title.trim());
           }}
         />
-        <button className="is-ghost" onClick={() => void addWithPhotos()} disabled={busy}>
+        <button
+          className="is-ghost"
+          onClick={() => void data.createWithPhotos(title.trim())}
+          disabled={data.busy === "new"}
+        >
           新建并放照片…
         </button>
-        <button onClick={() => void addText()} disabled={busy || !title.trim()}>
+        <button
+          onClick={() => void data.create(title.trim())}
+          disabled={data.busy === "new" || !title.trim()}
+        >
           记录
         </button>
       </div>
 
-      {error && <p className="plain-scene__error">{error}</p>}
+      {data.error && <p className="plain-scene__error">{data.error}</p>}
 
-      {entries.length === 0 ? (
+      {data.entries.length === 0 ? (
         <p className="plain-scene__empty">
           这个场景还没有记录。写点什么，或者直接导入照片。
         </p>
       ) : (
         <ul className="plain-scene__list">
-          {entries.map((entry) => {
-            const items = mediaOf(entry.id);
+          {data.entries.map((entry) => {
+            const items = data.mediaOf(entry.id);
             const body = bodyOf(entry);
             const isEditing = editingId === entry.id;
             const edited = Boolean(entry.updatedAt) && entry.updatedAt !== entry.createdAt;
@@ -196,22 +96,22 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
                       className="entry__edit-text"
                       rows={4}
                       value={draftText}
-                      placeholder="正文…（这段会存进这条记录自己的字段里）"
+                      placeholder="正文…"
                       onChange={(e) => setDraftText(e.target.value)}
                     />
                     <div className="entry__edit-actions">
                       <button
                         className="is-primary"
                         onClick={() => void saveEdit(entry)}
-                        disabled={busyEntry === entry.id}
+                        disabled={data.busy === entry.id}
                       >
                         保存
                       </button>
                       <button onClick={() => setEditingId(null)}>取消</button>
                       <button
                         className="is-quiet"
-                        onClick={() => void attachPhotos(entry.id)}
-                        disabled={busyEntry === entry.id}
+                        onClick={() => void data.attachPhotos(entry.id)}
+                        disabled={data.busy === entry.id}
                       >
                         ＋ 也加照片…
                       </button>
@@ -256,10 +156,10 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
                     <div className="entry__actions">
                       <button onClick={() => startEdit(entry)}>改文字</button>
                       <button
-                        onClick={() => void attachPhotos(entry.id)}
-                        disabled={busyEntry === entry.id}
+                        onClick={() => void data.attachPhotos(entry.id)}
+                        disabled={data.busy === entry.id}
                       >
-                        {busyEntry === entry.id ? "导入中…" : "＋ 加照片…"}
+                        {data.busy === entry.id ? "导入中…" : "＋ 加照片…"}
                       </button>
                       <span className="entry__meta">
                         {items.length > 0 && `${items.length} 张`}
@@ -274,7 +174,9 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
         </ul>
       )}
 
-      <p className="plain-scene__count">{entries.length > 0 && `共 ${entries.length} 条记录`}</p>
+      <p className="plain-scene__count">
+        {data.entries.length > 0 && `共 ${data.entries.length} 条记录`}
+      </p>
 
       {preview && <MediaLightbox item={preview} onClose={() => setPreview(null)} />}
     </div>

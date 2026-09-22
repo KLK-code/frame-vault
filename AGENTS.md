@@ -101,6 +101,10 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - 目录：`features/<域>/`；主题视图放 `features/scene/scenes/<主题 id>/`。
 - **新增一个功能主题 = 写一个组件 + 在 `registry.ts` 加一行 + 在 Rust 的 `builtin_scenes()` 登记同一个 id**。核心（记录格式、其他主题）一律不动。
   主题拿到的 props 是 `SceneViewProps`：`folder`（含它自己的 `sceneConfig`）、`scene`、`onSceneConfigChange`（写回配置）。
+- **能力在底层，主题只管展示与编排**：数据读写一律走 `features/scene/useSceneData.ts`
+  （取记录 / 取媒体 / 媒体归属 / "这条按哪天算" / 刷新 / 忙碌与错误 / 建记录 / 改文字 / 追加照片）。
+  **主题不许自己再写一遍"取记录 + 取媒体 + 过滤 + 刷新"**——那是能力散落的开始，
+  也是"这个主题有这功能、那个主题没有"的来源。主题能决定的只有：显示哪些、什么顺序、点哪里触发哪个能力。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）与 `MediaLightbox.tsx`（大图 / 视频）已经抽出来了，新主题直接复用，**别写第三份**。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
 - 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。

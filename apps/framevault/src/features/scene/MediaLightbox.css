@@ -25,6 +25,40 @@
   object-fit: contain;
 }
 
+.lightbox__footer {
+  padding: var(--fv-space-2);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-surface);
+}
+
+.lightbox__footer input,
+.lightbox__footer textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.lightbox__footer button {
+  padding: 5px 12px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.lightbox__footer button.is-primary {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-bg);
+}
+
 .lightbox__bar {
   display: flex;
   align-items: center;

@@ -368,6 +368,22 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 // 挑战把说明放在 entry.title。核心不解释 fields 的内容——换主题不受影响。
 ```
 
+**底层能力（主题必须用它，不许自己重造）**：`features/scene/useSceneData.ts`
+
+| 能力 | 说明 |
+|---|---|
+| `entries` / `media` / `mediaOf(entryId)` / `dateOf(entry)` | 本场景的记录、只属于它的媒体、"这条按哪天算"（最早照片的拍摄时间，否则记录时间） |
+| `create(title, text?)` / `edit(entry, { title?, fields? })` | 建一条 / 改一条；归属与创建时间由 Rust 保证不动 |
+| `pickPhotos()` / `importPhotos(entryId, files)` | 原语：选文件、把文件导进某条记录（挑战用这两个自己编排"一张照片一条记录"） |
+| `attachPhotos(entryId)` / `createWithPhotos(title)` | 便利组合：往已有记录加照片 / 新建一条并放照片 |
+| `busy` / `error` / `reload()` | 忙碌与错误状态、手动刷新 |
+
+**规则**：主题只决定"显示哪些、按什么顺序、点哪里触发哪个能力"。**不许在主题里再写一遍取数据 + 过滤 + 刷新**——
+普通记录与挑战能同时具备"改文字 / 追加照片"，就是因为能力只有一份。
+
+```tsx
+```
+
 四条约定：
 
 1. **视图不取"当前仓库"，只认 props 里的 `folder`**——它天然就是"当前场景"；
@@ -759,7 +775,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，23 个命令）：`vault.rs`（7 个）、`folder.rs`（8 个）、`entry.rs`（5 个）、`media.rs`（2 个，导入是 `async`）、`window.rs`（4 个，全部 `async`）。另外命令层还负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / 内置普通记录）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / **`useSceneData` 底层能力** / `mediaFormat` / `MediaLightbox` / 内置普通记录与挑战两个主题）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 24 passed（记录 2 条新增：局部更新不许改归属与创建时间、只给一半参数时另一半必须原样保留；媒体 10 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录 / EXIF 时间归一化 / 没有 EXIF 就留空；场景 2 条：id 不重复、每个场景都有名字与描述）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 277 KB / CSS 27 KB）。
 

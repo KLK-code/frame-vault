@@ -76,7 +76,9 @@
 
 ### 已引入依赖的许可证登记（本仓库真正在用的）
 
-引入新依赖前先在这里登记（见 AGENTS §1）。当前装的是这三个（Markdown 管线）：
+引入新依赖前先在这里登记（见 AGENTS §1）。当前装的是这些：
+
+**Markdown 管线（解析 + 渲染，只在 `src/markdown/parse.ts` 与 `features/scene/markdown/` 里用）**：
 
 | 包 | 版本 | 许可证 | 用途 |
 |---|---|---|---|
@@ -84,8 +86,17 @@
 | `remark-parse` | 11.x | MIT | CommonMark 解析 → mdast |
 | `remark-gfm` | 4.x | MIT | GFM 扩展：表格 / 任务列表 / 删除线 / 自动链接 |
 
-传递依赖（`micromark`、`mdast-util-*`、`unist-util-*` 等 30 余个）以 MIT 为主，没有 GPL / 未声明许可证的包
-（`pnpm licenses ls` 可复核）。已按上面的红线核对过，可以进这个仓库。
+**编辑引擎（所见即所得，只在 `features/scene/markdown/MarkdownWysiwyg.tsx` 里用，且按需加载）**：
+
+| 包 | 版本 | 许可证 | 用途 |
+|---|---|---|---|
+| `@milkdown/kit` | 7.22.1 | MIT | 编辑器组装层（core / preset-commonmark / preset-gfm / plugin-listener / utils） |
+| `@milkdown/react` | 7.22.1 | MIT | React 绑定（`Milkdown` / `MilkdownProvider` / `useEditor`） |
+| `prosemirror-*` | 1.4.1 ~ 1.42.5 | MIT | Milkdown 底下的编辑器内核（model / state / view / history / tables 等 15 个包） |
+| `dompurify` | 3.4.15 | **MPL-2.0 OR Apache-2.0** | 由 Milkdown 带入（清洗粘贴内容）。**双许可，我们按 Apache-2.0 这一支使用** —— MPL-2.0 是文件级 copyleft，不选这一支就不用管它的传染性 |
+
+传递依赖（`micromark` / `mdast-util-*` / `unist-util-*`，以及 Milkdown 的 crepe 附属带进来的 `@codemirror/*`、`@babel/*` 等）**400 余个包全是 MIT / ISC / Apache-2.0 / BSD**。
+2026-09 用 `pnpm licenses ls --prod` 复核过一遍：431 个包，**没有 GPL / AGPL / LGPL / 未声明许可证的包**，唯一的非宽松项就是上表里的 `dompurify`，而它有 Apache-2.0 一支可选。已按上面的红线核对过，可以进这个仓库。
 
 ## 七、下一步想学的方向（按优先级）
 

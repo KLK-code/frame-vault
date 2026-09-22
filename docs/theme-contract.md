@@ -114,7 +114,7 @@
 | 声明式表单 | `.fields`、`.field`、`.field__label`、`.field__unit`、`.field__control` |
 | 场景舞台（右侧） | `.scene-host`、`.scene-host--empty`、`.scene-host__head`、`.scene-host__name`、`.scene-host__theme`、`.scene-host__notice` |
 | 内置普通记录主题 | `.plain-scene`、`.plain-scene__compose`、`.plain-scene__list`、`.plain-scene__empty`、`.plain-scene__count`、`.plain-scene__error`、`.entry`、`.entry__head`、`.entry__title`、`.entry__time`、`.entry__body`、`.entry__actions`、`.entry__meta`、`.entry__edit`、`.entry__edit-title`、`.entry__edit-text`、`.entry__edit-actions`、`.entry__media`、`.thumb`、`.thumb__fallback` |
-| 内置写作台主题 | `.writing`、`.writing__bar`、`.writing__count`、`.writing__btn`、`.writing__empty`、`.writing__body`、`.writing__list`、`.writing__item`、`.writing__item-day`、`.writing__item-summary`、`.writing__sheet`、`.writing__head`、`.writing__date`、`.writing__time`、`.writing__dirty`、`.writing__meta`、`.writing__actions`、`.writing__hint`、`.writing__photos`、`.writing__photo-fallback` |
+| 内置写作台主题 | `.writing`、`.writing__bar`、`.writing__count`、`.writing__btn`、`.writing__empty`、`.writing__body`、`.writing__list`、`.writing__item`、`.writing__item-day`、`.writing__item-summary`、`.writing__sheet`、`.writing__head`、`.writing__date`、`.writing__time`、`.writing__dirty`、`.writing__meta`、`.writing__actions`、`.writing__hint`、`.writing__photos`、`.writing__photo-fallback`、`.writing__loading` |
 | 内置挑战主题 | `.challenge`、`.challenge__head`、`.challenge__progress`、`.challenge__bar`、`.challenge__fill`、`.challenge__numbers`、`.challenge__streaks`、`.challenge__setup`、`.challenge__state`、`.challenge__rules`、`.challenge__settings`、`.challenge__field`、`.challenge__settings-actions`、`.challenge__compose`、`.challenge__empty`、`.challenge__error`、`.wall`、`.wall__cell`、`.wall__btn`、`.wall__fallback`、`.wall__date`、`.challenge__note`、`.challenge__note-actions`、`.challenge__note-hint` |
 | 大图 / 视频预览 | `.lightbox`、`.lightbox__body`、`.lightbox__media`、`.lightbox__footer`、`.lightbox__bar`、`.lightbox__caption`、`.lightbox__unsupported`、`.lightbox__hint` |
 | 独立窗口 | `.window`、`.window__body` |
@@ -122,6 +122,7 @@
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
 | 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
 | Markdown 输入控件 | `.md-field`、`.md-field__head`、`.md-field__bar`、`.md-field__btn`、`.md-field__modes`、`.md-field__mode`、`.md-field__input`、`.md-field__preview`、`.md-field__empty` |
+| Markdown 所见即所得编辑器 | `.md-wysiwyg`（**第三方内部类名 `.milkdown` / `.ProseMirror` 不算承诺** —— 那是 Milkdown / ProseMirror 自己的 DOM，跟着它们的版本走） |
 | Markdown 正文 | `.md`、`.md__h` 与 `.md__h--1`…`.md__h--6`、`.md__p`、`.md__quote`、`.md__list`、`.md__list--ordered`、`.md__item`、`.md__item--task`、`.md__item-body`、`.md__check`、`.md__pre`、`.md__code`、`.md__inline-code`、`.md__strong`、`.md__em`、`.md__del`、`.md__hr`、`.md__link`、`.md__link-blocked`、`.md__table-wrap`、`.md__table`、`.md__cell`、`.md__cell--head`、`.md__cell--center`、`.md__cell--right`、`.md__notice` |
 
 **没写进上表的都不承诺。** 尤其是网格的**列宽数值**（`.entry__media` / `.wall` / `.photo-grid` 用的 `minmax(最小, 上限)`）属于实现细节：

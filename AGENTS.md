@@ -2,7 +2,7 @@
 
 > **这份文件是权威的。** 任何人（或 AI）在动这个仓库之前先读完它。
 > 与本文冲突的其它描述，**以本文为准**；本文没写的，查 `docs/ARCHITECTURE_IMPL_zh-CN.md`。
-> 最后更新：2026-09（macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件）
+> 最后更新：2026-09（macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件；写作台编辑器：§1 依赖例外、§6 两种输入控件、§9 新增两行坑）
 
 ## 0. 一句话
 
@@ -16,7 +16,7 @@ FrameVault 是一个**开放、本地优先、可扩展**的跨平台照片与�
 |---|---|---|
 | 壳 | Tauri 2.x | 桌面；Android 推迟 |
 | 后端 | Rust | Windows 走 MSVC toolchain，macOS 走 Apple 的 aarch64-apple-darwin。领域逻辑全在这里 |
-| 前端 | TypeScript + React 19 + Vite | 无 UI 框架、无路由库、无状态库 |
+| 前端 | TypeScript + React 19 + Vite | 无 UI 框架、无路由库、无状态库。**唯一的框架级例外是编辑器引擎**：`@milkdown/kit` + `@milkdown/react`（底子是 ProseMirror）—— 它只准出现在 `features/scene/markdown/MarkdownWysiwyg.tsx` 一个文件里，而且必须按需加载，见 §6 / §9 |
 | 包管理 | pnpm（单包：`apps/framevault`；仓库根没有 workspace 定义，将来多包再上 workspace） | Tauri CLI 用 `@tauri-apps/cli` 作为 devDependency，**永远不要 `cargo install tauri-cli`** |
 | 许可 | Apache-2.0 | 引入新依赖前先看 `docs/REFERENCES.md` 的许可证红线 |
 
@@ -133,14 +133,15 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   否则一百个主题会发明一百种格式，Vault 就不再是开放格式；
   不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
-- **内置主题共用能力、各自编排**：普通日记 / 旅行 / 挑战共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除）；**写作台自己编排界面**（左侧篇列表 + 右侧写作台，桌面并排预览），但同样只走 `useSceneData`、表单走 `SceneFields`、编辑器走 `MarkdownField`、大图走 `MediaLightbox` —— 它没有一处自己写的输入控件。`manifest.presentation` 只声明图标名 / 类别短语 / 推荐外观；外壳只经注册表读取。普通日记是 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`，**写作台**是 `builtin.writing`（一屏一篇的长文写作，桌面并排预览）。
+- **内置主题共用能力、各自编排**：普通日记 / 旅行 / 挑战共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除）；**写作台自己编排界面**（左侧篇列表 + 右侧一整块所见即所得的编辑区），但同样只走 `useSceneData`、表单走 `SceneFields`、编辑器走 `MarkdownWysiwyg`、大图走 `MediaLightbox` —— 它没有一处自己写的输入控件。`manifest.presentation` 只声明图标名 / 类别短语 / 推荐外观；外壳只经注册表读取。普通日记是 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`，**写作台**是 `builtin.writing`（一屏一篇的长文写作，正文所见即所得）。
 - **外观与功能主题靠 CSS 作用域分开，不许互相引用**：
   - **外观主题**（一套值 = 一个预设）挂 `:root[data-appearance="preset.x"]`，**所有窗口、所有区域**都读它；用户手调的单值覆盖优先级最高（内联在 `documentElement` 上）。**外壳**（标题栏 / 侧栏 / 选中行 / 设置窗口）的风格属于外观，**不许**跟着“当前场景是哪个主题”变。
   - **功能主题的巧思**只挂它自己的**舞台容器**（`data-scene` 在舞台那一层，**不在** `.app-root`），所以主题样式在作用域上碰不到外壳；允许的只有白名单：图标、`--fv-scene-banner`，以及主题视图自己的排版。
   - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
   - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / `--fv-nav-active-*`），字号、间距、圆角尺度、阴影这些“骨架”值三套必须一致 —— 三套外观要像**同一个产品**，不是三个 App。
 - **Markdown 是核心能力，不是主题私有**：解析只许走 `src/markdown/parse.ts`（别处不许 import `remark` / `unified`）；渲染走 `features/scene/markdown/`（`registry.ts` 是将来加自定义块的扩展点）；**主题不许自己写渲染器**。规矩：原始 HTML 不渲染（给可见提示）、软换行按换行显示、认不出的节点降级显示、**只读不回写**。
-  **输入控件也在核心**：`SceneFields` 渲染多行字段时用的是 `MarkdownField`（工具栏 + 编辑/预览），所以每个主题自动都有；**主题不许自己写工具栏或预览**。
+  **输入控件也在核心，而且有两种（主题只挑"用哪个"）**：`MarkdownField` = textarea + 语法工具栏 + 编辑/预览切换，`SceneFields` 渲染多行字段时默认就用它（表单 / 快速记录）；`MarkdownWysiwyg` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，**按需加载**），长文用。
+  **主题不许自己写工具栏 / 预览 / 富文本编辑器，也不许 import `@milkdown/*` 或 `prosemirror-*`**；要文档级编辑就在视图里 `React.lazy` 引核心的 `MarkdownWysiwyg`（写作台就是这么做的），字段声明照旧写 `textarea`。两个控件的接口一模一样（`value` 进、Markdown 字符串出），所以磁盘格式和渲染器都不用知道记录是哪个编辑器敲的。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
   只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
@@ -208,6 +209,8 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 输入法组合期间动选区 | 中文拼音串被截断，用户以为输入法坏了 | `compositionstart / compositionend` 期间工具栏不动作 |
 | 把 Markdown 渲染塞进 p 标签 | 标题 / 列表是块级元素，浏览器自动闭合外层 p，DOM 与预期不符、排版莫名 | 容器用 div（正文那处已改）；同理别把块级元素放进 p |
 | 跨窗口状态**整份回写** | 主骨架每次重算外观都会写一次盘，把设置窗口刚改的变量 / 刚选的选择冲回旧值 —— 表现为「改了没反应」「切了没用」 | **每个字段只有一个 owner**：overrides / scheme / appearance 只有设置窗口写，applied 只有主骨架写；写盘一律 **patch 合并**（只带自己那一项），广播出去的才是合并后的完整快照 |
+| 把所见即所得编辑器当受控组件整份回写 | 每次渲染都 `replaceAll(value)`：光标被拽回开头、中文输入法串被打断、撤销栈被清，表现为"打着打着字跳了" | 编辑器**只在"外部换了内容"时回灌一次**：用 ref 记住自己刚 `onChange` 出去的那份，`value === emitted` 就直接返回；自己的输入只向上报，不往下灌 |
+| 重编辑器静态 import | 一次都没打开的写作台，也让首屏多下载 331 KB（gzip +101 KB）—— 实测主包 417.7 KB vs 静态引入后的 ~749 KB | 带框架的重编辑器一律 `React.lazy` + `Suspense`（写作台只在自己这一屏里加载它）；判断标准是"不是每次开窗都要用的东西" |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 
@@ -215,7 +218,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **Android 与调用系统相机**：推迟到 Android 适配阶段。
 - **同步、插件宿主、Marketplace、多窗口标签页、日历视图、全文检索**：都还没到，别提前设计。
 - **视频抽帧（ffmpeg）**：按 PRD 属 P1/P2；现在视频交给 WebView / 平台解码。
-- **不引路由库、状态库、CSS-in-JS、UI 组件库**。
+- **不引路由库、状态库、CSS-in-JS、UI 组件库**。编辑器引擎（Milkdown / ProseMirror）是**唯一的框架级例外** —— 它不是"UI 组件库"，而是"磁盘上那串 Markdown 的编辑引擎"，边界见 §1 / §6：一个文件、按需加载、主题碰不到。
 - **不把 SQLite / localStorage / React state 当真相来源**。
 - **不许为了"以后可能要用"加抽象层**。
 
@@ -240,9 +243,9 @@ apps/framevault/
 │   │   │                       registry.ts（主题→视图）/ mediaFormat.ts / MediaLightbox.tsx
 │   │   │                       SceneMedia.tsx（场景照片墙，手机“照片”页）
 │   │   │                       scenes/plain（普通记录）/ scenes/challenge（挑战打卡墙）
-│   │   │                       scenes/travel（旅行）/ scenes/writing（写作台：长文 + 并排预览）
+│   │   │                       scenes/travel（旅行）/ scenes/writing（写作台：一屏一篇的长文）
 │   │   │                       SceneComposer / EntryTimeline / SceneIcon
-│   │   │                       markdown/（MarkdownView 渲染 + MarkdownField 输入 + registry 注册表 + blocks 组件）
+│   │   │                       markdown/（MarkdownView 渲染 + MarkdownField 表单输入 + MarkdownWysiwyg 所见即所得 + registry 注册表 + blocks 组件）
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：预设选择 + token schema + 实时编辑 + 跨窗口同步

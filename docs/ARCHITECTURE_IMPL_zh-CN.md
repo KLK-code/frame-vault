@@ -389,7 +389,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | `configSchema` | 这个场景的设置表单形状（存 `folder.sceneConfig`） | 挑战的「目标天数」「规则」 |
 | `presentation` | 图标名、类别短语、推荐外观，全部是纯数据 | 宿主与外壳经注册表读取，不导入主题内部实现 |
 
-**当前四个内置主题**：普通日记 `builtin.plain`、旅行 `builtin.travel`、挑战 `builtin.challenge`、**写作台 `builtin.writing`**。前三个视图各调用一次 `useSceneData`，再把结果传给共用录入和时间线；挑战另有照片墙展示；**写作台是唯一自己编排界面的主题**：左侧篇列表 + 右侧写作台（`MarkdownField` 用 `layout="split"` 并排、窄屏自动降级成 toggle），表单仍交给 `SceneFields`、大图仍用 `MediaLightbox`，它没有一处自己写的输入控件。时间线按 `dateOf` 倒序显示，编辑合并本主题字段并保留其他命名空间与未知字段。`SceneHost` 按场景 id 与主题 id 给视图设置 key，切换场景时重置草稿和预览，避免串场景。
+**当前四个内置主题**：普通日记 `builtin.plain`、旅行 `builtin.travel`、挑战 `builtin.challenge`、**写作台 `builtin.writing`**。前三个视图各调用一次 `useSceneData`，再把结果传给共用录入和时间线；挑战另有照片墙展示；**写作台是唯一自己编排界面的主题**：左侧篇列表 + 右侧一整块所见即所得的编辑区（`MarkdownWysiwyg`，用 `React.lazy` 按需加载），表单仍交给 `SceneFields`、大图仍用 `MediaLightbox`，它没有一处自己写的输入控件。时间线按 `dateOf` 倒序显示，编辑合并本主题字段并保留其他命名空间与未知字段。`SceneHost` 按场景 id 与主题 id 给视图设置 key，切换场景时重置草稿和预览，避免串场景。
 
 **默认外观**：旅行青绿、挑战炭黑橙色、日记暖白棕色。`tokens.css` 在 `@layer base` 内通过 `:root:has(.app-root[data-scene="…"])` 选择配色；变量仍定义在根元素，使用户内联覆盖保持最高优先级。旅行与日记支持深色变体，挑战默认固定深色基调。标题栏与手机骨架继承同一组变量；独立设置 / 仓库窗口不匹配这个选择器。
 
@@ -512,13 +512,16 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 
 这个阶段明确不做：自建 Document Model（等有第二个消费者）、`remark-rehype` / `rehype-react`（直连 React，少两个依赖且不产生 HTML）、`remark-directive` 自定义块（等真有主题要用）、语法高亮。
 
-**输入侧（同一层）**：`MarkdownField.tsx` = textarea + 语法工具栏 + 编辑 / 预览切换。
-它是`SceneFields` 渲染多行字段时用的控件，所以**所有主题自动都有**；产出仍然只是一个 Markdown 字符串。
+**输入侧（同一层）有两种编辑器，主题只挑"用哪个"**：
 
-三个坑（都写在代码注释里，也进了附录 B）：工具栏按钮要在 `onMouseDown` 里 `preventDefault`（否则手机键盘当场收起）；
-插入用 `setRangeText` 而不是自己拼字符串（自己拼会清掉浏览器撤销栈）；中文输入法 `composition` 期间不碰选区。
+- `MarkdownField.tsx` = textarea + 语法工具栏 + 编辑 / 预览切换。`SceneFields` 渲染多行字段时用的就是它，所以**所有主题自动都有**；
+- `MarkdownWysiwyg.tsx` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，装 `commonmark` + `gfm`）：边写边渲染、语法符号不出现。现在只有写作台用它，**`React.lazy` 按需加载**（它带着 ProseMirror 家族；实测静态引入会把主包从 417.7 KB 顶到约 749 KB，懒加载后是主包 417.7 KB + 独立 chunk 331.2 KB / gzip 101.2 KB，写作台之外一行都不下载）。
 
-公开类名见 `docs/theme-contract.md` §2 的「Markdown 输入控件」「Markdown 正文」两行。
+**编辑引擎 ≠ 渲染引擎**：`MarkdownView` 负责"把 Markdown 显示成排版"（只读投影，核心唯一的渲染器，主题不许另写）；`MarkdownWysiwyg` 负责"让你不看见语法符号地打字"（可写，是全仓库唯一 import `@milkdown/*` 的地方）。两者之间只有磁盘上那一串 Markdown 文本，所以**记录用哪个编辑器敲的，磁盘格式、渲染器、主题都不知道**。
+
+四个坑（都写在代码注释里，也进了附录 B）：工具栏按钮要在 `onMouseDown` 里 `preventDefault`（否则手机键盘当场收起）；插入用 `setRangeText` 而不是自己拼字符串（自己拼会清掉浏览器撤销栈）；中文输入法 `composition` 期间不碰选区；**所见即所得编辑器只在"外部换了内容"时回灌**（用 ref 记住自己刚 `onChange` 出去的那份做比对）——每次渲染都 `replaceAll` 会跟打字打架，光标跳、输入法串断、撤销栈被清。
+
+公开类名见 `docs/theme-contract.md` §2 的「Markdown 输入控件」「Markdown 所见即所得编辑器」「Markdown 正文」三行。
 
 ## 5. 前后端契约（最重要的一节）
 

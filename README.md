@@ -221,7 +221,7 @@ cargo new --lib crates/framevault-core
 
 ## 开发环境
 
-Windows 需要（本机已核对齐全）：
+**Windows**（主开发平台，本机已核对齐全）：
 
 | 依赖 | 版本 |
 |---|---|
@@ -231,6 +231,19 @@ Windows 需要（本机已核对齐全）：
 | MSVC | Visual Studio 2022 Community + Windows SDK 10.0.26100 |
 | WebView2 | 153.x（Win11 自带） |
 | Tauri CLI | @tauri-apps/cli 2.11.5（项目 devDependency；另装了全局 tauri-cli 用于 `tauri info` 体检） |
+
+**macOS**（2026-09 实测跑通，Apple Silicon）：
+
+| 依赖 | 版本 |
+|---|---|
+| 系统 | macOS 15.7.3（arm64） |
+| Node.js | 24.15.0 |
+| pnpm | 11.0.9 |
+| Rust + rustup | 1.98.1（stable-aarch64-apple-darwin） |
+| Xcode Command Line Tools | 必须装（Rust 链接要用 clang） |
+
+macOS **不需要** MSVC 和 WebView2 —— 系统自带 WKWebView。窗口在 mac 上走系统原生红黄绿（`src-tauri/tauri.macos.conf.json` + `commands/window.rs`），Windows 仍是自绘标题栏。
+首次 `pnpm tauri dev` 的 Cargo 全量编译：Apple Silicon 上约 2 分钟，Windows 上 5~15 分钟。
 
 Android 开发另需：Android Studio、Android SDK、NDK、JDK 17。
 

@@ -2,7 +2,7 @@
 
 > **这份文件是权威的。** 任何人（或 AI）在动这个仓库之前先读完它。
 > 与本文冲突的其它描述，**以本文为准**；本文没写的，查 `docs/ARCHITECTURE_IMPL_zh-CN.md`。
-> 最后更新：2026-04（媒体落地之后）
+> 最后更新：2026-09（macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件）
 
 ## 0. 一句话
 
@@ -15,12 +15,12 @@ FrameVault 是一个**开放、本地优先、可扩展**的跨平台照片与�
 | 层 | 选型 | 备注 |
 |---|---|---|
 | 壳 | Tauri 2.x | 桌面；Android 推迟 |
-| 后端 | Rust（MSVC toolchain） | 领域逻辑全在这里 |
+| 后端 | Rust | Windows 走 MSVC toolchain，macOS 走 Apple 的 aarch64-apple-darwin。领域逻辑全在这里 |
 | 前端 | TypeScript + React 19 + Vite | 无 UI 框架、无路由库、无状态库 |
 | 包管理 | pnpm（workspace） | Tauri CLI 用 `@tauri-apps/cli` 作为 devDependency，**永远不要 `cargo install tauri-cli`** |
 | 许可 | Apache-2.0 | 引入新依赖前先看 `docs/REFERENCES.md` 的许可证红线 |
 
-**平台范围**：当前只做 Windows。macOS 未验证。**Android 及"调用系统相机拍照"明确推迟**到专门的 Android 适配阶段——不要为了它提前设计跨平台抽象。
+**平台范围**：**Windows 仍是主开发平台；macOS 已验证可编译、可运行**（2026-09 实测：`cargo test` / `pnpm exec tsc --noEmit` / `pnpm build` / `pnpm tauri dev` 全通，窗口走系统原生红黄绿，见 `src-tauri/tauri.macos.conf.json`）。**Android 及"调用系统相机拍照"仍明确推迟**到专门的 Android 适配阶段——不要为了 Android 提前设计跨平台抽象。
 
 ## 2. 分层与依赖方向（最容易被改坏的地方）
 
@@ -54,7 +54,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
    移动 = 改一个字段，不搬文件。
 2. **用户数据必须经 Rust 落盘**：排序、置顶、主题绑定、主题业务进度、封面……
    错：写进 React state 或 localStorage 就当作保存了（重启就没了），或塞进 SQLite（它只是缓存）。
-3. **派生数据不进 Vault**：SQLite 索引、缩略图 → `%APPDATA%/com.framevault.app/`。
+3. **派生数据不进 Vault**：SQLite 索引、缩略图 → 应用数据目录（Windows `%APPDATA%\com.framevault.app\`，macOS `~/Library/Application Support/com.framevault.app/`，代码里一律走 Tauri 的 `app_data_dir()`，不自己拼）。
    它们随时可重建，**永远不是真相来源**（PRD FV-SYN-002）。
 4. **写盘一律原子**：`storage::write_json_atomic`（tmp + rename），不要裸 `fs::write`。
 5. **加字段必须 `#[serde(default)]`**；删字段也不能让老文件读不出来——serde 默认忽略未知字段，
@@ -164,6 +164,11 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 文件行尾 CRLF | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 在组件里写裸色值 | 用 `--fv-*`；要新颜色先给 token 起个语义名字 |
 | 删掉的文件又自己回来了 | 编辑器还开着那个标签页，会话恢复时把内容写回磁盘。删磁盘文件 ≠ 关标签页；报"找不到模块"时先 `git status` 看它是不是未跟踪的 `??` |
+| 以为 `tauri.macos.conf.json` 的 `app.windows` 会和主配置**逐字段合并** | 不会。平台配置走的是 json_patch（RFC 7386），**数组整体替换**：mac 那份必须把窗口字段写全，而且**必须显式写 `"label": "main"`** —— 漏了 label 窗口就换了名字，`capabilities/default.json` 的 `windows` 对不上，权限全掉 |
+| 在 `commands/window.rs` 里直接链 `title_bar_style` / `hidden_title` / `traffic_light_position` | 这三个方法带 `#[cfg(target_os = "macos")]`，**Windows 直接编译不过**。必须包进 `#[cfg(target_os = "macos")]` 块，非 mac 分支保持 `.decorations(false)` |
+| 以为 `trafficLightPosition.y` 是"按钮顶边到窗口顶边的距离"，或以为 `y = 顶栏高 - 按钮高` | 都不是。tao 把标题栏容器高度设成 `按钮frame高 + y`，容器顶边钉在窗口顶边，按钮却保留它到容器**底边**的距离 —— 于是 **y 每 +1，红黄绿就往下 1px**。实测 `按钮中心 = y + 2`：顶栏 32px 要居中就是 `y = 14`（x=20 对齐 20~72px，前端留 80px）。对不齐别推公式，`screencapture` 截图量按钮中心，改成 `中心 - 2`。**y 只有一份**（`tauri.macos.conf.json` 的主窗口配置），子窗口在 `native_titlebar()` 里从 `app.config()` 读，别在 Rust 里再抄一个常量；因此改顶栏高度只需同步 **JSON + `tokens.css`** 两处 |
+| 想自己写 `onDoubleClick` 做"双击顶栏最大化" | 不用写：Tauri 注入的 `drag.js` 已经带了，而且 macOS 上专门走 `mouseup`（鼠标移开还能取消），比自写更贴系统习惯 |
+| 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 
@@ -198,10 +203,12 @@ apps/framevault/
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：token schema + 实时编辑 + 跨窗口同步
 │   ├── lib/api.ts              **唯一** invoke / listen / convertFileSrc 出口
+│   ├── lib/platform.ts         前端唯一一处"现在是什么系统"的判断（isMacOS）
 │   ├── styles/                 layers.css（层顺序）/ reset.css
 │   └── tokens.css              设计令牌：唯一允许出现裸色值的地方
 └── src-tauri/
-    ├── tauri.conf.json         assetProtocol 已开；窗口 decorations: false
+    ├── tauri.conf.json         assetProtocol 已开；窗口 decorations: false（Windows 自绘标题栏）
+    ├── tauri.macos.conf.json   macOS 覆盖：窗口走原生红黄绿（Overlay + hiddenTitle）
     ├── capabilities/default.json  三个窗口的权限
     └── src/
         ├── lib.rs              组装 + generate_handler
@@ -218,7 +225,7 @@ apps/framevault/
 ├── folders/<id>/folder.json
 └── media/<id>/{orig.<ext>, meta.json}
 
-%APPDATA%/com.framevault.app/   ← 本机缓存，不进同步，删了能重建
+%APPDATA%/com.framevault.app/   ← 本机缓存（macOS 是 ~/Library/Application Support/…），删了能重建
 ├── vaults.json           已知仓库列表 + 当前仓库
 └── thumbs/<vault-id>/<media-id>.jpg
 ```

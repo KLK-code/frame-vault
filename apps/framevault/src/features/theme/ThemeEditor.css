@@ -30,6 +30,17 @@
     background: none;
   }
 
+  .theme-editor__text {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-sm);
+    background: var(--fv-color-bg);
+    font-size: var(--fv-text-sm);
+    font-family: var(--fv-font-sans);
+  }
+
   .theme-editor__range {
     flex: 1;
     min-width: 0;

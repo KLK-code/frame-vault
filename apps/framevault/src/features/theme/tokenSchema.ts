@@ -5,7 +5,7 @@ export type TokenDef = {
   label: string;
   /** 一句话说明它影响哪些地方（和 Obsidian 的设置项一样，有说明才像个正经设置） */
   desc?: string;
-  kind: "color" | "length";
+  kind: "color" | "length" | "text";
   min?: number;
   max?: number;
   step?: number;
@@ -14,6 +14,17 @@ export type TokenDef = {
 export type TokenGroup = { title: string; tokens: TokenDef[] };
 
 export const TOKEN_GROUPS: TokenGroup[] = [
+  {
+    title: "字体",
+    tokens: [
+      {
+        key: "--fv-font-sans",
+        label: "界面字体",
+        desc: "按优先级排列的字体栈，逗号分隔；找不到的字体会自动往后退",
+        kind: "text",
+      },
+    ],
+  },
   {
     title: "主色",
     tokens: [

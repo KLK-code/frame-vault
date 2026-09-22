@@ -15,10 +15,13 @@ body,
 body {
   font-family: var(--fv-font-sans);
   font-size: var(--fv-text-base);
-  line-height: 1.55;
+  /* 之前这里写死了 1.55，导致 --fv-line-height 一直没生效——又一个裸值教训 */
+  line-height: var(--fv-line-height);
   color: var(--fv-color-text);
   background: var(--fv-color-bg);
-  -webkit-font-smoothing: antialiased;
+  /* 注意：这里**不要**写 -webkit-font-smoothing: antialiased。
+     那是 macOS 的观感调法，在 Windows / WebView2 上会关掉 ClearType 次像素渲染，
+     中文会明显发虚。Windows 上要清晰，最有效的做法就是别动它。 */
 }
 
 button,

@@ -53,7 +53,15 @@
     /* ── 字体 ──
        字号整体偏大一档：基准 15px（原来 13px），行高 1.6。
        观感上"大气"很大程度上来自字号与行高，而不是留白。 */
-    --fv-font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    /* 字体栈说明：
+       - 拉丁字母走 system-ui（Windows 上是 Segoe UI）；
+       - **中文**会跳过 Segoe UI，落到第一个有中文字形的字体：优先 "Microsoft YaHei UI"
+         （比老的 "Microsoft YaHei" 在屏幕显示上更锐利）；
+       - 最前面两个（MiSans / 鸿蒙黑体）如果哪天装了会自动优先，字形比雅黑更均匀。
+       想换字体不用改代码：设置 → 外观 → 界面字体。 */
+    --fv-font-sans:
+      "MiSans", "HarmonyOS Sans SC", system-ui, "Segoe UI", "Microsoft YaHei UI",
+      "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
     --fv-font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
     --fv-text-xs: 12px;
     --fv-text-sm: 13px;

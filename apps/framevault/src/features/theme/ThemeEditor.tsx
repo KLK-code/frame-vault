@@ -23,8 +23,10 @@ export default function ThemeEditor() {
 
   /** 当前生效值：有覆盖用覆盖，没有就读 tokens 算出来的值 */
   function current(key: string): string {
-    if (overrides[key]) return overrides[key];
-    return getComputedStyle(document.documentElement).getPropertyValue(key).trim();
+    const raw =
+      overrides[key] ?? getComputedStyle(document.documentElement).getPropertyValue(key);
+    // 字体栈是多行写的，归一化空白后才能在输入框里正常显示
+    return raw.replace(/\s+/g, " ").trim();
   }
 
   function currentPx(key: string, fallback: number): number {
@@ -87,6 +89,14 @@ export default function ThemeEditor() {
                         className="theme-editor__color"
                         type="color"
                         value={toHex(current(token.key))}
+                        onChange={(e) => set(token.key, e.target.value)}
+                      />
+                    ) : token.kind === "text" ? (
+                      <input
+                        className="theme-editor__text"
+                        type="text"
+                        spellCheck={false}
+                        value={current(token.key)}
                         onChange={(e) => set(token.key, e.target.value)}
                       />
                     ) : (

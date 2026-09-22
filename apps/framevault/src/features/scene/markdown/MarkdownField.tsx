@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useCompact } from "../../../lib/useCompact";
 import MarkdownView from "./MarkdownView";
 import "./MarkdownField.css";
 
@@ -31,9 +32,13 @@ const ACTIONS: Action[] = [
 ];
 
 /**
- * 正文输入控件：textarea + 语法工具栏 + 编辑 / 预览 切换。
+ * 正文输入控件：textarea + 语法工具栏 + 预览。
  *
- * 它**只产出 Markdown 字符串**，不碰数据、也不认识记录 —— 所以渲染器换不换、主题怎么写都跟它无关。
+ * 两种形态（主题只挑形态，不自己写控件 —— 见 AGENTS §6）：
+ *   field     表单里的多行字段（默认）：编辑 ↔ 预览 切换；
+ *   document  写作页（长文主题用）：**宽视口并排**（左写右看），窄视口自动退回切换。
+ *
+ * 它**只产出 Markdown 字符串**，不碰数据、也不认识记录。
  * 三个坑都在这儿治好了（也记进了 AGENTS §9）：
  *   1. 工具栏按钮 onMouseDown 里 preventDefault：不然点按钮会抢走焦点，手机键盘当场收起来；
  *   2. 插入用 setRangeText 而不是自己拼字符串：自己拼会把浏览器的撤销栈清掉（Ctrl+Z 一次全丢）；
@@ -44,17 +49,23 @@ export default function MarkdownField({
   value,
   placeholder,
   rows = 4,
+  variant = "field",
   onChange,
 }: {
   id?: string;
   value: string;
   placeholder?: string;
   rows?: number;
+  variant?: "field" | "document";
   onChange: (next: string) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const composing = useRef(false);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
+
+  // 并排要够宽才有意义：比骨架的窄屏断点更靠里（900 / 940，同样带滞后）
+  const compact = useCompact(900, 940);
+  const split = variant === "document" && !compact;
 
   function apply(action: Action) {
     const el = ref.current;
@@ -91,8 +102,36 @@ export default function MarkdownField({
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
+  function renderInput() {
+    return (
+      <textarea
+        id={id}
+        ref={ref}
+        className="field__control md-field__input"
+        rows={variant === "document" ? Math.max(rows, 14) : rows}
+        placeholder={placeholder}
+        value={value}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={() => {
+          composing.current = false;
+        }}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  }
+
+  function renderPreview() {
+    return (
+      <div className="md-field__preview">
+        {value.trim() ? <MarkdownView text={value} /> : <p className="md-field__empty">还没有内容</p>}
+      </div>
+    );
+  }
+
   return (
-    <div className="md-field">
+    <div className={variant === "document" ? "md-field md-field--document" : "md-field"}>
       <div className="md-field__head">
         <div className="md-field__bar" role="toolbar" aria-label="Markdown 语法">
           {ACTIONS.map((action) => (
@@ -109,44 +148,35 @@ export default function MarkdownField({
             </button>
           ))}
         </div>
-        <div className="md-field__modes">
-          <button
-            type="button"
-            className={mode === "edit" ? "md-field__mode is-active" : "md-field__mode"}
-            onClick={() => setMode("edit")}
-          >
-            编辑
-          </button>
-          <button
-            type="button"
-            className={mode === "preview" ? "md-field__mode is-active" : "md-field__mode"}
-            onClick={() => setMode("preview")}
-          >
-            预览
-          </button>
-        </div>
+        {!split && (
+          <div className="md-field__modes">
+            <button
+              type="button"
+              className={mode === "edit" ? "md-field__mode is-active" : "md-field__mode"}
+              onClick={() => setMode("edit")}
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              className={mode === "preview" ? "md-field__mode is-active" : "md-field__mode"}
+              onClick={() => setMode("preview")}
+            >
+              预览
+            </button>
+          </div>
+        )}
       </div>
 
-      {mode === "edit" ? (
-        <textarea
-          id={id}
-          ref={ref}
-          className="field__control md-field__input"
-          rows={rows}
-          placeholder={placeholder}
-          value={value}
-          onCompositionStart={() => {
-            composing.current = true;
-          }}
-          onCompositionEnd={() => {
-            composing.current = false;
-          }}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <div className="md-field__preview">
-          {value.trim() ? <MarkdownView text={value} /> : <p className="md-field__empty">还没有内容</p>}
+      {split ? (
+        <div className="md-field__split">
+          <div className="md-field__pane">{renderInput()}</div>
+          <div className="md-field__pane">{renderPreview()}</div>
         </div>
+      ) : mode === "edit" ? (
+        renderInput()
+      ) : (
+        renderPreview()
       )}
     </div>
   );

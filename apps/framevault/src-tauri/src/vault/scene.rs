@@ -8,6 +8,9 @@ pub const CHALLENGE_SCENE: &str = "builtin.challenge";
 
 pub const TRAVEL_SCENE: &str = "builtin.travel";
 
+/// 内置的"写作台"场景：一屏一篇，为长文写作优化（Markdown + 并排预览）
+pub const WRITING_SCENE: &str = "builtin.writing";
+
 /// 一个场景（= 功能主题）的元信息。
 /// 现在只有内置的；将来这里会换成"从主题包清单里读"，第三方就能带自己的场景。
 #[derive(Debug, Clone, Serialize)]
@@ -38,6 +41,12 @@ pub fn builtin_scenes() -> Vec<SceneInfo> {
             builtin: true,
         },
         SceneInfo {
+            id: WRITING_SCENE.to_string(),
+            name: "写作台".to_string(),
+            description: "一屏一篇：Markdown 写作 + 并排预览".to_string(),
+            builtin: true,
+        },
+        SceneInfo {
             id: CHALLENGE_SCENE.to_string(),
             name: "挑战".to_string(),
             description: "挑战今天，遇见更强的自己：进度、连续天数与打卡记录".to_string(),
@@ -60,6 +69,7 @@ mod tests {
         let list = builtin_scenes();
         assert!(is_known(PLAIN_SCENE));
         assert!(is_known(CHALLENGE_SCENE));
+        assert!(is_known(WRITING_SCENE));
         assert!(!is_known("vendor.unknown"));
         assert!(list.iter().all(|s| s.builtin));
 

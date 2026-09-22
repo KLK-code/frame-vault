@@ -2,6 +2,7 @@ import type { SceneUnit } from "./manifest";
 import challengeScene from "./scenes/challenge";
 import plainScene from "./scenes/plain";
 import travelScene from "./scenes/travel";
+import writingScene from "./scenes/writing";
 
 export type { FieldDecl, SceneManifest, SceneUnit, SceneViewProps } from "./manifest";
 
@@ -19,6 +20,7 @@ export const SCENES: Record<string, SceneUnit> = {
   "builtin.plain": plainScene,
   "builtin.challenge": challengeScene,
   "builtin.travel": travelScene,
+  "builtin.writing": writingScene,
 };
 
 export function sceneOf(id: string): SceneUnit | undefined {

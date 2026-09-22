@@ -289,7 +289,7 @@ src/
 │   ├── SceneComposer.tsx/.css  共用快捷录入（照片 / 文字，防重复提交）
 │   ├── EntryTimeline.tsx/.css  共用时间线、编辑、媒体与删除入口
 │   ├── SceneIcon.tsx          主题声明使用的线性图标
-│   └── scenes/{plain,travel,challenge}/  普通日记 / 旅行 / 挑战自治单元
+│   └── scenes/{plain,travel,challenge,writing}/  普通日记 / 旅行 / 挑战 / 写作台 自治单元
 │       └── manifest.ts + index.ts + 视图.tsx + 同名.css
 ├── features/vault/           仓库：悬浮切换菜单 + 独立窗口里的管理面板
 ├── features/settings/        设置：左导航 + 右内容
@@ -389,7 +389,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | `configSchema` | 这个场景的设置表单形状（存 `folder.sceneConfig`） | 挑战的「目标天数」「规则」 |
 | `presentation` | 图标名、类别短语、推荐外观，全部是纯数据 | 宿主与外壳经注册表读取，不导入主题内部实现 |
 
-**当前三个内置主题（2026-09-22）**：普通日记沿用 `builtin.plain`，旅行新增 `builtin.travel`，挑战沿用 `builtin.challenge`。三个视图各调用一次 `useSceneData`，再把结果传给共用录入和时间线；挑战另有照片墙展示。时间线按 `dateOf` 倒序显示，编辑合并本主题字段并保留其他命名空间与未知字段。`SceneHost` 按场景 id 与主题 id 给视图设置 key，切换场景时重置草稿和预览，避免串场景。
+**当前四个内置主题**：普通日记 `builtin.plain`、旅行 `builtin.travel`、挑战 `builtin.challenge`、**写作台 `builtin.writing`**。前三个视图各调用一次 `useSceneData`，再把结果传给共用录入和时间线；挑战另有照片墙展示；**写作台是唯一自己编排界面的主题**：左侧篇列表 + 右侧写作台（`MarkdownField` 用 `layout="split"` 并排、窄屏自动降级成 toggle），表单仍交给 `SceneFields`、大图仍用 `MediaLightbox`，它没有一处自己写的输入控件。时间线按 `dateOf` 倒序显示，编辑合并本主题字段并保留其他命名空间与未知字段。`SceneHost` 按场景 id 与主题 id 给视图设置 key，切换场景时重置草稿和预览，避免串场景。
 
 **默认外观**：旅行青绿、挑战炭黑橙色、日记暖白棕色。`tokens.css` 在 `@layer base` 内通过 `:root:has(.app-root[data-scene="…"])` 选择配色；变量仍定义在根元素，使用户内联覆盖保持最高优先级。旅行与日记支持深色变体，挑战默认固定深色基调。标题栏与手机骨架继承同一组变量；独立设置 / 仓库窗口不匹配这个选择器。
 
@@ -877,7 +877,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 渲染 + 注册表 + 输入控件 `MarkdownField`）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 四个主题单元 `scenes/{plain,travel,challenge,writing}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 渲染 + 注册表 + 输入控件 `MarkdownField`）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
 

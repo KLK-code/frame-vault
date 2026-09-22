@@ -1,0 +1,204 @@
+# AGENTS.md — FrameVault 工程契约
+
+> **这份文件是权威的。** 任何人（或 AI）在动这个仓库之前先读完它。
+> 与本文冲突的其它描述，**以本文为准**；本文没写的，查 `docs/ARCHITECTURE_IMPL_zh-CN.md`。
+> 最后更新：2026-04（媒体落地之后）
+
+## 0. 一句话
+
+FrameVault 是一个**开放、本地优先、可扩展**的跨平台照片与视频日记 Vault。
+用户数据是**开放的普通文件**（JSON / JPG / PNG / MP4 / MOV），FrameVault 只是它的宿主和 UI。
+稳定的边界不是界面，而是 **Vault 规范 + Core API + Plugin API**。
+
+## 1. 技术基线（不许擅自替换或升级）
+
+| 层 | 选型 | 备注 |
+|---|---|---|
+| 壳 | Tauri 2.x | 桌面；Android 推迟 |
+| 后端 | Rust（MSVC toolchain） | 领域逻辑全在这里 |
+| 前端 | TypeScript + React 19 + Vite | 无 UI 框架、无路由库、无状态库 |
+| 包管理 | pnpm（workspace） | Tauri CLI 用 `@tauri-apps/cli` 作为 devDependency，**永远不要 `cargo install tauri-cli`** |
+| 许可 | Apache-2.0 | 引入新依赖前先看 `docs/REFERENCES.md` 的许可证红线 |
+
+**平台范围**：当前只做 Windows。macOS 未验证。**Android 及"调用系统相机拍照"明确推迟**到专门的 Android 适配阶段——不要为了它提前设计跨平台抽象。
+
+## 2. 分层与依赖方向（最容易被改坏的地方）
+
+**Rust**
+
+```text
+main.rs → lib.rs（组装：插件、状态、命令注册）
+          └── commands/   薄适配器：收参数（校验）→ 调领域 → 转可序列化形状
+                └── vault/   领域核心：**这里不许出现 tauri**
+```
+
+- `vault/` 里**不许** `use tauri`、不许出现 `AppHandle`/`State`/窗口概念。它只依赖 std + serde + uuid + sha2 + image。
+  这样它才能被 `cargo test` 直接测，将来也才能整体搬进独立 crate。
+- `commands/` 里**不许写业务规则**。校验参数可以，判断业务不行——规则进 `vault/`。
+- 错误统一用 `error.rs` 的 `AppError` / `AppResult`（有 `From` 实现，`?` 直接能用）。命令里**不许**手写 `.map_err()`。
+
+**前端**
+
+```text
+main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/*（业务块）→ lib/api.ts（唯一出口）
+```
+
+- **`invoke` / `listen` / `convertFileSrc` / 插件调用只能出现在 `lib/api.ts`**。别的文件一律从这里 import。
+- 样式跟组件同目录同名；**组件不许 import 别人的样式文件**。
+- 依赖方向单向。外壳不许 import 主题视图的内部实现（只认 `FolderNode` / `SceneInfo` 这类契约类型）。
+
+## 3. 数据模型铁律
+
+1. **仓库里一切都是扁平的**：`folders/` 没有父子关系、`entries/` 不嵌套、`media/` 一个 id 一个目录。
+   归属靠字段（`Entry.folderId`、`MediaMeta.entryId`）；**"归类/分组"永远只是展示层的事**。
+   移动 = 改一个字段，不搬文件。
+2. **用户数据必须经 Rust 落盘**：排序、置顶、主题绑定、主题业务进度、封面……
+   错：写进 React state 或 localStorage 就当作保存了（重启就没了），或塞进 SQLite（它只是缓存）。
+3. **派生数据不进 Vault**：SQLite 索引、缩略图 → `%APPDATA%/com.framevault.app/`。
+   它们随时可重建，**永远不是真相来源**（PRD FV-SYN-002）。
+4. **写盘一律原子**：`storage::write_json_atomic`（tmp + rename），不要裸 `fs::write`。
+5. **加字段必须 `#[serde(default)]`**；删字段也不能让老文件读不出来——serde 默认忽略未知字段，
+   并且要有测试守着"老版本文件还能读"（看法 `vault/folder.rs` / `vault/model.rs` 里的 `old_*_still_loads` 测试）。
+6. **id 一律 UUIDv7，由 Rust 发**（`new_id` 命令）。**时间戳由调用方给**，Rust 层不引时钟依赖（测试才好写）。
+7. `SCHEMA_VERSION` 在 `vault/model.rs`。改版本号之前先想清楚老数据怎么办。
+8. **媒体原始文件导入后不可变**；磁盘名固定 `orig.<ext>`，用户原名只存在 meta 里。
+
+## 4. 术语表（**防漂移的关键，务必按这个说**）
+
+| 概念 | 文档 / PRD | UI 文案 | 代码标识 |
+|---|---|---|---|
+| 一个文件夹（容器） | 文件夹 | **场景** | `Folder` / `FolderMeta` / `FolderNode` |
+| 文件夹绑定的那套玩法 | 功能主题（**Workspace Type**） | **主题** | `scene` ⚠️ 见下 |
+| 配色 / 字体 / 皮肤 | 外观 Theme | 外观 | `--fv-*` token、`features/theme/` |
+| 一条记录 | Entry | 记录 | `Entry` |
+| 照片 / 视频 | 媒体 | 照片 / 视频 | `MediaMeta` / `MediaItem` |
+
+⚠️ **代码里的 `scene` 是历史命名**，它的真实含义是"这个文件夹绑定的功能主题 id"
+（`FolderMeta.scene`、`SceneInfo`、`effectiveScene`、`builtin_scenes()`）。
+**文档与 PRD 里永远不要写 `scene`，代码里永远不要再造第三个名字。**
+
+三条文案规则：
+
+1. UI 里 **"场景" = 文件夹**；不要把功能主题叫"场景"；
+2. UI 里 **"主题" = 功能主题**；外观主题一律叫"外观"；
+3. 想改名（`scene` → `workspaceType`）**必须一次做全**：加 `#[serde(alias = "scene")]` 读老文件 →
+   写迁移 → 改前端 → 更新本文档与 ARCHITECTURE_IMPL。**不许只改一半**（那才是真正的漂移源）。
+
+## 5. 命令 / 事件契约
+
+- 命令名 `snake_case`、动词开头（`list_entries` / `save_entry` / `import_media`）。
+- 前端 `invoke` 传 **camelCase**，Rust 形参 **snake_case**，Tauri 自动映射；进 JSON 的结构体一律 `#[serde(rename_all = "camelCase")]`。
+- **关系型改动返回全量**（排序 / 置顶 / 绑定 / 删除 → 返回整个列表）。前端直接替换，不做乐观更新。
+  理由：只回一条会让前端自己猜规则，两边迟早不一致。
+- Rust 的 `Err` 会变成 Promise reject；错误文案用中文、说人话，别把英文栈甩给用户。
+- **重活/长任务必须 `#[tauri::command(async)]`**（否则跑在主线程，窗口会卡死甚至关不掉——踩过）。
+- 事件名 `域://动作`（例：`vault://changed`）。**每个窗口是独立的 `document`**，跨窗口同步只能靠事件。
+- 加/改/删命令要同时改**四处**：命令实现 → `lib.rs` 的 `generate_handler!` → `lib/api.ts` 的包装 → 本文 §5 与 `ARCHITECTURE_IMPL §5.1`。
+- 命令层可以算**绝对路径**给前端（前端不拼路径），可以放行 asset 协议，但**不许**存业务状态。
+
+## 6. 前端规范
+
+- 目录：`features/<域>/`；主题视图放 `features/scene/scenes/<主题 id>/`。
+- **新增一个功能主题 = 写一个组件 + 在 `registry.ts` 加一行**。核心（Rust schema、记录格式、其他主题）一律不动。
+- 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
+- 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。
+- 状态分区（README 工程约定最后一条）：持久化用户数据（Rust）/ 当前选择（`useState`）/ 视图与面板开关（`useState` + localStorage）/ 派生数据（Rust 缓存）。
+  **不要合成一个大的 `page` 对象**。
+- 不引路由库、状态库、CSS-in-JS。现在前端只是"展示 + 转发"。
+- 文案中文、口语；空状态要给出下一步该做什么，错误要能看懂。
+- **不要提前抽象**：第二个地方真的要用，才把东西从主题目录升级到 `features/` 或通用层。
+
+## 7. 验证纪律（"写完了"不等于"跑过了"）
+
+| 改了什么 | 必须跑 |
+|---|---|
+| `vault/` 领域层 | `cargo test`（新逻辑要带测试）+ `cargo check` |
+| 任何 Rust / `tauri.conf.json` | `cargo build`，而且**必须重启 `pnpm tauri dev`**（HMR 只换前端，跑着的还是旧命令表） |
+| 前端 | `pnpm exec tsc --noEmit` + `pnpm build` |
+
+- **三处同看**：终端的 `println!`、界面上的状态、磁盘上的文件。哪个没动，问题就在哪一段。
+- 报错**从第一个 error 开始修**（Rust 会串一长串连锁错误，只看末尾会被吓到）。
+- 无法验证的改动，必须在回复里说清楚"为什么无法验证、你要怎么确认"。
+
+## 8. 文档同步矩阵（改了代码不更新文档 = 制造漂移）
+
+| 改了 | 必须同步 |
+|---|---|
+| 命令 / 事件 | `ARCHITECTURE_IMPL §5.1 / §5.2` + 本文 §5 |
+| 磁盘布局、字段、schema | `ARCHITECTURE_IMPL §13` + `PRD §12` 里对应待决项 |
+| 设计 token、公开类名 | `docs/theme-contract.md` + `tokens.css` |
+| 前端目录结构、分层规则 | `ARCHITECTURE_IMPL §4` |
+| 阶段范围变化（做什么/不做什么） | `README.md`「当前产品方向与开发范围」+ PRD 里程碑 |
+| 踩到新坑 | `ARCHITECTURE_IMPL 附录 B` + 本文 §9 |
+
+## 9. 已知坑（浓缩版，完整版在 `ARCHITECTURE_IMPL 附录 B`）
+
+| 坑 | 正确做法 |
+|---|---|
+| 改了 `generate_handler!` 里的命令名，界面报 `command xxx not found` | 重启 `pnpm tauri dev` |
+| 窗口命令写成同步的 | 窗口/长任务命令一律 `#[tauri::command(async)]` |
+| 新窗口没在 `capabilities` 里授权 | `capabilities/default.json` 的 `windows` 要列出**每个**窗口 label |
+| 用 URL 查询串区分窗口 | 读 `getCurrentWindow().label` |
+| 只关主窗口，进程不退出 | `on_window_event` 里对主窗口 `CloseRequested` 调 `app.exit(0)` |
+| 拿着 Mutex 做磁盘 IO | 用 `{ }` 圈小临界区，IO 放锁外 |
+| 忘了开 asset 协议 / 忘了放行目录 | 照片全碎：要 `protocol-asset` feature + `assetProtocol.enable` + 运行时 `allow_directory(vault)` |
+| 把 HEIC 直接塞进 `<img>` | 先缩略图；解不开就查扩展名给占位 + 原文件路径 |
+| 文件行尾 CRLF | `.gitattributes` + Prettier `endOfLine: "lf"` |
+| 在组件里写裸色值 | 用 `--fv-*`；要新颜色先给 token 起个语义名字 |
+
+## 10. 现在明确不做（YAGNI / 已拍板推迟）
+
+- **目录嵌套、主题继承**：已定案不做——仓库扁平，归类是展示层的事。
+- **Android 与调用系统相机**：推迟到 Android 适配阶段。
+- **同步、插件宿主、Marketplace、多窗口标签页、日历视图、全文检索**：都还没到，别提前设计。
+- **视频抽帧（ffmpeg）**：按 PRD 属 P1/P2；现在视频交给 WebView / 平台解码。
+- **不引路由库、状态库、CSS-in-JS、UI 组件库**。
+- **不把 SQLite / localStorage / React state 当真相来源**。
+- **不许为了"以后可能要用"加抽象层**。
+
+## 11. 提交与协作
+
+- commit message 用中文，写清**做了什么 + 为什么**；一次提交只做一件事。
+- 提交前跑完 §7 的验证。
+- 大改动（改 schema、改命令名、改目录布局）**先在对话里说清楚再动手**；不确定就问，不要猜着写。
+- 不要 `git push --force`、不要动别人的分支。
+
+## 12. 文件地图（找东西从这里开始）
+
+```text
+apps/framevault/
+├── src/                        前端
+│   ├── App.tsx / App.css       主窗口外壳：左场景树 + 右场景舞台 + 可拖分隔条
+│   ├── main.tsx                入口：按窗口 label 分派
+│   ├── app/                    TitleBar / 独立窗口外壳 / window.css
+│   ├── features/
+│   │   ├── scene/              场景层：useFolders（数据+归类）/ SceneTree / SceneHost /
+│   │   │                       registry.ts（主题→视图）/ scenes/plain（内置普通记录）
+│   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
+│   │   ├── settings/           设置：左导航 + 右内容
+│   │   └── theme/              外观：token schema + 实时编辑 + 跨窗口同步
+│   ├── lib/api.ts              **唯一** invoke / listen / convertFileSrc 出口
+│   ├── styles/                 layers.css（层顺序）/ reset.css
+│   └── tokens.css              设计令牌：唯一允许出现裸色值的地方
+└── src-tauri/
+    ├── tauri.conf.json         assetProtocol 已开；窗口 decorations: false
+    ├── capabilities/default.json  三个窗口的权限
+    └── src/
+        ├── lib.rs              组装 + generate_handler
+        ├── error.rs            AppError / AppResult
+        ├── state.rs            VaultRegistry + vaults.json 持久化
+        ├── commands/           vault / folder / entry / media / window（薄适配器）
+        └── vault/              领域核心（不认识 tauri）：model / storage / folder / scene / media / id
+```
+
+```text
+<用户选的目录>/          ← Vault：用户数据，可备份、可同步、可手改
+├── vault.json            身份文件（有它才算 Vault）
+├── entries/<id>/entry.json
+├── folders/<id>/folder.json
+└── media/<id>/{orig.<ext>, meta.json}
+
+%APPDATA%/com.framevault.app/   ← 本机缓存，不进同步，删了能重建
+├── vaults.json           已知仓库列表 + 当前仓库
+└── thumbs/<vault-id>/<media-id>.jpg
+```

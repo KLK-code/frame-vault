@@ -8,6 +8,7 @@
 
 | 文档 | 说明 |
 |---|---|
+| [AGENTS.md](./AGENTS.md) | **工程契约（权威）**：分层与依赖方向、数据模型铁律、术语表、命令/事件契约、验证与文档同步纪律、明确不做的事。**动代码前先读它。** |
 | [FrameVault_PRD_zh-CN.md](./FrameVault_PRD_zh-CN.md) | 产品需求（功能优先级 P0/P1/P2、里程碑） |
 | [FrameVault_Technical_Architecture_zh-CN.md](./FrameVault_Technical_Architecture_zh-CN.md) | 技术栈、模块边界、Vault 规范、同步模型 |
 | [docs/ARCHITECTURE_IMPL_zh-CN.md](./docs/ARCHITECTURE_IMPL_zh-CN.md) | **实现架构**：应该有哪些文件、每个文件负责什么、对外暴露什么接口 |
@@ -23,9 +24,9 @@
 - **用户决定顺序**：文件夹与记录支持拖动排序、置顶/取消置顶；顺序、置顶和主题绑定是需持久化的用户数据，不只是临时界面状态。
 - **挑战为后期能力**：如“坚持跑步一个月”，通过进度和反馈鼓励坚持，违反规则后本轮进度清零、重新开始；规则与历史保留策略另行设计。
 
-当前代码仍是单窗口导航原型，上述为需求与目标结构，并不代表文件夹、阅读器或插件已实现。先以内置普通记录主题打通流程，再按实际需求提炼插件接口。
+**实现现状（2026-04）**：这已经不是一个只有壳子的原型了——可以新建 / 导入 / 切换仓库，新建场景并绑定主题，按主题分组浏览场景，写文字记录，**导入照片与视频并在界面里看大图 / 播放**。仍然缺的：记录只能建不能改删、没有图库 / 日历 / 搜索、没有同步与插件宿主、只有内置"普通记录"一个主题。
 
-**已定案（2026-04）**：仓库层面不做目录嵌套——一个文件夹 = 一个场景 = 一个文件夹 + 它绑定的主题，所有场景平铺存放；"按主题归类"是前端显示层的事（同属"挑战"的跑步与健身房会聚成一组显示），记录归属靠 `folderId` 字段，移动 = 改一个字段。图库聚合范围、排序与跨文件夹移动的交互等尚未定案，统一记录在 [PRD 待决事项](./FrameVault_PRD_zh-CN.md#12-仍需后续决策的问题)。
+**已定案（2026-04）**：仓库层面不做目录嵌套——一个文件夹 = 一个场景 = 一个文件夹 + 它绑定的主题，所有场景平铺存放；"按主题归类"是前端显示层的事（同属"挑战"的跑步与健身房会聚成一组显示），记录归属靠 `folderId` 字段、媒体归属靠 `entryId` 字段，移动 = 改一个字段。媒体原始文件按不可变对象保存，缩略图与索引属可重建缓存、放应用数据目录、不进同步。图库聚合范围、排序与跨文件夹移动的交互等尚未定案，统一记录在 [PRD 待决事项](./FrameVault_PRD_zh-CN.md#12-仍需后续决策的问题)。
 
 ## 技术栈基线
 
@@ -47,13 +48,18 @@
 
 ```text
 frame-vault/
-├── FrameVault_PRD_zh-CN.md                    # 产品需求
-├── FrameVault_Technical_Architecture_zh-CN.md # 技术架构
-├── README.md                                  # 本文件
-├── .gitignore                                 # 已预置 node_modules / dist / target
-├── .vscode/                                   # 本机编辑器配置（已 gitignore）
+├── AGENTS.md                                   # **工程契约（权威）**，动代码前先读
+├── FrameVault_PRD_zh-CN.md                     # 产品需求
+├── FrameVault_Technical_Architecture_zh-CN.md  # 技术架构
+├── README.md                                   # 本文件
+├── docs/
+│   ├── ARCHITECTURE_IMPL_zh-CN.md              # 实现架构：文件、接口、命令表、数据结构
+│   ├── theme-contract.md                       # 主题契约：token 表、公开 selector、主题包格式
+│   └── REFERENCES.md                           # 参考项目与许可证红线
+├── .gitignore                                  # 已预置 node_modules / dist / target
+├── .vscode/                                    # 本机编辑器配置（已 gitignore）
 └── apps/
-    └── framevault/                            # 已有 Tauri + React 单窗口导航原型
+    └── framevault/                             # Tauri + React 应用：场景树 + 场景舞台 + 媒体导入
 ```
 
 ### 目标形态

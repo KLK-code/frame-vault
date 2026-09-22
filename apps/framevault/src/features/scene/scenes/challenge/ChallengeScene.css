@@ -1,0 +1,292 @@
+@layer components {
+.challenge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-3);
+}
+
+/* ── 顶部：进度 + 连续天数 ── */
+.challenge__head {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-4);
+  padding: var(--fv-space-3) var(--fv-space-4);
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-lg);
+  background: var(--fv-color-surface);
+}
+
+.challenge__progress {
+  flex: 1;
+  min-width: 0;
+}
+
+.challenge__bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fv-color-surface-active);
+}
+
+.challenge__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--fv-color-accent);
+  transition: width 0.2s ease-out;
+}
+
+.challenge__numbers {
+  margin: var(--fv-space-2) 0 0;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.challenge__numbers b {
+  color: var(--fv-color-text);
+  font-size: var(--fv-text-base);
+}
+
+.challenge__streaks {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--fv-space-4);
+  margin: 0;
+}
+
+.challenge__streaks div {
+  text-align: center;
+}
+
+.challenge__streaks dt {
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+}
+
+.challenge__streaks dd {
+  margin: 2px 0 0;
+  color: var(--fv-color-text);
+  font-size: var(--fv-text-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.challenge__setup {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.challenge__setup:hover {
+  background: var(--fv-color-surface-hover);
+}
+
+/* ── 状态与规则 ── */
+.challenge__state {
+  margin: 0;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+}
+
+.challenge__state.is-done {
+  color: var(--fv-color-accent);
+}
+
+.challenge__state.is-broken {
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  color: var(--fv-color-danger);
+}
+
+.challenge__rules {
+  margin: 0;
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border-left: 2px solid var(--fv-color-accent);
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+  white-space: pre-wrap;
+}
+
+/* ── 设置挑战 ── */
+.challenge__settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-2);
+  padding: var(--fv-space-3);
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+}
+
+.challenge__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-1);
+}
+
+.challenge__field span {
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+}
+
+.challenge__field input,
+.challenge__field textarea,
+.challenge__compose input {
+  padding: 7px 10px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+  resize: vertical;
+}
+
+.challenge__settings-actions {
+  display: flex;
+  gap: var(--fv-space-2);
+}
+
+.challenge__settings-actions button {
+  padding: 6px 16px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.challenge__settings-actions button.is-primary {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-bg);
+}
+
+/* ── 打卡录入 ── */
+.challenge__compose {
+  display: flex;
+  gap: var(--fv-space-2);
+}
+
+.challenge__compose input {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fv-text-base);
+}
+
+.challenge__compose button {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border: 1px solid var(--fv-color-accent);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-bg);
+  font-family: inherit;
+  font-size: var(--fv-text-base);
+}
+
+.challenge__compose button.is-ghost {
+  border-color: var(--fv-color-border-strong);
+  background: transparent;
+  color: var(--fv-color-text);
+}
+
+.challenge__compose button.is-ghost:hover:not(:disabled) {
+  background: var(--fv-color-surface-hover);
+}
+
+.challenge__compose button:disabled {
+  border-color: var(--fv-color-border-strong);
+  background: var(--fv-color-surface);
+  color: var(--fv-color-muted);
+}
+
+.challenge__empty {
+  margin: 0;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+  line-height: var(--fv-line-height);
+}
+
+.challenge__error {
+  margin: 0;
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border: 1px solid var(--fv-color-danger);
+  border-radius: var(--fv-radius-md);
+  color: var(--fv-color-danger);
+  font-size: var(--fv-text-sm);
+  overflow-wrap: anywhere;
+}
+
+/* ── 打卡墙：一格一张照片，日期压在右下角 ── */
+.wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--fv-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wall__btn {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-surface);
+}
+
+.wall__btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.18s ease-out;
+}
+
+.wall__btn:hover {
+  border-color: var(--fv-color-accent);
+}
+
+.wall__btn:hover img {
+  transform: scale(1.03);
+}
+
+.wall__fallback {
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  letter-spacing: 0.04em;
+}
+
+/* 日期贴右下角；底色用遮罩令牌，这样深浅色都压得住 */
+.wall__date {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--fv-color-scrim);
+  color: var(--fv-color-bg);
+  font-size: var(--fv-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .challenge__head {
+    flex-wrap: wrap;
+  }
+}
+}

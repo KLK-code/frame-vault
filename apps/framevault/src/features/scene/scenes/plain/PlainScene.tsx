@@ -10,34 +10,10 @@ import {
   type Entry,
   type MediaItem,
 } from "../../../../lib/api";
+import MediaLightbox from "../../MediaLightbox";
+import { displayableSrc, formatBytes, formatTime } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
 import "./PlainScene.css";
-
-function formatTime(iso: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/** WebView 自己就能解的图片格式。HEIC 不在其中——而 iPhone 直出恰恰是 HEIC，所以必须区别对待 */
-const WEBVIEW_IMAGE_EXTS = new Set(["jpg", "jpeg", "jpe", "png", "webp", "gif", "bmp", "avif"]);
-
-/**
- * 这个媒体能不能直接丢给 <img>：有缩略图就用缩略图（快），否则看格式。
- * 返回 null = 显示不了，界面要给占位和说明，别丢一个碎图给用户。
- */
-function displayableSrc(item: MediaItem): string | null {
-  if (item.thumbPath) return item.thumbPath;
-  if (item.mime.startsWith("video/")) return null;
-  return WEBVIEW_IMAGE_EXTS.has(item.ext) ? item.originalPath : null;
-}
 
 /**
  * 内置"普通记录"：一条记录 = 一个标题 + 时间 + 若干照片/视频。
@@ -71,16 +47,6 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  // Esc 关掉大图
-  useEffect(() => {
-    if (!preview) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setPreview(null);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [preview]);
 
   /** 新建一条纯文字记录 */
   async function addText() {
@@ -152,9 +118,7 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
       {error && <p className="plain-scene__error">{error}</p>}
 
       {entries.length === 0 ? (
-        <p className="plain-scene__empty">
-          这个场景还没有记录。写点什么，或者直接导入照片。
-        </p>
+        <p className="plain-scene__empty">这个场景还没有记录。写点什么，或者直接导入照片。</p>
       ) : (
         <ul className="plain-scene__list">
           {entries.map((entry) => {
@@ -200,41 +164,7 @@ export default function PlainScene({ folder, scene }: SceneViewProps) {
 
       <p className="plain-scene__count">{entries.length > 0 && `共 ${entries.length} 条记录`}</p>
 
-      {preview && (
-        <div className="lightbox" role="dialog" aria-modal="true" onClick={() => setPreview(null)}>
-          <div className="lightbox__body" onClick={(e) => e.stopPropagation()}>
-            {preview.mime.startsWith("video/") ? (
-              <video
-                className="lightbox__media"
-                src={assetUrl(preview.originalPath)}
-                controls
-                autoPlay
-              />
-            ) : WEBVIEW_IMAGE_EXTS.has(preview.ext) ? (
-              <img
-                className="lightbox__media"
-                src={assetUrl(preview.originalPath)}
-                alt={preview.name}
-              />
-            ) : (
-              // 不假装能显示：说清楚原因，并给出原文件位置
-              <div className="lightbox__unsupported">
-                <p>WebView 解不开 .{preview.ext}（常见于 iPhone 直出的 HEIC）。</p>
-                <p>文件已经完整导入，原始文件在这里：</p>
-                <code>{preview.originalPath}</code>
-              </div>
-            )}
-
-            <div className="lightbox__bar">
-              <span className="lightbox__caption">
-                {preview.name} · {formatBytes(preview.bytes)}
-                {preview.width ? ` · ${preview.width}×${preview.height}` : ""}
-              </span>
-              <button onClick={() => setPreview(null)}>关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {preview && <MediaLightbox item={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }

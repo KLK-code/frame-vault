@@ -347,12 +347,22 @@ entries/<id>/entry.json     │   ├ 晨跑打卡     ← scene: builtin.challe
 **主题视图契约**（写新主题只需要满足这个）：
 
 ```tsx
-// features/scene/scenes/<主题>/XxxScene.tsx
-export type SceneViewProps = { folder: FolderNode; scene: SceneInfo };
+// features/scene/registry.ts
+export type SceneViewProps = {
+  folder: FolderNode;          // 当前场景（含它自己的 sceneConfig）
+  scene: SceneInfo;            // 主题元信息（名字、描述）
+  onSceneConfigChange: (config: Record<string, unknown>) => Promise<boolean>;
+};
 
-export default function XxxScene({ folder, scene }: SceneViewProps) {
-  // 自己决定列什么、怎么录入；数据都写进 entry.fields（核心不解释）
+// features/scene/scenes/<主题>/XxxScene.tsx
+export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneViewProps) {
+  // 自己决定列什么、怎么录入；场景自己的参数写进 folder.sceneConfig（核心不解释）
 }
+
+// 公共件（**第二处用到才抽的**）：
+//   mediaFormat.ts     格式化 + "这个格式 WebView 能不能显示"
+//   MediaLightbox.tsx  点开大图 / 播视频
+// 新主题直接复用，别再写第三份。
 ```
 
 四条约定：
@@ -578,6 +588,8 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 
 ---
 
+> **进度偏差**：挑战主题（打卡墙 / 进度 / 连续天数）比计划提前落地了（原计划放在后期），但只做了"只统计不清零"的那一半——时长边界、违规判定、轮次重启按 PRD §12 第 16 条仍待定。
+
 ## 12. 工程约定（写代码前先看这节）
 
 1. **一个文件一件事**：能用一句话概括它的职责；不能就拆。
@@ -695,7 +707,7 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 ```text
 <vault>/media/<media-id>/
 ├── orig.jpg      原始文件本体，导入后**不可变**（PRD FV-SYN-003）
-└── meta.json     原名 / 扩展名 / MIME / 大小 / 宽高 / sha256 / entryId / addedAt
+└── meta.json     原名 / 扩展名 / MIME / 大小 / 宽高 / sha256 / entryId / addedAt / takenAt
 ```
 
 四条规则：
@@ -704,6 +716,8 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 2. **换归属 = 改 meta 里的 `entryId`**，不搬动几 GB 的文件（和记录扁平化同一个理由）；导入时也是“先落盘、再挂到记录上”两步；
 3. **缩略图不进 Vault**：`%APPDATA%/com.framevault.app/thumbs/<vault-id>/<media-id>.jpg`，可随时重建（PRD FV-SYN-002）；
 4. **媒体进 WebView 的唯一通道是 asset 协议**：Cargo 开 `protocol-asset` + `tauri.conf.json` 开 `assetProtocol`，运行时只 `allow_directory` **当前 Vault 和它的缩略图缓存**——不用 `**` 把整台机器打开。前端一律走 `assetUrl()`（`api.ts` 里包着 `convertFileSrc`），绝不手拼路径。
+
+5. **拍摄时间要读 EXIF（`takenAt`）**：拍照那天才是打卡墙 / 日历该用的日期；读不到（截图、微信导出图都没有 EXIF）就退回 `addedAt`，**不许把导入日当成拍摄日**。
 
 > 为什么缩略图放本机：它是**派生数据**。放进 Vault 只会让同步白搬几 GB，还会在每台设备上各自冲突；丢了在导入时重建即可。
 
@@ -744,7 +758,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / 内置普通记录）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
-**验证状态**：`cargo test` 18 passed（媒体 6 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 270 KB / CSS 21 KB）。
+**验证状态**：`cargo test` 22 passed（媒体 10 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录 / EXIF 时间归一化 / 没有 EXIF 就留空；场景 2 条：id 不重复、每个场景都有名字与描述）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 277 KB / CSS 27 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
@@ -765,3 +779,4 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 带 alpha 的 PNG 存成 JPEG | 缩略图报错：Jpeg 不支持 Rgba8 | 先 `.to_rgb8()` 再 `save` |
 | 图省事用 `**` 放行 asset 范围 | WebView 能读整台机器的文件，前端一旦被注入就完蛋 | 只放行当前 Vault + 它的缩略图目录 |
 | 把 HEIC 直接塞进 `<img>` | 网格里一片碎图（而 iPhone 直出就是 HEIC） | 先生成缩略图；生成不了就查扩展名，给占位 + 原文件路径，别丢碎图 |
+| 把导入日当成拍摄日 | 从相册导旧照片，卡片上的日期全是"今天" | 读 EXIF `DateTimeOriginal` 存 `takenAt`；读不到才退回 `addedAt` |

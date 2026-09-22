@@ -60,6 +60,11 @@ export type MediaItem = {
   bytes: number;
   width: number | null;
   height: number | null;
+  /**
+   * EXIF 拍摄时间（"YYYY-MM-DDTHH:MM:SS"，本地时间、无时区）；
+   * 读不到就是 null —— 卡片日期、打卡日都要退回 addedAt，不能瞎猜。
+   */
+  takenAt: string | null;
   /** sha256，将来去重与同步校验用 */
   hash: string;
   /** 挂在哪条记录上；null = 导入了还没整理 */

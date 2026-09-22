@@ -99,7 +99,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 ## 6. 前端规范
 
 - 目录：`features/<域>/`；主题视图放 `features/scene/scenes/<主题 id>/`。
-- **新增一个功能主题 = 写一个组件 + 在 `registry.ts` 加一行**。核心（Rust schema、记录格式、其他主题）一律不动。
+- **新增一个功能主题 = 写一个组件 + 在 `registry.ts` 加一行 + 在 Rust 的 `builtin_scenes()` 登记同一个 id**。核心（记录格式、其他主题）一律不动。
+  主题拿到的 props 是 `SceneViewProps`：`folder`（含它自己的 `sceneConfig`）、`scene`、`onSceneConfigChange`（写回配置）。
+- **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）与 `MediaLightbox.tsx`（大图 / 视频）已经抽出来了，新主题直接复用，**别写第三份**。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值/裸尺寸**，只能用 `--fv-*` token。
 - 类名 `.block__element--modifier`；只有 `docs/theme-contract.md` 里列出的类名算"对外承诺"。
 - 状态分区（README 工程约定最后一条）：持久化用户数据（Rust）/ 当前选择（`useState`）/ 视图与面板开关（`useState` + localStorage）/ 派生数据（Rust 缓存）。
@@ -173,7 +175,8 @@ apps/framevault/
 │   ├── app/                    TitleBar / 独立窗口外壳 / window.css
 │   ├── features/
 │   │   ├── scene/              场景层：useFolders（数据+归类）/ SceneTree / SceneHost /
-│   │   │                       registry.ts（主题→视图）/ scenes/plain（内置普通记录）
+│   │   │                       registry.ts（主题→视图）/ mediaFormat.ts / MediaLightbox.tsx
+│   │   │                       scenes/plain（普通记录）/ scenes/challenge（挑战打卡墙）
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：token schema + 实时编辑 + 跨窗口同步

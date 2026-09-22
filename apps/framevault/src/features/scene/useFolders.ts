@@ -82,7 +82,8 @@ export function useFolders() {
   );
 
   const bindScene = useCallback(
-    (id: string, scene: string | null) => apply(() => bindFolderScene(id, scene)),
+    (id: string, scene: string | null, config?: Record<string, unknown>) =>
+      apply(() => bindFolderScene(id, scene, config)),
     [apply],
   );
 

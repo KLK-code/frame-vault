@@ -69,6 +69,10 @@ pub struct MediaMeta {
     pub width: Option<u32>,
     #[serde(default)]
     pub height: Option<u32>,
+    /// EXIF 的拍摄时间（"YYYY-MM-DDTHH:MM:SS"，**本地时间、不带时区**）。
+    /// 读不到就是 None —— 打卡墙、日历都该退回 added_at，绝不能瞎猜。
+    #[serde(default)]
+    pub taken_at: Option<String>,
     /// sha256：将来去重与同步校验用（PRD FV-MED-005）
     #[serde(default)]
     pub hash: String,
@@ -143,6 +147,47 @@ pub fn image_size(path: &Path) -> Option<(u32, u32)> {
     image::image_dimensions(path).ok()
 }
 
+/// 读 EXIF 拍摄时间。任何一步失败都返回 None —— 照片本身没问题，只是没这个信息。
+pub fn exif_taken_at(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut reader = std::io::BufReader::new(file);
+    let exif = exif::Reader::new().read_from_container(&mut reader).ok()?;
+
+    let field = exif
+        .get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
+        .or_else(|| exif.get_field(exif::Tag::DateTime, exif::In::PRIMARY))?;
+
+    normalize_exif_datetime(&format!("{}", field.display_value()))
+}
+
+/// EXIF 的时间写法是 `2026:09:22 16:57:03`，转成 ISO 形状 `2026-09-22T16:57:03`。
+/// 宽松一点：冒号或短横、空格或 T 分隔都认；认不出来就 None（不编造时间）。
+pub fn normalize_exif_datetime(raw: &str) -> Option<String> {
+    let text = raw.trim();
+    let (date, time) = match text.split_once('T') {
+        Some((d, t)) => (d, t),
+        None => text.split_once(' ')?,
+    };
+
+    let date = date.trim().replace(':', "-");
+    let mut parts = date.split('-');
+    let (year, month, day) = (parts.next()?, parts.next()?, parts.next()?);
+    if year.len() != 4 || month.is_empty() || day.is_empty() {
+        return None;
+    }
+
+    let time = time.trim();
+    if !time.contains(':') {
+        return None;
+    }
+
+    Some(format!(
+        "{year}-{:0>2}-{:0>2}T{time}",
+        month.trim_start_matches('0'),
+        day.trim_start_matches('0')
+    ))
+}
+
 pub fn read_media(vault: &Path, id: &str) -> AppResult<MediaMeta> {
     read_json(&media_meta_path(vault, id))
 }
@@ -181,6 +226,12 @@ pub fn import_media(
         } else {
             None
         };
+        // 拍摄时间要单独读：EXIF 只在图片里有，而且经常压根没有
+        let taken_at = if is_decodable_image(&ext) {
+            exif_taken_at(&dest)
+        } else {
+            None
+        };
 
         let meta = MediaMeta {
             schema_version: SCHEMA_VERSION,
@@ -194,6 +245,7 @@ pub fn import_media(
             bytes,
             width: size.map(|(w, _)| w),
             height: size.map(|(_, h)| h),
+            taken_at,
             hash,
             entry_id: None,
             added_at: added_at.to_string(),
@@ -341,6 +393,47 @@ mod tests {
         let weird = vault.join("x.heic");
         fs::write(&weird, b"not really a heic").unwrap();
         assert!(write_thumbnail(&weird, &vault.join("cache").join("x.jpg"), 64).is_err());
+    }
+
+    #[test]
+    fn exif_datetime_is_normalized() {
+        assert_eq!(
+            normalize_exif_datetime("2026:09:22 16:57:03").as_deref(),
+            Some("2026-09-22T16:57:03")
+        );
+        assert_eq!(
+            normalize_exif_datetime("2026-09-22 16:57:03").as_deref(),
+            Some("2026-09-22T16:57:03"),
+            "exif 库自己格式化过的也认"
+        );
+        assert_eq!(
+            normalize_exif_datetime("2026:09:22T08:05:00").as_deref(),
+            Some("2026-09-22T08:05:00")
+        );
+        assert_eq!(
+            normalize_exif_datetime("2026:1:2 3:04:05").as_deref(),
+            Some("2026-01-02T3:04:05"),
+            "月日补零；时间按原样（EXIF 一直是 HH:MM:SS）"
+        );
+
+        // 认不出来就 None：宁可不显示，也不要编一个时间
+        assert!(normalize_exif_datetime("").is_none());
+        assert!(normalize_exif_datetime("2026:09:22").is_none());
+        assert!(normalize_exif_datetime("not a date").is_none());
+        assert!(normalize_exif_datetime("2026:09:22").is_none(), "只有日期没有时间");
+    }
+
+    #[test]
+    fn png_without_exif_has_no_taken_at() {
+        let vault = temp_vault("noexif");
+        let source = vault.join("a.png");
+        image::RgbImage::new(2, 2).save(&source).unwrap();
+
+        let meta = import_media(&vault, "m-1", &source, "2026-04-01T10:00:00Z").unwrap();
+        assert!(
+            meta.taken_at.is_none(),
+            "没有 EXIF 就必须留空，让上层退回 added_at"
+        );
     }
 
     #[test]

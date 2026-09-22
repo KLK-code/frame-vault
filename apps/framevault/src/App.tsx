@@ -150,7 +150,13 @@ function App() {
         />
 
         <section className="content">
-          <SceneHost folder={active} scene={activeScene} />
+          <SceneHost
+            folder={active}
+            scene={activeScene}
+            onSceneConfigChange={(config) =>
+              active ? bindScene(active.id, active.scene, config) : Promise.resolve(false)
+            }
+          />
         </section>
       </main>
     </div>

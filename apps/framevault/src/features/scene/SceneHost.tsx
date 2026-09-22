@@ -6,6 +6,8 @@ import "./SceneHost.css";
 type Props = {
   folder: FolderNode | null;
   scene: SceneInfo | null;
+  /** 透传给主题视图：写完 sceneConfig 后由外壳刷新场景列表 */
+  onSceneConfigChange: (config: Record<string, unknown>) => Promise<boolean>;
 };
 
 /**
@@ -14,7 +16,7 @@ type Props = {
  * 它只做三件事：显示场景名与主题、按 `effectiveScene` 找视图、把视图渲染出来。
  * 具体"记录长什么样、怎么录入"全部由主题视图决定——核心不掺和。
  */
-export default function SceneHost({ folder, scene }: Props) {
+export default function SceneHost({ folder, scene, onSceneConfigChange }: Props) {
   if (!folder) {
     return (
       <div className="scene-host scene-host--empty">
@@ -43,7 +45,7 @@ export default function SceneHost({ folder, scene }: Props) {
       )}
 
       {View && scene ? (
-        <View folder={folder} scene={scene} />
+        <View folder={folder} scene={scene} onSceneConfigChange={onSceneConfigChange} />
       ) : (
         <PlainScene
           folder={folder}
@@ -55,6 +57,7 @@ export default function SceneHost({ folder, scene }: Props) {
               builtin: false,
             }
           }
+          onSceneConfigChange={onSceneConfigChange}
         />
       )}
     </div>

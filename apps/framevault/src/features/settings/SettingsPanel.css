@@ -1,9 +1,9 @@
 @layer components {
-  /* 参考 Obsidian 的设置：左边分类导航，右边内容 */
+  /* 参考 Obsidian 的设置：左边分类导航（带搜索框），右边内容 */
   .settings {
     display: grid;
-    grid-template-columns: 168px 1fr;
-    gap: var(--fv-space-5);
+    grid-template-columns: 196px 1fr;
+    gap: var(--fv-space-6);
     height: 100%;
   }
 
@@ -14,12 +14,28 @@
     align-self: start;
     position: sticky;
     top: 0;
-    padding-right: var(--fv-space-3);
+    padding-right: var(--fv-space-4);
     border-right: 1px solid var(--fv-color-border);
   }
 
+  .settings__search {
+    margin-bottom: var(--fv-space-3);
+    padding: 7px 10px;
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-md);
+    background: var(--fv-color-bg);
+    font-size: var(--fv-text-sm);
+  }
+
+  .settings__search::placeholder {
+    color: var(--fv-color-muted);
+  }
+
   .settings__nav-item {
-    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: var(--fv-space-2);
+    padding: 7px 10px;
     border: none;
     border-radius: var(--fv-radius-sm);
     background: transparent;
@@ -39,13 +55,27 @@
     font-weight: 500;
   }
 
+  .settings__nav-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .settings__nav-empty {
+    padding: 6px 10px;
+    font-size: var(--fv-text-sm);
+    color: var(--fv-color-muted);
+  }
+
   .settings__content {
     min-width: 0;
   }
 
   .settings__title {
-    margin: 0 0 var(--fv-space-4);
-    font-size: var(--fv-text-lg);
+    margin: 0 0 var(--fv-space-5);
+    font-size: var(--fv-text-xl);
     font-weight: 600;
   }
 
@@ -53,34 +83,50 @@
     height: var(--fv-space-5);
   }
 
-  /* ── 设置项列表 ── */
-  .settings__rows {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--fv-color-border);
-    border-radius: var(--fv-radius-md);
-    overflow: hidden;
+  .settings__group-title {
+    margin: var(--fv-space-5) 0 var(--fv-space-2);
+    font-size: var(--fv-text-sm);
+    font-weight: 600;
+    color: var(--fv-color-muted);
+  }
+
+  .settings__group-title:first-child {
+    margin-top: 0;
+  }
+
+  /* 卡片：Obsidian 那种浅底圆角块；行之间靠留白和层次分开，不画分割线 */
+  .settings__card {
+    padding: 0 var(--fv-space-4);
+    background: var(--fv-color-surface);
+    border-radius: var(--fv-radius-lg);
   }
 
   .settings__row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--fv-space-3);
-    padding: var(--fv-space-4);
-    border: none;
-    border-bottom: 1px solid var(--fv-color-border);
-    background: var(--fv-color-bg);
+    gap: var(--fv-space-5);
+    padding: var(--fv-space-4) 0;
+  }
+
+  .settings__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .settings__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: var(--fv-text-base);
-    text-align: left;
+    color: var(--fv-color-text);
   }
 
-  .settings__row:last-child {
-    border-bottom: none;
-  }
-
-  .settings__row:hover {
-    background: var(--fv-color-surface-hover);
+  .settings__desc {
+    font-size: var(--fv-text-sm);
+    color: var(--fv-color-muted);
   }
 
   .settings__badge {
@@ -88,12 +134,26 @@
     padding: 1px 6px;
     border: 1px solid var(--fv-color-border);
     border-radius: var(--fv-radius-sm);
-    font-size: var(--fv-text-sm);
+    font-size: var(--fv-text-xs);
     color: var(--fv-color-muted);
   }
 
+  .settings__action {
+    flex: 0 0 auto;
+    min-width: 76px;
+    padding: 6px 14px;
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-md);
+    background: var(--fv-color-bg);
+    font-size: var(--fv-text-sm);
+  }
+
+  .settings__action:hover {
+    background: var(--fv-color-surface-hover);
+  }
+
   .settings__status {
-    margin: var(--fv-space-3) 0 0;
+    margin: var(--fv-space-4) 0 0;
     font-size: var(--fv-text-sm);
     color: var(--fv-color-muted);
   }

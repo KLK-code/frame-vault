@@ -1,41 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-
-const STORAGE_KEY = "fv.themeOverrides";
-const SCHEME_KEY = "fv.colorScheme";
+import { useCallback, useEffect, useState } from "react";
+import {
+  publishTheme,
+  readStoredTheme,
+  type ColorScheme,
+  type ThemePayload,
+} from "./themeSync";
 
 export type Overrides = Record<string, string>;
 
-function readOverrides(): Overrides {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Overrides) : {};
-  } catch {
-    return {};
-  }
-}
+export type { ColorScheme };
 
 /**
- * 实时主题覆盖：
- * - 写进 documentElement 的内联样式 = 最强的一层（相当于 CSS 里的 user 层）
- * - 存 localStorage（属于"视图 / 偏好"类状态，不进 Vault；见架构文档 §14）
+ * 实时主题覆盖（只在设置窗口里用）：
+ * - 改动 → publishTheme：本窗口立即生效 + 存盘 + 广播给其它窗口
  * - 能导出成一段 CSS，粘回 tokens.css 就成了默认样式
  */
 export function useThemeOverrides() {
-  const [overrides, setOverrides] = useState<Overrides>(readOverrides);
-  const applied = useRef<string[]>([]);
+  const [overrides, setOverrides] = useState<Overrides>(() => readStoredTheme().overrides);
 
+  // 任何改动都广播出去，让主窗口 / 其它窗口跟着变
   useEffect(() => {
-    const root = document.documentElement;
-
-    for (const key of applied.current) {
-      if (!(key in overrides)) root.style.removeProperty(key);
-    }
-    for (const [key, value] of Object.entries(overrides)) {
-      root.style.setProperty(key, value);
-    }
-
-    applied.current = Object.keys(overrides);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
+    publishTheme({ overrides, scheme: readStoredTheme().scheme });
   }, [overrides]);
 
   const set = useCallback((key: string, value: string) => {
@@ -69,32 +54,13 @@ export function useThemeOverrides() {
   return { overrides, set, reset, resetOne, exportCss };
 }
 
-export type ColorScheme = "system" | "light" | "dark";
-
-/** 浅色 / 深色 / 跟随系统：通过 html[data-theme="dark"] 切换 tokens 里的那组覆盖 */
+/** 配色模式：同样要广播，否则主窗口不会跟着切深色 */
 export function useColorScheme() {
-  const [scheme, setScheme] = useState<ColorScheme>(
-    () => (localStorage.getItem(SCHEME_KEY) as ColorScheme | null) ?? "system",
-  );
+  const [scheme, setScheme] = useState<ColorScheme>(() => readStoredTheme().scheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-
-    function apply() {
-      const dark = scheme === "dark" || (scheme === "system" && mql.matches);
-      if (dark) root.dataset.theme = "dark";
-      else delete root.dataset.theme;
-    }
-
-    apply();
-    localStorage.setItem(SCHEME_KEY, scheme);
-
-    if (scheme === "system") {
-      mql.addEventListener("change", apply);
-      return () => mql.removeEventListener("change", apply);
-    }
-    return undefined;
+    const payload: ThemePayload = { overrides: readStoredTheme().overrides, scheme };
+    publishTheme(payload);
   }, [scheme]);
 
   return { scheme, setScheme };

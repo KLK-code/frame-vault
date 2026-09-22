@@ -4,21 +4,38 @@ import "./SettingsPanel.css";
 
 export default function SettingsPanel() {
   const [activeId, setActiveId] = useState(SETTINGS_SECTIONS[0].id);
+  const [query, setQuery] = useState("");
+
+  const keyword = query.trim().toLowerCase();
+  const visible = SETTINGS_SECTIONS.filter((s) => s.label.toLowerCase().includes(keyword));
+
   const active = SETTINGS_SECTIONS.find((s) => s.id === activeId) ?? SETTINGS_SECTIONS[0];
   const ActiveSection = active.Section;
 
   return (
     <div className="settings">
       <nav className="settings__nav">
-        {SETTINGS_SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            className={"settings__nav-item" + (section.id === activeId ? " is-active" : "")}
-            onClick={() => setActiveId(section.id)}
-          >
-            {section.label}
-          </button>
-        ))}
+        <input
+          className="settings__search"
+          placeholder="搜索设置…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+
+        {visible.length === 0 ? (
+          <span className="settings__nav-empty">没有匹配的设置</span>
+        ) : (
+          visible.map((section) => (
+            <button
+              key={section.id}
+              className={"settings__nav-item" + (section.id === activeId ? " is-active" : "")}
+              onClick={() => setActiveId(section.id)}
+            >
+              <span className="settings__nav-icon">{section.icon}</span>
+              {section.label}
+            </button>
+          ))
+        )}
       </nav>
 
       <section className="settings__content">

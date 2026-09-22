@@ -42,4 +42,31 @@ button {
 ::selection {
   background: var(--fv-color-selection);
 }
+
+/* 细滚动条：默认的粗滚动条很影响观感 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fv-color-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--fv-color-border-strong);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fv-color-muted);
+  background-clip: content-box;
+}
 }

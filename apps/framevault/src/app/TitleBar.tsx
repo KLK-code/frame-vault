@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isMacOS } from "../lib/platform";
 import "./TitleBar.css";
 
 /* 画法约定：viewBox 10×10、描边 1.4，且**描边必须完整落在画布内**。
@@ -59,14 +60,28 @@ function IconClose() {
 }
 
 /**
- * 自绘标题栏：因为窗口设了 decorations: false，系统标题栏没有了。
- * 拖动靠 data-tauri-drag-region（需要 core:window:allow-start-dragging 权限）。
+ * 自绘标题栏。两个平台两套做法：
+ *
+ * - **Windows**：窗口 `decorations: false`，系统标题栏被去掉，最小化 / 最大化 / 关闭
+ *   三个按钮都由这里自绘（图标与悬停色也是 Windows 的习惯）。
+ * - **macOS**：窗口保留系统标题栏，但用 `titleBarStyle: Overlay` + `hiddenTitle`
+ *   让内容铺满整个窗口，红黄绿由系统画在我们这条顶栏上层
+ *   （见 `src-tauri/tauri.macos.conf.json` 与 `src-tauri/src/commands/window.rs`）。
+ *   所以 mac 上**不渲染**那三个自绘按钮：缩放 / 全屏 / 双击的语义交给系统，
+ *   自己再实现一遍只会跟系统习惯打架。左边留出 `--fv-titlebar-inset-mac` 给红黄绿。
+ *
+ * 拖动两个平台都靠 data-tauri-drag-region（需要 core:window:allow-start-dragging 权限）。
+ * 另外「双击顶栏缩放」是 Tauri 注入脚本自带的，而且 macOS 上专门走 mouseup（鼠标移开还能取消），
+ * **不要再自己写一遍 onDoubleClick**。
  */
 export default function TitleBar({ title }: { title: string }) {
   const win = getCurrentWindow();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
+    // macOS 上按钮是系统画的，图标也由系统管，不用我们跟着窗口尺寸同步状态
+    if (isMacOS) return;
+
     let unlisten: (() => void) | undefined;
     const sync = () => {
       win.isMaximized().then(setMaximized).catch(() => {});
@@ -87,25 +102,28 @@ export default function TitleBar({ title }: { title: string }) {
         {title}
       </span>
 
-      <div className="titlebar__actions">
-        <button className="titlebar__btn" title="最小化" onClick={() => win.minimize()}>
-          <IconMinimize />
-        </button>
-        <button
-          className="titlebar__btn"
-          title={maximized ? "向下还原" : "最大化"}
-          onClick={() => win.toggleMaximize()}
-        >
-          {maximized ? <IconRestore /> : <IconMaximize />}
-        </button>
-        <button
-          className="titlebar__btn titlebar__btn--close"
-          title="关闭"
-          onClick={() => win.close()}
-        >
-          <IconClose />
-        </button>
-      </div>
+      {/* macOS 上是系统原生红黄绿（窗口 decorations: true），自绘按钮会重复 */}
+      {!isMacOS && (
+        <div className="titlebar__actions">
+          <button className="titlebar__btn" title="最小化" onClick={() => win.minimize()}>
+            <IconMinimize />
+          </button>
+          <button
+            className="titlebar__btn"
+            title={maximized ? "向下还原" : "最大化"}
+            onClick={() => win.toggleMaximize()}
+          >
+            {maximized ? <IconRestore /> : <IconMaximize />}
+          </button>
+          <button
+            className="titlebar__btn titlebar__btn--close"
+            title="关闭"
+            onClick={() => win.close()}
+          >
+            <IconClose />
+          </button>
+        </div>
+      )}
     </header>
   );
 }

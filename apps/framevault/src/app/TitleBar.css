@@ -41,4 +41,9 @@
   background: var(--fv-color-danger-strong);
   color: var(--fv-color-on-danger);
 }
+
+/* macOS：红黄绿是系统画的，顶栏左侧要让开（值见 tokens.css 的 --fv-titlebar-inset-mac） */
+:root[data-os="macos"] .titlebar {
+  padding-left: var(--fv-titlebar-inset-mac);
+}
 }

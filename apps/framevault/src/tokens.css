@@ -36,6 +36,10 @@
 
     /* ── 尺寸 ── */
     --fv-titlebar-height: 32px;
+    /* macOS：顶栏左侧要让开系统原生红黄绿按钮。
+       关闭按钮左边缘 20px 起，三个 12px 按钮按系统间距排开约占到 72px，再留 8px 间隙。
+       与 src-tauri/src/commands/window.rs 里的 TRAFFIC_LIGHT 常量必须同时改。 */
+    --fv-titlebar-inset-mac: 80px;
 
     /* ── 圆角 ── */
     --fv-radius-sm: 4px;

@@ -3,12 +3,25 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--fv-space-3);
-  margin-bottom: var(--fv-space-5);
+  margin-bottom: var(--fv-space-4);
 }
 
 .manager__head h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fv-text-lg);
+  font-weight: 600;
+}
+
+.manager__head button {
+  padding: 6px 12px;
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+  font-size: var(--fv-text-base);
+}
+
+.manager__head button:hover {
+  background: var(--fv-color-surface-hover);
 }
 
 .manager__empty {
@@ -18,7 +31,7 @@
 .manager__list {
   display: flex;
   flex-direction: column;
-  gap: var(--fv-space-2);
+  gap: var(--fv-space-1);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -29,7 +42,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--fv-space-3);
-  padding: var(--fv-space-3);
+  padding: var(--fv-space-2) var(--fv-space-3);
   background: var(--fv-color-surface);
   border: 1px solid var(--fv-color-border);
   border-radius: var(--fv-radius-md);
@@ -42,18 +55,18 @@
 .manager__info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .manager__info span {
-  font-size: 12px;
+  font-size: var(--fv-text-sm);
   color: var(--fv-color-muted);
   overflow-wrap: anywhere;
 }
 
 .manager__info span.is-missing {
-  color: #c0392b;
+  color: var(--fv-color-danger);
 }
 
 .manager__actions {
@@ -63,12 +76,15 @@
 }
 
 .manager__actions button {
-  padding: 6px 12px;
+  padding: 4px 10px;
   border: 1px solid var(--fv-color-border);
   border-radius: var(--fv-radius-md);
-  background: var(--fv-color-surface);
-  color: inherit;
-  cursor: pointer;
+  background: var(--fv-color-bg);
+  font-size: var(--fv-text-sm);
+}
+
+.manager__actions button:hover:not(:disabled) {
+  background: var(--fv-color-surface-hover);
 }
 
 .manager__actions button:disabled {
@@ -77,7 +93,7 @@
 }
 
 .manager__status {
-  margin-top: var(--fv-space-5);
-  font-size: 13px;
+  margin-top: var(--fv-space-4);
+  font-size: var(--fv-text-sm);
   color: var(--fv-color-muted);
 }

@@ -3,6 +3,7 @@
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
+  background: var(--fv-color-bg);
 }
 
 .manager-window__bar {
@@ -13,7 +14,7 @@
   padding: var(--fv-space-2) var(--fv-space-3);
   background: var(--fv-color-surface);
   border-bottom: 1px solid var(--fv-color-border);
-  font-size: 12px;
+  font-size: var(--fv-text-sm);
   color: var(--fv-color-muted);
 }
 
@@ -21,15 +22,16 @@
   padding: 4px 10px;
   border: 1px solid var(--fv-color-border);
   border-radius: var(--fv-radius-md);
-  background: var(--fv-color-surface);
-  color: inherit;
-  font-size: 12px;
-  cursor: pointer;
+  background: var(--fv-color-bg);
+  font-size: var(--fv-text-sm);
+}
+
+.manager-window__bar button:hover {
+  background: var(--fv-color-surface-hover);
 }
 
 .manager-window__body {
   flex: 1;
-  padding: var(--fv-space-5);
+  padding: var(--fv-space-4) var(--fv-space-5);
   overflow: auto;
 }
-

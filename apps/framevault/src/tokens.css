@@ -1,13 +1,44 @@
+/* FrameVault Design Tokens
+   风格基准：Obsidian + Things —— 中性、干净、发丝线边框、小圆角、几乎不用重色块。
+   规则：组件里不写裸色值，一切颜色都必须在这里有名字（FV-THM-001）。 */
 :root {
-  --fv-color-bg: #f7f7f7;
-  --fv-color-surface: #ffffff;
-  --fv-color-text: #202020;
-  --fv-color-muted: #777777;
-  --fv-color-border: #e3e3e3;
-  --fv-color-accent: #6f5cff;
-  --fv-radius-md: 12px;
+  /* ── 颜色 ── */
+  --fv-color-bg: #ffffff; /* 内容区底色 */
+  --fv-color-surface: #fbfbfa; /* 侧栏 / 面板底色（Obsidian 的暖灰） */
+  --fv-color-surface-hover: #f2f2f1; /* 悬停底色 */
+  --fv-color-text: #1f1f1f; /* 正文 */
+  --fv-color-muted: #8a8a8a; /* 次要文字 */
+  --fv-color-border: #e8e8e6; /* 发丝线 */
+  --fv-color-border-strong: #d8d8d5; /* 需要用力的分隔线 */
+
+  /* 主色：原来那个蓝。想换主题只改这三行 */
+  --fv-color-accent: #086ddd;
+  --fv-color-accent-soft: #e8f1fd; /* 选中底色 */
+  --fv-color-accent-hover: #f0f5fc; /* 悬停淡蓝 */
+
+  --fv-color-danger: #c0392b;
+
+  /* ── 圆角（Things 偏小圆角）── */
+  --fv-radius-sm: 4px;
+  --fv-radius-md: 6px;
+  --fv-radius-lg: 10px;
+
+  /* ── 间距（等比，别在组件里写裸 px）── */
+  --fv-space-1: 4px;
   --fv-space-2: 8px;
   --fv-space-3: 12px;
+  --fv-space-4: 16px;
   --fv-space-5: 24px;
-  --fv-space-7: 32px;
+  --fv-space-6: 32px;
+  --fv-space-7: 48px;
+
+  /* ── 字体 ── */
+  --fv-font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --fv-text-sm: 12px;
+  --fv-text-base: 13px;
+  --fv-text-lg: 15px;
+  --fv-text-xl: 20px;
+
+  /* ── 阴影：只给浮层用，别到处堆 ── */
+  --fv-shadow-menu: 0 6px 24px rgba(0, 0, 0, 0.1);
 }

@@ -12,10 +12,22 @@ body,
 }
 
 body {
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    "Microsoft YaHei",
-    sans-serif;
+  font-family: var(--fv-font-sans);
+  font-size: var(--fv-text-base);
+  line-height: 1.55;
+  color: var(--fv-color-text);
+  background: var(--fv-color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
 }

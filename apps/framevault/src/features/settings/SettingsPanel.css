@@ -67,7 +67,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--fv-space-3);
-    padding: var(--fv-space-3) var(--fv-space-4);
+    padding: var(--fv-space-4);
     border: none;
     border-bottom: 1px solid var(--fv-color-border);
     background: var(--fv-color-bg);

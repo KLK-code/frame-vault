@@ -50,15 +50,17 @@
     --fv-space-6: 32px;
     --fv-space-7: 48px;
 
-    /* ── 字体 ── */
+    /* ── 字体 ──
+       字号整体偏大一档：基准 15px（原来 13px），行高 1.6。
+       观感上"大气"很大程度上来自字号与行高，而不是留白。 */
     --fv-font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
     --fv-font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
-    --fv-text-xs: 11px;
-    --fv-text-sm: 12px;
-    --fv-text-base: 13px;
-    --fv-text-lg: 15px;
-    --fv-text-xl: 20px;
-    --fv-line-height: 1.55;
+    --fv-text-xs: 12px;
+    --fv-text-sm: 13px;
+    --fv-text-base: 15px;
+    --fv-text-lg: 17px;
+    --fv-text-xl: 22px;
+    --fv-line-height: 1.6;
 
     /* ── 阴影阶梯：只给浮层用 ── */
     --fv-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);

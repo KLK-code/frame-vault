@@ -46,9 +46,9 @@ export const TOKEN_GROUPS: TokenGroup[] = [
   {
     title: "字号与间距",
     tokens: [
-      { key: "--fv-text-sm", label: "小字号", kind: "length", min: 10, max: 16, step: 1 },
-      { key: "--fv-text-base", label: "基准字号", kind: "length", min: 11, max: 18, step: 1 },
-      { key: "--fv-text-lg", label: "大字号", kind: "length", min: 13, max: 22, step: 1 },
+      { key: "--fv-text-sm", label: "小字号", kind: "length", min: 11, max: 18, step: 1 },
+      { key: "--fv-text-base", label: "基准字号", kind: "length", min: 12, max: 20, step: 1 },
+      { key: "--fv-text-lg", label: "大字号", kind: "length", min: 14, max: 26, step: 1 },
       { key: "--fv-space-3", label: "间距 · 紧", kind: "length", min: 4, max: 24, step: 1 },
       { key: "--fv-space-5", label: "间距 · 中", kind: "length", min: 8, max: 40, step: 1 },
       { key: "--fv-space-6", label: "间距 · 松", kind: "length", min: 12, max: 64, step: 2 },

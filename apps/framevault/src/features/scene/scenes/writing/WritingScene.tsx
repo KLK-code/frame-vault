@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
 import { useCompact } from "../../../../lib/useCompact";
 import { fieldText, readField, writeFields, type FieldDecl, type SceneViewProps } from "../../manifest";
 import { displayableSrc, formatDay } from "../../mediaFormat";
-import MarkdownField from "../../markdown/MarkdownField";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
 import SceneIcon from "../../SceneIcon";
@@ -11,6 +10,9 @@ import SceneNotice from "../../SceneNotice";
 import { useSceneData } from "../../useSceneData";
 import manifest from "./manifest";
 import "./WritingScene.css";
+
+// 所见即所得编辑器比较重（ProseMirror 家族），只在写作台里按需加载
+const MarkdownWysiwyg = lazy(() => import("../../markdown/MarkdownWysiwyg"));
 
 const NL = String.fromCharCode(10);
 
@@ -162,17 +164,15 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 </div>
               )}
 
-              <MarkdownField
-                id="writing-text"
-                value={draft.text}
-                rows={compact ? 10 : 18}
-                layout={compact ? "toggle" : "split"}
-                placeholder={textField ? textField.placeholder : undefined}
-                onChange={(next) => {
-                  setDraft((prev) => ({ ...prev, text: next }));
-                  setDirty(true);
-                }}
-              />
+              <Suspense fallback={<p className="writing__loading">编辑器加载中…</p>}>
+                <MarkdownWysiwyg
+                  value={draft.text}
+                  onChange={(next) => {
+                    setDraft((prev) => ({ ...prev, text: next }));
+                    setDirty(true);
+                  }}
+                />
+              </Suspense>
 
               <div className="writing__actions">
                 <button
@@ -199,7 +199,7 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 >
                   删除
                 </button>
-                <span className="writing__hint">正文是 Markdown；宽窗口下右边是实时预览</span>
+                <span className="writing__hint">所见即所得：标题、列表、引用直接就是排好的样子，改完记得保存</span>
               </div>
 
               {photos.length > 0 && (

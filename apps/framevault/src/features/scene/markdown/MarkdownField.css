@@ -1,5 +1,5 @@
 @layer components {
-  /* Markdown 输入控件：工具栏 + 编辑 / 预览（document 形态还能并排） */
+  /* Markdown 输入控件：工具栏 + 编辑 / 预览 */
   .md-field { display: grid; gap: var(--fv-space-2); }
 
   .md-field__head {
@@ -55,25 +55,4 @@
     background: var(--fv-color-paper);
   }
   .md-field__empty { margin: 0; color: var(--fv-color-muted); font-size: var(--fv-text-sm); }
-
-  /* ── document 形态：写作页 ── */
-  .md-field--document .md-field__input {
-    min-height: 320px;
-    line-height: var(--fv-line-height);
-    resize: vertical;
-  }
-  .md-field--document .md-field__preview {
-    max-height: 60vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-gutter: stable;
-  }
-
-  .md-field__split {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: var(--fv-space-3);
-    align-items: start;
-  }
-  .md-field__pane { min-width: 0; }
 }

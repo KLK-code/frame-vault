@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { useCompact } from "../../../lib/useCompact";
 import MarkdownView from "./MarkdownView";
 import "./MarkdownField.css";
 
@@ -34,9 +33,7 @@ const ACTIONS: Action[] = [
 /**
  * 正文输入控件：textarea + 语法工具栏 + 预览。
  *
- * 两种形态（主题只挑形态，不自己写控件 —— 见 AGENTS §6）：
- *   field     表单里的多行字段（默认）：编辑 ↔ 预览 切换；
- *   document  写作页（长文主题用）：**宽视口并排**（左写右看），窄视口自动退回切换。
+ * 编辑 ↔ 预览 切换；主题只管用不用它，不自己写控件（见 AGENTS §6）。
  *
  * 它**只产出 Markdown 字符串**，不碰数据、也不认识记录。
  * 三个坑都在这儿治好了（也记进了 AGENTS §9）：
@@ -49,23 +46,17 @@ export default function MarkdownField({
   value,
   placeholder,
   rows = 4,
-  variant = "field",
   onChange,
 }: {
   id?: string;
   value: string;
   placeholder?: string;
   rows?: number;
-  variant?: "field" | "document";
   onChange: (next: string) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const composing = useRef(false);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
-
-  // 并排要够宽才有意义：比骨架的窄屏断点更靠里（900 / 940，同样带滞后）
-  const compact = useCompact(900, 940);
-  const split = variant === "document" && !compact;
 
   function apply(action: Action) {
     const el = ref.current;
@@ -108,7 +99,7 @@ export default function MarkdownField({
         id={id}
         ref={ref}
         className="field__control md-field__input"
-        rows={variant === "document" ? Math.max(rows, 14) : rows}
+        rows={rows}
         placeholder={placeholder}
         value={value}
         onCompositionStart={() => {
@@ -131,7 +122,7 @@ export default function MarkdownField({
   }
 
   return (
-    <div className={variant === "document" ? "md-field md-field--document" : "md-field"}>
+    <div className="md-field">
       <div className="md-field__head">
         <div className="md-field__bar" role="toolbar" aria-label="Markdown 语法">
           {ACTIONS.map((action) => (
@@ -148,36 +139,25 @@ export default function MarkdownField({
             </button>
           ))}
         </div>
-        {!split && (
-          <div className="md-field__modes">
-            <button
-              type="button"
-              className={mode === "edit" ? "md-field__mode is-active" : "md-field__mode"}
-              onClick={() => setMode("edit")}
-            >
-              编辑
-            </button>
-            <button
-              type="button"
-              className={mode === "preview" ? "md-field__mode is-active" : "md-field__mode"}
-              onClick={() => setMode("preview")}
-            >
-              预览
-            </button>
-          </div>
-        )}
+        <div className="md-field__modes">
+          <button
+            type="button"
+            className={mode === "edit" ? "md-field__mode is-active" : "md-field__mode"}
+            onClick={() => setMode("edit")}
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            className={mode === "preview" ? "md-field__mode is-active" : "md-field__mode"}
+            onClick={() => setMode("preview")}
+          >
+            预览
+          </button>
+        </div>
       </div>
 
-      {split ? (
-        <div className="md-field__split">
-          <div className="md-field__pane">{renderInput()}</div>
-          <div className="md-field__pane">{renderPreview()}</div>
-        </div>
-      ) : mode === "edit" ? (
-        renderInput()
-      ) : (
-        renderPreview()
-      )}
+      {mode === "edit" ? renderInput() : renderPreview()}
     </div>
   );
 }

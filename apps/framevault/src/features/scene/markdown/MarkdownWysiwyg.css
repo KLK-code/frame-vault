@@ -1,0 +1,94 @@
+@layer components {
+  /* 所见即所得正文：只吃 --fv-* token，跟 MarkdownView 的排版尽量一致 */
+  .md-wysiwyg {
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-md);
+    background: var(--fv-color-paper);
+    overflow: hidden;
+  }
+  .md-wysiwyg:focus-within { border-color: var(--fv-color-accent); }
+
+  .md-wysiwyg .milkdown { display: block; }
+  .md-wysiwyg .ProseMirror {
+    min-height: 320px;
+    max-height: 70vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: var(--fv-space-4);
+    outline: none;
+    color: var(--fv-color-text);
+    font-size: var(--fv-text-base);
+    line-height: var(--fv-line-height);
+    overflow-wrap: anywhere;
+  }
+  .md-wysiwyg .ProseMirror > *:first-child { margin-top: 0; }
+  .md-wysiwyg .ProseMirror > *:last-child { margin-bottom: 0; }
+
+  .md-wysiwyg .ProseMirror h1,
+  .md-wysiwyg .ProseMirror h2,
+  .md-wysiwyg .ProseMirror h3,
+  .md-wysiwyg .ProseMirror h4,
+  .md-wysiwyg .ProseMirror h5,
+  .md-wysiwyg .ProseMirror h6 {
+    margin: var(--fv-space-4) 0 var(--fv-space-2);
+    color: var(--fv-color-text-strong);
+    font-weight: 650;
+    line-height: 1.35;
+  }
+  .md-wysiwyg .ProseMirror h1 { font-size: var(--fv-text-xl); }
+  .md-wysiwyg .ProseMirror h2 { font-size: var(--fv-text-lg); }
+  .md-wysiwyg .ProseMirror h3 { font-size: var(--fv-text-base); }
+  .md-wysiwyg .ProseMirror h4,
+  .md-wysiwyg .ProseMirror h5,
+  .md-wysiwyg .ProseMirror h6 { font-size: var(--fv-text-sm); color: var(--fv-color-muted); }
+
+  .md-wysiwyg .ProseMirror p { margin: 0 0 var(--fv-space-3); }
+  .md-wysiwyg .ProseMirror blockquote {
+    margin: 0 0 var(--fv-space-3);
+    padding: var(--fv-space-1) 0 var(--fv-space-1) var(--fv-space-3);
+    border-left: 3px solid var(--fv-color-border-strong);
+    color: var(--fv-color-muted);
+  }
+  .md-wysiwyg .ProseMirror ul,
+  .md-wysiwyg .ProseMirror ol { margin: 0 0 var(--fv-space-3); padding-left: var(--fv-space-5); }
+  .md-wysiwyg .ProseMirror li { margin: var(--fv-space-1) 0; }
+  .md-wysiwyg .ProseMirror li > p { margin: 0; }
+  .md-wysiwyg .ProseMirror code {
+    padding: 1px 4px;
+    font-family: var(--fv-font-mono);
+    font-size: .92em;
+    background: var(--fv-color-surface-active);
+    border-radius: var(--fv-radius-sm);
+  }
+  .md-wysiwyg .ProseMirror pre {
+    margin: 0 0 var(--fv-space-3);
+    padding: var(--fv-space-3);
+    overflow-x: auto;
+    background: var(--fv-color-surface);
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-md);
+  }
+  .md-wysiwyg .ProseMirror pre code { padding: 0; background: transparent; font-size: var(--fv-text-sm); }
+  .md-wysiwyg .ProseMirror a { color: var(--fv-color-accent); text-decoration: underline; text-underline-offset: 2px; }
+  .md-wysiwyg .ProseMirror hr { margin: var(--fv-space-5) 0; border: none; border-top: 1px solid var(--fv-color-border); }
+  .md-wysiwyg .ProseMirror img { max-width: 100%; border-radius: var(--fv-radius-md); }
+  .md-wysiwyg .ProseMirror table { border-collapse: collapse; font-size: var(--fv-text-sm); }
+  .md-wysiwyg .ProseMirror th,
+  .md-wysiwyg .ProseMirror td {
+    padding: var(--fv-space-1) var(--fv-space-3);
+    border: 1px solid var(--fv-color-border);
+    text-align: left;
+  }
+  .md-wysiwyg .ProseMirror th { background: var(--fv-color-surface); font-weight: 600; }
+
+  /* 空文档时给个提示（ProseMirror 的空段落靠 ::before 画） */
+  .md-wysiwyg .ProseMirror p.is-empty::before,
+  .md-wysiwyg .ProseMirror .is-empty::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: var(--fv-color-muted);
+    pointer-events: none;
+  }
+}

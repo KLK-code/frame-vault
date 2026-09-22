@@ -6,6 +6,8 @@ pub const PLAIN_SCENE: &str = "builtin.plain";
 /// 内置的"挑战 / 打卡"场景：连续打卡，顶部显示进度与连续天数
 pub const CHALLENGE_SCENE: &str = "builtin.challenge";
 
+pub const TRAVEL_SCENE: &str = "builtin.travel";
+
 /// 一个场景（= 功能主题）的元信息。
 /// 现在只有内置的；将来这里会换成"从主题包清单里读"，第三方就能带自己的场景。
 #[derive(Debug, Clone, Serialize)]
@@ -25,14 +27,20 @@ pub fn builtin_scenes() -> Vec<SceneInfo> {
     vec![
         SceneInfo {
             id: PLAIN_SCENE.to_string(),
-            name: "普通记录".to_string(),
-            description: "照片 + 文字的时间线，最基础的场景".to_string(),
+            name: "普通日记".to_string(),
+            description: "记录生活，那些细小而珍贵的瞬间".to_string(),
+            builtin: true,
+        },
+        SceneInfo {
+            id: TRAVEL_SCENE.to_string(),
+            name: "旅行".to_string(),
+            description: "收藏世界，也收藏自己：用地点、文字与照片记录旅程".to_string(),
             builtin: true,
         },
         SceneInfo {
             id: CHALLENGE_SCENE.to_string(),
             name: "挑战".to_string(),
-            description: "连续打卡：顶部是进度与连续天数，照片按日期铺成打卡墙".to_string(),
+            description: "挑战今天，遇见更强的自己：进度、连续天数与打卡记录".to_string(),
             builtin: true,
         },
     ]
@@ -72,5 +80,16 @@ mod tests {
                 scene.id
             );
         }
+    }
+
+    #[test]
+    fn travel_can_be_selected_and_survives_folder_roundtrip() {
+        assert!(is_known("builtin.travel"), "旅行必须能通过绑定主题的校验");
+        let folder = super::super::folder::FolderMeta::new(
+            "travel-test", "旅途", 0, Some("builtin.travel".into()),
+        );
+        let json = serde_json::to_string(&folder).unwrap();
+        let restored: super::super::folder::FolderMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.effective_scene(), "builtin.travel");
     }
 }

@@ -1,6 +1,7 @@
 import type { FolderNode, SceneInfo } from "../../lib/api";
 import { sceneOf } from "./registry";
 import PlainScene from "./scenes/plain/PlainScene";
+import SceneIcon from "./SceneIcon";
 import "./SceneHost.css";
 
 type Props = {
@@ -30,12 +31,20 @@ export default function SceneHost({ folder, scene, onSceneConfigChange }: Props)
   }
 
   const View = sceneOf(folder.effectiveScene)?.View;
+  const presentation = sceneOf(folder.effectiveScene)?.manifest.presentation;
 
   return (
     <div className="scene-host">
       <header className="scene-host__head">
-        <h1 className="scene-host__name">{folder.name}</h1>
-        <span className="scene-host__theme">{scene ? scene.name : folder.effectiveScene}</span>
+        <div className="scene-host__intro">
+          <span className="scene-host__eyebrow"><SceneIcon name={presentation?.icon} size={16} />{presentation?.eyebrow ?? "FRAMEVAULT"}</span>
+          <div className="scene-host__heading">
+            <h1 className="scene-host__name">{folder.name}</h1>
+            <span className="scene-host__theme">{scene ? scene.name : folder.effectiveScene}</span>
+          </div>
+          <p className="scene-host__subtitle">{presentation?.subtitle ?? scene?.description}</p>
+        </div>
+        {presentation && <span className="scene-host__signature" aria-hidden="true">{presentation.signature}<SceneIcon name={presentation.icon} size={38} /></span>}
       </header>
 
       {!View && (
@@ -45,9 +54,10 @@ export default function SceneHost({ folder, scene, onSceneConfigChange }: Props)
       )}
 
       {View && scene ? (
-        <View folder={folder} scene={scene} onSceneConfigChange={onSceneConfigChange} />
+        <View key={`${folder.id}:${scene.id}`} folder={folder} scene={scene} onSceneConfigChange={onSceneConfigChange} />
       ) : (
         <PlainScene
+          key={`${folder.id}:${folder.effectiveScene}`}
           folder={folder}
           scene={
             scene ?? {

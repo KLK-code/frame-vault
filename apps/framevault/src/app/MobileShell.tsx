@@ -68,7 +68,7 @@ export default function MobileShell() {
   }
 
   return (
-    <div className="app-root">
+    <div className="app-root" data-scene={active?.effectiveScene}>
       {/*
         桌面窗口必须保留自绘标题栏：Windows 上窗口是 decorations: false，
         它是**唯一**能拖动 / 最小化 / 关闭的地方。去掉就变成"窗口卡死在那儿"。

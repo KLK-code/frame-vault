@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FolderNode, SceneInfo } from "../../lib/api";
 import type { SceneGroup } from "./useFolders";
+import { sceneOf } from "./registry";
+import SceneIcon from "./SceneIcon";
 import "./SceneTree.css";
 
 type Props = {
@@ -122,7 +124,7 @@ export default function SceneTree({
             title="选择主题"
             onChange={(e) => setDraftScene(e.target.value)}
           >
-            <option value="">普通记录</option>
+            <option value="">普通日记</option>
             {scenes
               .filter((s) => s.id !== "builtin.plain")
               .map((s) => (
@@ -189,7 +191,7 @@ export default function SceneTree({
                     }}
                     onBlur={() => setEditing(null)}
                   >
-                    <option value="">不绑定 · 普通记录</option>
+                    <option value="">不绑定 · 普通日记</option>
                     {scenes.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
@@ -206,7 +208,9 @@ export default function SceneTree({
                     onClick={() => onSelect(folder.id)}
                     onDoubleClick={() => setEditing({ id: folder.id, mode: "rename" })}
                     title={folder.name}
+                    aria-current={isActive ? "page" : undefined}
                   >
+                    <SceneIcon name={sceneOf(folder.effectiveScene)?.manifest.presentation?.icon} size={18} />
                     {folder.pinned && (
                       <span className="scene-row__pin" title="已置顶">
                         <IconBookmark />

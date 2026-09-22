@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import TitleBar from "./app/TitleBar";
 import SceneHost from "./features/scene/SceneHost";
 import SceneTree from "./features/scene/SceneTree";
+import { sceneOf } from "./features/scene/registry";
+import SceneIcon from "./features/scene/SceneIcon";
 import { useActiveFolder, useFolders } from "./features/scene/useFolders";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
 import { confirm, openSettings } from "./lib/api";
@@ -90,7 +92,7 @@ function DesktopShell() {
   }
 
   return (
-    <div className="app-root">
+    <div className="app-root" data-scene={active?.effectiveScene}>
       <TitleBar title="FrameVault" />
 
       <main className="app">
@@ -108,6 +110,14 @@ function DesktopShell() {
           />
 
           {error && <p className="sidebar__error">{error}</p>}
+
+          {active && sceneOf(active.effectiveScene)?.manifest.presentation && (
+            <div className="sidebar__motto">
+              <SceneIcon name={sceneOf(active.effectiveScene)?.manifest.presentation?.icon} size={28} />
+              <p>{sceneOf(active.effectiveScene)?.manifest.presentation?.motto}</p>
+              <span>FRAMEVAULT · 每一帧，都珍贵</span>
+            </div>
+          )}
 
           <div className="sidebar__footer">
             <VaultSwitcher />

@@ -1,6 +1,7 @@
 import type { SceneUnit } from "./manifest";
 import challengeScene from "./scenes/challenge";
 import plainScene from "./scenes/plain";
+import travelScene from "./scenes/travel";
 
 export type { FieldDecl, SceneManifest, SceneUnit, SceneViewProps } from "./manifest";
 
@@ -17,6 +18,7 @@ export type { FieldDecl, SceneManifest, SceneUnit, SceneViewProps } from "./mani
 export const SCENES: Record<string, SceneUnit> = {
   "builtin.plain": plainScene,
   "builtin.challenge": challengeScene,
+  "builtin.travel": travelScene,
 };
 
 export function sceneOf(id: string): SceneUnit | undefined {

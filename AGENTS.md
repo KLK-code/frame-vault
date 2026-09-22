@@ -128,6 +128,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   否则一百个主题会发明一百种格式，Vault 就不再是开放格式；
   不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
+- 三个内置主题共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除），仍由 `useSceneData` 提供数据。`manifest.presentation` 仅声明图标名与文案；外壳只经注册表读取。主骨架的 `data-scene` 让 `tokens.css` 选择默认配色，用户外观覆盖优先。普通日记仍用 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
   只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
@@ -220,6 +221,7 @@ apps/framevault/
 │   │   │                       registry.ts（主题→视图）/ mediaFormat.ts / MediaLightbox.tsx
 │   │   │                       SceneMedia.tsx（场景照片墙，手机“照片”页）
 │   │   │                       scenes/plain（普通记录）/ scenes/challenge（挑战打卡墙）
+│   │   │                       scenes/travel（旅行）/ SceneComposer / EntryTimeline / SceneIcon
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：token schema + 实时编辑 + 跨窗口同步

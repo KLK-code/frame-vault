@@ -286,9 +286,11 @@ src/
 │   ├── SceneTree.tsx / .css    左侧：主题分组 → 场景行（新建/重命名/置顶/换主题/删除）
 │   ├── SceneHost.tsx / .css    右侧：按 effectiveScene 找视图并渲染（含空态、缺主题提示）
 │   ├── registry.ts            主题 id → 视图组件（**扩展点**）
-│   └── scenes/plain/          内置"普通记录"
-│       ├── PlainScene.tsx
-│       └── PlainScene.css
+│   ├── SceneComposer.tsx/.css  共用快捷录入（照片 / 文字，防重复提交）
+│   ├── EntryTimeline.tsx/.css  共用时间线、编辑、媒体与删除入口
+│   ├── SceneIcon.tsx          主题声明使用的线性图标
+│   └── scenes/{plain,travel,challenge}/  普通日记 / 旅行 / 挑战自治单元
+│       └── manifest.ts + index.ts + 视图.tsx + 同名.css
 ├── features/vault/           仓库：悬浮切换菜单 + 独立窗口里的管理面板
 ├── features/settings/        设置：左导航 + 右内容
 ├── features/theme/           设计令牌 schema + 实时编辑 + 跨窗口同步
@@ -318,7 +320,7 @@ App.tsx ──▶ features/* ──▶ lib/api.ts ──▶ (invoke / listen) �
 | 规则 | 说明 | 例子 |
 |---|---|---|
 | **一个主题一个目录** | 主题视图 + 它私有的子组件 + 样式都放一起，删主题只删一个目录 | `scenes/plain/{PlainScene.tsx,PlainScene.css}` |
-| **复用要"有人催"** | 第二个主题真要用才从 `scenes/<id>/` 升级到 `features/scene/`，第三个才升级到通用原语 | 现在只有 `PlainScene` 一个主题，所以什么都不用抽 |
+| **复用要"有人催"** | 第二个主题真要用才从 `scenes/<id>/` 升级到 `features/scene/` | 三个主题已共用 `SceneComposer` / `EntryTimeline`，数据仍由 `useSceneData` 提供 |
 | **样式与组件同目录同名** | 全局样式只有 `styles/` + `tokens.css`；其余样式跟它服务的组件并排 | `SceneTree.css` 与 `SceneTree.tsx` 同目录 |
 | **外壳不认识场景内部** | 外壳只认 `FolderNode` / `SceneInfo` 这两个契约类型，不认识任何主题的实现 | `App.tsx` 不 import 任何 `scenes/…` 里的东西 |
 
@@ -385,6 +387,11 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 |---|---|---|
 | `entryFields` | 这个主题的记录上有什么字段（核心生成录入控件与展示） | 普通记录的「正文」 |
 | `configSchema` | 这个场景的设置表单形状（存 `folder.sceneConfig`） | 挑战的「目标天数」「规则」 |
+| `presentation` | 图标名、标题区短语、副标题、手写式签名与侧栏寄语，全部是纯数据 | 宿主与外壳经注册表读取，不导入主题内部实现 |
+
+**当前三个内置主题（2026-09-22）**：普通日记沿用 `builtin.plain`，旅行新增 `builtin.travel`，挑战沿用 `builtin.challenge`。三个视图各调用一次 `useSceneData`，再把结果传给共用录入和时间线；挑战另有照片墙展示。时间线按 `dateOf` 倒序显示，编辑合并本主题字段并保留其他命名空间与未知字段。`SceneHost` 按场景 id 与主题 id 给视图设置 key，切换场景时重置草稿和预览，避免串场景。
+
+**默认外观**：旅行青绿、挑战炭黑橙色、日记暖白棕色。`tokens.css` 在 `@layer base` 内通过 `:root:has(.app-root[data-scene="…"])` 选择配色；变量仍定义在根元素，使用户内联覆盖保持最高优先级。旅行与日记支持深色变体，挑战默认固定深色基调。标题栏与手机骨架继承同一组变量；独立设置 / 仓库窗口不匹配这个选择器。
 
 **要加"距离 / 时长"这类主题特有字段？在 manifest 里加两行声明即可**——不用改核心，也不用改别的主题。
 这是"通用能力 vs 主题特有"的分界：**通用能力进 `useSceneData`；主题特有的一律先走声明**；
@@ -395,7 +402,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 这就是"基础功能默认做好"的真正理由：不是省事，是**格式统一**（一百个主题各写一套删除 = 一百种墓碑格式，Vault 就不再开放）。
 
 **规则**：主题只决定"显示哪些、按什么顺序、点哪里触发哪个能力"。**不许在主题里再写一遍取数据 + 过滤 + 刷新**——
-普通记录与挑战能同时具备"改文字 / 追加照片"，就是因为能力只有一份。
+三个主题能同时具备"改文字 / 追加照片 / 删除撤销"，就是因为能力只有一份。
 
 ```tsx
 ```
@@ -407,7 +414,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 3. **loading / error / empty 三态自己处理**（现在还没有通用原语，等第二个主题出现再抽——别提前抽）；
 4. **认不出的主题不许白屏**：`SceneHost` 会显示一条提示并用"普通记录"兜底渲染，场景内容永远看得见。
 
-**注册表就是扩展点**：`registry.ts` 里多一行 `"vendor.xxx": XxxScene`，这个主题就活了；Rust 侧一行都不用改（`entry.fields` 是开放区）。将来主题以包的形式分发时，这里换成动态注册。
+**注册表就是扩展点**：前端 `registry.ts` 登记主题单元，同时在 Rust `builtin_scenes()` 登记同一 id，才能通过绑定主题校验。主题字段使用既有 `entry.fields` 开放区，无需改变核心 schema。将来主题以包的形式分发时再换成动态注册。
 
 ### 4.5 三个复用层级的判定
 
@@ -692,6 +699,8 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 
 ### 13.2 数据落点（都在 Vault 内，开放格式）
 
+2026-09 新增的旅行字段为 `fields["builtin.travel"].location` / `.text`，挑战心得为 `fields["builtin.challenge"].text`，日记正文继续使用 `fields["builtin.plain"].text`；均走现有开放字段区与原子写盘通道，不改 `SCHEMA_VERSION`。读取仍兼容早期顶层字段。主题展示声明与默认配色不写进 Vault。
+
 ```text
 <用户选的目录>/
 ├── vault.json
@@ -818,15 +827,15 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 ---
 
-## 附录 A：当前已实现清单（更新于 2026-04）
+## 附录 A：当前已实现清单（更新于 2026-09-22）
 
 **Rust 外壳**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出、29 条命令注册——含一个示例 `greet`）；`error.rs`（`AppError` / `AppResult`，命令里不手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
 
-**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry`：`folderId` / `scene` 快照 / `fields` 开放区 / `deletedAt` 墓碑，以及 `apply_update` / `mark_deleted` / `restore`）、`storage.rs`（tmp + rename 原子写入；列出时跳过坏数据；返回**含墓碑**的全部记录）、`folder.rs`（场景元数据 / 排序 / 删场景守卫只数活记录）、`scene.rs`（内置主题登记：普通记录、挑战）、`media.rs`（导入 / sha256 / 尺寸 / EXIF 拍摄时间 / 缩略图）、`id.rs`（UUIDv7）。
+**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry`：`folderId` / `scene` 快照 / `fields` 开放区 / `deletedAt` 墓碑，以及 `apply_update` / `mark_deleted` / `restore`）、`storage.rs`（tmp + rename 原子写入；列出时跳过坏数据；返回**含墓碑**的全部记录）、`folder.rs`（场景元数据 / 排序 / 删场景守卫只数活记录）、`scene.rs`（内置主题登记：普通日记、旅行、挑战）、`media.rs`（导入 / sha256 / 尺寸 / EXIF 拍摄时间 / 缩略图）、`id.rs`（UUIDv7）。
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / 两个主题单元 `scenes/{plain,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 26 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 288 KB / CSS 36 KB）。
 
@@ -853,4 +862,3 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
 | 用一次整文件写回改文档 | 读到一半就写回，会把文件尾部**整段截断**（本文件就栽过一次） | 改文档用定位替换（`edit` / 按行 splice），别用"读全文再写回"；写完 `tail` 看一眼尾部 |
-

@@ -1,0 +1,44 @@
+@layer components {
+  .scene-composer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--fv-space-2);
+    padding: var(--fv-space-3);
+    border: 1px solid var(--fv-color-border);
+    border-radius: var(--fv-radius-lg);
+    background: var(--fv-color-paper);
+    box-shadow: var(--fv-shadow-1);
+  }
+  .scene-composer input {
+    flex: 1 1 160px;
+    min-width: 0;
+    padding: var(--fv-space-2);
+    border: none;
+    border-radius: var(--fv-radius-sm);
+    background: transparent;
+    color: var(--fv-color-text);
+    font-size: var(--fv-text-base);
+  }
+  .scene-composer input::placeholder { color: var(--fv-color-muted); }
+  .scene-composer__actions { display: flex; gap: var(--fv-space-2); margin-left: auto; }
+  .scene-composer button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--fv-space-2);
+    min-height: 40px;
+    padding: var(--fv-space-2) var(--fv-space-4);
+    border: 1px solid transparent;
+    border-radius: var(--fv-radius-md);
+    font-size: var(--fv-text-sm);
+  }
+  .scene-composer__photo { background: transparent; color: var(--fv-color-muted); }
+  .scene-composer__photo:hover:not(:disabled) { background: var(--fv-color-surface-hover); color: var(--fv-color-text); }
+  .scene-composer__submit { background: var(--fv-color-accent); color: var(--fv-color-on-accent); }
+  .scene-composer button:disabled { opacity: .55; cursor: default; }
+  @media (max-width: 640px) {
+    .scene-composer button { min-height: 44px; }
+    .scene-composer input { flex-basis: 100%; }
+  }
+}

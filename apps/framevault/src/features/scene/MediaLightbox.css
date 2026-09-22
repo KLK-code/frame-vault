@@ -56,7 +56,7 @@
 .lightbox__footer button.is-primary {
   border-color: var(--fv-color-accent);
   background: var(--fv-color-accent);
-  color: var(--fv-color-bg);
+  color: var(--fv-color-on-accent);
 }
 
 .lightbox__bar {
@@ -70,17 +70,17 @@
 .lightbox__caption {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--fv-color-bg);
+  color: var(--fv-color-on-scrim);
   font-size: var(--fv-text-sm);
 }
 
 .lightbox__bar button {
   flex: 0 0 auto;
   padding: 5px 14px;
-  border: 1px solid var(--fv-color-bg);
+  border: 1px solid var(--fv-color-on-scrim);
   border-radius: var(--fv-radius-md);
   background: transparent;
-  color: var(--fv-color-bg);
+  color: var(--fv-color-on-scrim);
   font-family: inherit;
   font-size: var(--fv-text-sm);
 }

@@ -1,0 +1,5 @@
+@layer components {
+  .travel-scene { display: flex; flex-direction: column; gap: var(--fv-space-4); }
+  .travel-scene__footer { text-align: center; color: var(--fv-color-accent); font-size: var(--fv-text-xs); margin: var(--fv-space-3) 0; letter-spacing: .08em; }
+  .travel-scene__error { padding: var(--fv-space-3); border: 1px solid var(--fv-color-danger); border-radius: var(--fv-radius-md); color: var(--fv-color-danger); overflow-wrap: anywhere; }
+}

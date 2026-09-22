@@ -3,6 +3,8 @@ import { assetUrl, type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
 import SceneNotice from "../../SceneNotice";
+import EntryTimeline from "../../EntryTimeline";
+import SceneComposer from "../../SceneComposer";
 import { displayableSrc, formatBytes, formatDay, localDay } from "../../mediaFormat";
 import type { SceneViewProps } from "../../registry";
 import { useSceneData } from "../../useSceneData";
@@ -33,7 +35,8 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
     typeof config.targetDays === "number" && config.targetDays > 0 ? Math.round(config.targetDays) : 0;
   const rules = typeof config.rules === "string" ? config.rules : "";
 
-  const [note, setNote] = useState("");
+  const [view, setView] = useState<"timeline" | "wall">("timeline");
+  const [savingConfig, setSavingConfig] = useState(false);
   const [preview, setPreview] = useState<MediaItem | null>(null);
   const [draftNote, setDraftNote] = useState("");
   const [editing, setEditing] = useState(false);
@@ -82,28 +85,6 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
     setDraftNote(item.entryId ? (entryById.get(item.entryId)?.title ?? "") : "");
   }
 
-  /** 打卡主路径：选一批照片，**一张照片建一条记录**（所以一格就是一格） */
-  async function checkInWithPhotos() {
-    const files = await data.pickPhotos();
-    if (files.length === 0) return;
-
-    const text = note.trim();
-    for (const file of files) {
-      const entry = await data.create(text);
-      if (!entry) break;
-      await data.importPhotos(entry.id, [file]);
-    }
-    setNote("");
-  }
-
-  /** 没有照片也能打卡（比如今天只是拉伸了一下） */
-  async function checkInText() {
-    const text = note.trim();
-    if (!text) return;
-    const entry = await data.create(text);
-    if (entry) setNote("");
-  }
-
   async function saveConfig() {
     const target = Math.round(Number(draftConfig.targetDays));
     const next: ChallengeConfig = {
@@ -111,19 +92,31 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
       targetDays: Number.isFinite(target) && target > 0 ? target : 0,
       rules: String(draftConfig.rules ?? "").trim(),
     };
-    const ok = await onSceneConfigChange(next);
-    if (ok) setEditing(false);
+    setSavingConfig(true);
+    try {
+      const ok = await onSceneConfigChange(next);
+      if (ok) setEditing(false);
+    } finally { setSavingConfig(false); }
   }
 
   const previewEntry = preview?.entryId ? entryById.get(preview.entryId) : undefined;
 
   return (
     <div className="challenge">
-      <section className="challenge__head">
+      <SceneComposer data={data} className="challenge__compose" placeholder="记录一次进步…" individualPhotos />
+      <section className="challenge__head" aria-label="挑战进度">
+        <div className="challenge__ring" role="img" aria-label={targetDays ? `目标完成 ${percent}%` : "尚未设置目标"}>
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <circle className="challenge__ring-track" cx="50" cy="50" r="42" />
+            <circle className="challenge__ring-fill" cx="50" cy="50" r="42" pathLength="100" strokeDasharray={`${percent} 100`} />
+          </svg>
+          <strong>{targetDays ? `${percent}%` : "—"}</strong>
+        </div>
         <div className="challenge__progress">
           <div
             className="challenge__bar"
             role="progressbar"
+            aria-label="目标完成进度"
             aria-valuenow={percent}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -145,16 +138,16 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
 
         <dl className="challenge__streaks">
           <div>
-            <dt>连续</dt>
-            <dd>{stats.streak} 天</dd>
+            <dt>连续打卡</dt>
+            <dd>{stats.streak}<small> 天</small></dd>
           </div>
           <div>
-            <dt>最长</dt>
-            <dd>{stats.longest} 天</dd>
+            <dt>最长坚持</dt>
+            <dd>{stats.longest}<small> 天</small></dd>
           </div>
         </dl>
 
-        <button className="challenge__setup" onClick={() => setEditing((v) => !v)}>
+        <button className="challenge__setup" aria-expanded={editing} onClick={() => setEditing((v) => !v)}>
           {editing ? "收起" : "设置挑战"}
         </button>
       </section>
@@ -181,7 +174,7 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
             idPrefix="challenge-config"
           />
           <div className="challenge__settings-actions">
-            <button className="is-primary" onClick={() => void saveConfig()} disabled={data.busy === "new"}>
+            <button className="is-primary" onClick={() => void saveConfig()} disabled={savingConfig}>
               保存
             </button>
             <button onClick={() => setEditing(false)}>取消</button>
@@ -189,36 +182,22 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
         </div>
       )}
 
-      <div className="challenge__compose">
-        <input
-          value={note}
-          placeholder="今天练了什么？（可留空）"
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void checkInText();
-          }}
-        />
-        <button
-          className="is-ghost"
-          onClick={() => void checkInWithPhotos()}
-          disabled={data.busy === "new"}
-        >
-          导入照片…
-        </button>
-        <button onClick={() => void checkInText()} disabled={data.busy === "new" || !note.trim()}>
-          记一笔
-        </button>
-      </div>
-
       <SceneNotice message={data.notice} onUndo={data.undo} onDismiss={data.dismissNotice} />
 
       {data.error && <p className="challenge__error">{data.error}</p>}
 
-      {cells.length === 0 ? (
+      <div className="challenge__views" role="group" aria-label="记录展示方式">
+        <button aria-pressed={view === "timeline"} onClick={() => setView("timeline")}>打卡记录</button>
+        <button aria-pressed={view === "wall"} onClick={() => setView("wall")}>照片墙</button>
+      </div>
+
+      {view === "timeline" ? (
+        <EntryTimeline data={data} sceneId={scene.id} fields={manifest.entryFields ?? []}
+          emptyText="每一次开始，都算进步。写下今天完成的小事，或导入一张照片，留下第一次打卡。" />
+      ) : cells.length === 0 ? (
         <p className="challenge__empty">
-          还没有打卡。点「导入照片…」选今天的照片——<b>一张照片一条记录，墙上一格一张</b>。
-          <br />
-          如果这里没显示打卡墙，去场景行的「⋯ → 切换主题…」里绑上「{scene.name}」。
+          还没有打卡照片。点上方「照片」选择文件——<b>一张照片一条记录，墙上一格一张</b>。
+          纯文字打卡会显示在「打卡记录」里。
         </p>
       ) : (
         <ul className="wall">

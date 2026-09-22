@@ -25,11 +25,11 @@ export default function SceneFields({ fields, values, onChange, idPrefix }: Prop
         const value = values[field.key];
 
         return (
-          <label className="field" key={field.key} htmlFor={id}>
-            <span className="field__label">
+          <div className="field" key={field.key}>
+            <label className="field__label" htmlFor={id}>
               {field.label}
               {field.unit && <span className="field__unit">（{field.unit}）</span>}
-            </span>
+            </label>
 
             {field.type === "textarea" ? (
               <textarea
@@ -80,7 +80,7 @@ export default function SceneFields({ fields, values, onChange, idPrefix }: Prop
                 }
               />
             )}
-          </label>
+          </div>
         );
       })}
     </div>

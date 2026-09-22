@@ -7,6 +7,14 @@ import type { SceneManifest } from "../../manifest";
  * 核心会自动给它生成录入控件——**不用改核心，也不用改别的主题**。
  */
 const manifest: SceneManifest = {
+  presentation: {
+    icon: "bolt", eyebrow: "MAKE IT HAPPEN",
+    subtitle: "挑战今天，遇见更强的自己",
+    signature: "NEVER GIVE UP", motto: "更好的自己，从每一次坚持开始。",
+  },
+  entryFields: [
+    { key: "text", label: "打卡心得", type: "textarea", placeholder: "记录今天的进步…" },
+  ],
   configSchema: [
     { key: "targetDays", label: "目标天数", type: "number", unit: "天", placeholder: "30" },
     { key: "rules", label: "挑战规则", type: "textarea", placeholder: "每天至少跑 1 公里" },

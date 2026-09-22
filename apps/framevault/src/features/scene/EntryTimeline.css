@@ -1,0 +1,217 @@
+@layer components {
+
+  .entry-timeline { min-width: 0; padding: var(--fv-space-4) var(--fv-space-5); border: 1px solid var(--fv-color-border); border-radius: var(--fv-radius-lg); background: var(--fv-color-paper); }
+  .entry-timeline__toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--fv-space-2); color: var(--fv-color-muted); font-size: var(--fv-text-xs); padding-bottom: var(--fv-space-3); }
+  .entry-timeline__toolbar button { display: flex; align-items: center; gap: var(--fv-space-1); padding: var(--fv-space-1); border: none; border-radius: var(--fv-radius-sm); background: transparent; color: var(--fv-color-muted); }
+  .entry-timeline__toolbar button:hover { color: var(--fv-color-accent); }
+  .entry-timeline__empty { display: grid; justify-items: center; padding: var(--fv-space-7) var(--fv-space-4); text-align: center; color: var(--fv-color-muted); }
+  .entry-timeline__empty svg { color: var(--fv-color-accent); }
+  .entry-timeline__empty p { max-width: 38ch; font-size: var(--fv-text-sm); line-height: 1.9; }
+  .entry::before { content: ""; position: absolute; left: 3px; top: 24px; bottom: -24px; width: 1px; background: var(--fv-color-border); }
+  .entry::after { content: ""; position: absolute; left: -1px; top: 24px; width: 9px; height: 9px; border: 2px solid var(--fv-color-accent); border-radius: 50%; background: var(--fv-color-paper); }
+  .entry:last-child { border-bottom: 0; }
+  .entry:last-child::before { bottom: var(--fv-space-5); }
+  .entry__location { color: var(--fv-color-accent); font-size: var(--fv-text-xs); overflow-wrap: anywhere; }
+  .entry__clock { margin-left: auto; color: var(--fv-color-muted); font-size: var(--fv-text-xs); }
+  .entry__time { font-size: var(--fv-text-xs); }
+  .entry__actions { margin-top: var(--fv-space-1); }
+  @media (max-width: 640px) {
+    .entry-timeline { padding: var(--fv-space-3); }
+    .entry { padding-left: var(--fv-space-4); }
+    .entry__actions { gap: var(--fv-space-1); }
+    .entry__meta { flex-basis: 100%; margin-left: 0; }
+  }
+
+.plain-scene__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 一条记录：标题 + 时间在上，媒体网格在下，整条用发丝线分隔 */
+.entry {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-2);
+  padding: var(--fv-space-4) 0 var(--fv-space-5) var(--fv-space-5);
+  border-bottom: 1px solid var(--fv-color-border);
+}
+
+.entry__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fv-space-3);
+  flex-wrap: wrap;
+}
+
+.entry__title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--fv-color-text);
+  font-size: var(--fv-text-lg);
+  font-weight: 600;
+}
+
+/* 正文：多行、保留换行，读起来像日记不像表格 */
+.entry__body {
+  margin: 0;
+  color: var(--fv-color-text);
+  font-size: var(--fv-text-base);
+  line-height: var(--fv-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 每条记录自己的操作：加照片 / 改文字 —— 不用回到顶部那个输入框 */
+.entry__actions {
+  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+}
+
+.entry__actions button {
+  padding: 3px 10px;
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-family: inherit;
+  font-size: var(--fv-text-xs);
+}
+
+.entry__actions button:hover:not(:disabled) {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent-hover);
+  color: var(--fv-color-accent);
+}
+
+.entry__actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.entry__actions button.is-danger {
+  color: var(--fv-color-danger);
+}
+
+.entry__actions button.is-danger:hover:not(:disabled) {
+  border-color: var(--fv-color-danger);
+  background: transparent;
+  color: var(--fv-color-danger);
+}
+
+.entry__meta {
+  margin-left: auto;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 编辑中：标题 + 正文 + 保存 ── */
+.entry__edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-2);
+}
+
+.entry__edit-title,
+.entry__edit-text {
+  padding: 7px 10px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-base);
+  resize: vertical;
+}
+
+.entry__edit-title {
+  font-weight: 600;
+}
+
+.entry__edit-text {
+  line-height: var(--fv-line-height);
+}
+
+.entry__edit-actions {
+  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+}
+
+.entry__edit-actions button {
+  padding: 6px 16px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.entry__edit-actions button.is-primary {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-on-accent);
+}
+
+.entry__edit-actions button.is-quiet {
+  border-color: transparent;
+  color: var(--fv-color-muted);
+}
+
+.entry__time {
+  flex: 0 0 auto;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 缩略图网格 ── */
+.entry__media {
+  display: grid;
+  /* 上限写具体像素而不是 1fr：格子封顶后，窗口变宽只会多出列，不会让每张图跟着膨胀 */
+  grid-template-columns: repeat(auto-fill, minmax(112px, 176px));
+  gap: var(--fv-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumb {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-surface);
+}
+
+.thumb:hover {
+  border-color: var(--fv-color-accent);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 显示不了的格式（视频 / HEIC）给个明确占位，别丢碎图 */
+.thumb__fallback {
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  letter-spacing: 0.04em;
+}
+
+}

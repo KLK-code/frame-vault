@@ -4,7 +4,7 @@
   flex-direction: column;
   min-height: 0;
   flex: 1;
-  padding: var(--fv-space-2) var(--fv-space-2) 0;
+  padding: var(--fv-space-5) var(--fv-space-3) 0;
 }
 
 .scene-tree__head {
@@ -115,7 +115,7 @@
 .scene-tree__compose-actions button.is-primary {
   border-color: var(--fv-color-accent);
   background: var(--fv-color-accent);
-  color: var(--fv-color-bg);
+  color: var(--fv-color-on-accent);
 }
 
 /* ── 主题分组 ── */
@@ -148,9 +148,9 @@
 .scene-row {
   display: flex;
   align-items: center;
-  gap: var(--fv-space-1);
+  gap: var(--fv-space-2);
   width: 100%;
-  padding: 7px 26px 7px 10px;
+  padding: var(--fv-space-3) var(--fv-space-6) var(--fv-space-3) var(--fv-space-3);
   border: none;
   border-radius: var(--fv-radius-sm);
   background: transparent;
@@ -169,6 +169,13 @@
   color: var(--fv-color-accent);
   font-weight: 500;
 }
+
+.app-root:is([data-scene="builtin.travel"], [data-scene="builtin.challenge"]) .scene-row.is-active {
+  background: var(--fv-color-accent);
+  color: var(--fv-color-on-accent);
+}
+
+.scene-row > svg { flex-shrink: 0; }
 
 .scene-row__name {
   overflow: hidden;
@@ -203,8 +210,13 @@
 }
 
 .scene-row-wrap:hover .scene-row__more,
+.scene-row-wrap:has(.is-active) .scene-row__more,
 .scene-row__more:focus-visible {
   opacity: 1;
+}
+
+.app-root:is([data-scene="builtin.travel"], [data-scene="builtin.challenge"]) .scene-row-wrap:has(.is-active) .scene-row__more {
+  color: var(--fv-color-on-accent);
 }
 
 .scene-row__more:hover {

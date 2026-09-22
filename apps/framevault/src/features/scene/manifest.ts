@@ -29,6 +29,14 @@ export type FieldDecl = {
 };
 
 export type SceneManifest = {
+  /** 纯展示声明，宿主与侧栏共享，不包含组件或业务规则。 */
+  presentation?: {
+    icon: "book" | "mountain" | "bolt";
+    eyebrow: string;
+    subtitle: string;
+    signature: string;
+    motto: string;
+  };
   /** 这个主题的记录上有什么字段（核心据此生成录入与展示） */
   entryFields?: FieldDecl[];
   /** 这个场景的设置表单形状（存在 folder.sceneConfig 里） */

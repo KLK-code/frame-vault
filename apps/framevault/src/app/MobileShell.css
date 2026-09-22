@@ -69,7 +69,7 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
-  padding: var(--fv-space-3);
+  padding: 0;
 }
 
 /* 设置是自己内部滚动的两栏，外层别再滚一层 */

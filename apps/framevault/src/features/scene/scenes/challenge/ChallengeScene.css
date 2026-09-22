@@ -1,4 +1,16 @@
 @layer components {
+.challenge__ring { position: relative; flex: 0 0 80px; width: 80px; height: 80px; display: grid; place-items: center; }
+.challenge__ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.challenge__ring circle { fill: none; stroke-width: 7; }
+.challenge__ring-track { stroke: var(--fv-color-surface-active); }
+.challenge__ring-fill { stroke: var(--fv-color-accent); stroke-linecap: round; }
+.challenge__ring strong { font-size: var(--fv-text-lg); font-variant-numeric: tabular-nums; }
+.challenge__streaks small { font-size: var(--fv-text-xs); color: var(--fv-color-muted); font-weight: 400; }
+.challenge__views { display: flex; gap: var(--fv-space-1); padding: var(--fv-space-1); align-self: flex-start; border: 1px solid var(--fv-color-border); border-radius: var(--fv-radius-md); background: var(--fv-color-surface); }
+.challenge__views button { border: 0; border-radius: var(--fv-radius-sm); padding: var(--fv-space-2) var(--fv-space-4); background: transparent; color: var(--fv-color-muted); font-size: var(--fv-text-sm); }
+.challenge__views button[aria-pressed="true"] { background: var(--fv-color-accent-soft); color: var(--fv-color-accent); }
+@media (max-width: 640px) { .challenge__views button { min-height: 44px; } }
+
 .challenge {
   display: flex;
   flex-direction: column;
@@ -14,12 +26,12 @@
   padding: var(--fv-space-3) var(--fv-space-4);
   border: 1px solid var(--fv-color-border);
   border-radius: var(--fv-radius-lg);
-  background: var(--fv-color-surface);
+  background: var(--fv-color-paper);
 }
 
 .challenge__progress {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 160px;
+  min-width: 140px;
 }
 
 .challenge__bar {
@@ -68,14 +80,14 @@
 .challenge__streaks dd {
   margin: 2px 0 0;
   color: var(--fv-color-text);
-  font-size: var(--fv-text-lg);
+  font-size: var(--fv-text-xl);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .challenge__setup {
   flex: 0 0 auto;
-  align-self: flex-start;
+  align-self: center;
   padding: 5px 12px;
   border: 1px solid var(--fv-color-border-strong);
   border-radius: var(--fv-radius-md);
@@ -127,17 +139,6 @@
   background: var(--fv-color-bg);
 }
 
-.challenge__compose input {
-  padding: 7px 10px;
-  border: 1px solid var(--fv-color-border-strong);
-  border-radius: var(--fv-radius-md);
-  background: var(--fv-color-bg);
-  color: var(--fv-color-text);
-  font-family: inherit;
-  font-size: var(--fv-text-sm);
-  resize: vertical;
-}
-
 .challenge__settings-actions {
   flex-wrap: wrap;
   display: flex;
@@ -157,47 +158,7 @@
 .challenge__settings-actions button.is-primary {
   border-color: var(--fv-color-accent);
   background: var(--fv-color-accent);
-  color: var(--fv-color-bg);
-}
-
-/* ── 打卡录入 ── */
-.challenge__compose {
-  flex-wrap: wrap;
-  display: flex;
-  gap: var(--fv-space-2);
-}
-
-.challenge__compose input {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fv-text-base);
-}
-
-.challenge__compose button {
-  flex: 0 0 auto;
-  padding: 8px 16px;
-  border: 1px solid var(--fv-color-accent);
-  border-radius: var(--fv-radius-md);
-  background: var(--fv-color-accent);
-  color: var(--fv-color-bg);
-  font-family: inherit;
-  font-size: var(--fv-text-base);
-}
-
-.challenge__compose button.is-ghost {
-  border-color: var(--fv-color-border-strong);
-  background: transparent;
-  color: var(--fv-color-text);
-}
-
-.challenge__compose button.is-ghost:hover:not(:disabled) {
-  background: var(--fv-color-surface-hover);
-}
-
-.challenge__compose button:disabled {
-  border-color: var(--fv-color-border-strong);
-  background: var(--fv-color-surface);
-  color: var(--fv-color-muted);
+  color: var(--fv-color-on-accent);
 }
 
 .challenge__empty {
@@ -265,12 +226,12 @@
 /* 日期贴右下角；底色用遮罩令牌，这样深浅色都压得住 */
 .wall__date {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
+  right: var(--fv-space-2);
+  bottom: var(--fv-space-2);
   padding: 2px 7px;
   border-radius: 999px;
   background: var(--fv-color-scrim);
-  color: var(--fv-color-bg);
+  color: var(--fv-color-on-scrim);
   font-size: var(--fv-text-xs);
   font-variant-numeric: tabular-nums;
 }

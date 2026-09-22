@@ -174,18 +174,27 @@ export function useSceneData(folder: FolderNode): SceneData {
     [importInto, reload],
   );
 
+  const pickPhotos = useCallback(async () => {
+    try {
+      return await pickMediaFiles();
+    } catch (err) {
+      setError(String(err));
+      return [];
+    }
+  }, []);
+
   const attachPhotos = useCallback(
     async (entryId: string) => {
-      const files = await pickMediaFiles();
+      const files = await pickPhotos();
       if (files.length === 0) return false;
       return importPhotos(entryId, files);
     },
-    [importPhotos],
+    [importPhotos, pickPhotos],
   );
 
   const createWithPhotos = useCallback(
     async (title: string, text?: string) => {
-      const files = await pickMediaFiles();
+      const files = await pickPhotos();
       if (files.length === 0) return null;
 
       setBusy("new");
@@ -205,7 +214,7 @@ export function useSceneData(folder: FolderNode): SceneData {
         setBusy(null);
       }
     },
-    [folder.id, importInto, reload],
+    [folder.id, importInto, reload, pickPhotos],
   );
 
   const remove = useCallback(
@@ -251,7 +260,7 @@ export function useSceneData(folder: FolderNode): SceneData {
     dateOf,
     create,
     edit,
-    pickPhotos: pickMediaFiles,
+    pickPhotos,
     importPhotos,
     attachPhotos,
     createWithPhotos,

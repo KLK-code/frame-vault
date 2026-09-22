@@ -488,6 +488,32 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 
 ---
 
+### 4.9 Markdown 渲染（核心能力，不是主题私有）
+
+```text
+src/markdown/parse.ts              唯一出口：parseMarkdown(text) → MdNode 树（别处不许 import remark）
+features/scene/markdown/           渲染与输入（要用 vault 资源地址，所以放场景域）
+  MarkdownView.tsx  registry.ts  blocks.tsx  MarkdownView.css
+```
+
+为什么分两层：解析是纯函数（给字符串出树，跟场景无关）→ 通用层；渲染要用 vault 的资源地址 → 场景域。
+为什么自建注册表：主题 / 插件将来要加自定义块，扩展点是 `registry.ts`（节点名 → 渲染函数），不是改核心。
+
+三条规矩：
+
+1. 原始 HTML 不渲染：mdast 的 `html` 节点给一条看得见的提示，不静默丢弃、更不执行（整条链路不产生 HTML 字符串，所以不需要 sanitizer）；
+2. 认不出的节点降级显示：有文字显示文字、有子节点显示子节点 —— 跟「认不出的主题不许白屏」同一条规矩；
+3. 只读投影，绝不回写：渲染不改 `fields`，也不产生任何落盘数据。
+
+两条刻意的取舍：
+
+- 软换行按换行显示（文本节点里的换行转成 `<br>`）：日记 / 手机记录的习惯是敲了就换行，不按 CommonMark 合并成空格；
+- 图片暂不渲染：Vault 内的图片引用语法还没定，先给可见提示（免得主题各自发明引用写法）。
+
+这个阶段明确不做：自建 Document Model（等有第二个消费者）、`remark-rehype` / `rehype-react`（直连 React，少两个依赖且不产生 HTML）、`remark-directive` 自定义块（等真有主题要用）、语法高亮。
+
+公开类名见 `docs/theme-contract.md` §2 的「Markdown 正文」一行。
+
 ## 5. 前后端契约（最重要的一节）
 
 ### 5.1 命令全表
@@ -845,7 +871,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 三个主题单元 `scenes/{plain,travel,challenge}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 解析唯一出口 + 渲染注册表 + 正文组件）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
 
@@ -871,6 +897,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 删掉的文件又自己回来了 | 报"找不到模块"，但 `git status` 里它是未跟踪的 `??` | 编辑器还开着那个标签页，会话恢复把内容写回磁盘；**删磁盘文件 ≠ 关标签页** |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
+| 把 Markdown 渲染塞进 p 标签 | 标题 / 列表 / 引用都是块级元素，浏览器会自动闭合外层 p —— DOM 跟写的不一样，排版莫名其妙 | 渲染容器用 div：正文那处已从 p 换成 div（样式仍挂在外层 div 上） |
 | 用脚本裁剪 CSS 段落后没跑构建 | `lightningcss` 报 `Invalid empty selector`，位置指向一个空行 —— 其实是多了一个 `}`（删段落时把 `@layer` 的收尾括号也留下了） | 删整段后**数一遍括号**，并且先跑 `pnpm build`：括号不平衡时 dev / build 都会报，但报错位置会误导 |
 | 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏 / 侧栏 / 设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的视觉只走巧思白名单（图标 / banner） |
 | 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式 | 共享组件里不许出现主题 id；要区分的观感做成 token（如 `--fv-nav-active-bg`），由**外观预设**给值 |

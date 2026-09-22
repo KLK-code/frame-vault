@@ -74,6 +74,19 @@
 
 **结论**：本清单里的项目**全部只用于读结构和设计**。要引入依赖，先在这一页登记它的许可证。
 
+### 已引入依赖的许可证登记（本仓库真正在用的）
+
+引入新依赖前先在这里登记（见 AGENTS §1）。当前装的是这三个（Markdown 管线）：
+
+| 包 | 版本 | 许可证 | 用途 |
+|---|---|---|---|
+| `unified` | 11.x | MIT | Markdown 管线骨架（只在 `src/markdown/parse.ts` 里用） |
+| `remark-parse` | 11.x | MIT | CommonMark 解析 → mdast |
+| `remark-gfm` | 4.x | MIT | GFM 扩展：表格 / 任务列表 / 删除线 / 自动链接 |
+
+传递依赖（`micromark`、`mdast-util-*`、`unist-util-*` 等 30 余个）以 MIT 为主，没有 GPL / 未声明许可证的包
+（`pnpm licenses ls` 可复核）。已按上面的红线核对过，可以进这个仓库。
+
 ## 七、下一步想学的方向（按优先级）
 
 1. **前端结构**：Agaric 的 `docs/UI-MAP.md» 与 Spacedrive 的视图注册 → 直接服务你现在的痛点

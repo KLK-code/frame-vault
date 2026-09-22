@@ -55,14 +55,9 @@
   font-weight: 600;
 }
 
-/* 正文：多行、保留换行，读起来像日记不像表格 */
+/* 正文：Markdown 渲染（软换行由渲染器转成 <br>，不再靠 white-space: pre-wrap 兜底） */
 .entry__body {
   margin: 0;
-  color: var(--fv-color-text);
-  font-size: var(--fv-text-base);
-  line-height: var(--fv-line-height);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 /* 每条记录自己的操作：加照片 / 改文字 —— 不用回到顶部那个输入框 */

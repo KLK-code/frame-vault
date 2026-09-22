@@ -2,6 +2,7 @@ import { useState } from "react";
 import { assetUrl, type Entry, type MediaItem } from "../../lib/api";
 import MediaLightbox from "./MediaLightbox";
 import SceneFields from "./SceneFields";
+import MarkdownView from "./markdown/MarkdownView";
 import { fieldText, readField, writeFields } from "./manifest";
 import { displayableSrc, formatBytes, formatTime, formatDay } from "./mediaFormat";
 import type { FieldDecl } from "./manifest";
@@ -116,7 +117,12 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
                     </div>
                     <h3 className="entry__title">{entry.title || "未命名记录"}</h3>
 
-                    {body && <p className="entry__body">{body}</p>}
+                    {body && (
+                      /* 正文是 Markdown：这里从 <p> 换成 <div> —— 块级元素不能塞进 <p>（<p> 会被浏览器自动闭合） */
+                      <div className="entry__body">
+                        <MarkdownView text={body} />
+                      </div>
+                    )}
 
                     {items.length > 0 && (
                       <ul className="entry__media">

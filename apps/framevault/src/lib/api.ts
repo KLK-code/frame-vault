@@ -1,6 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 /**
  * 前端与 Rust 的唯一接缝。
@@ -95,6 +96,11 @@ export type VaultInfo = {
 export const confirm = (message: string, title = "确认") => ask(message, { title, kind: "warning" });
 
 /** 弹系统文件夹选择器；取消则返回 null */
+/** 在系统浏览器里打开外部链接：Markdown 正文里的链接走这里，不让 WebView 自己跳走 */
+export async function openExternal(url: string): Promise<void> {
+  await openUrl(url);
+}
+
 export async function pickFolder(title: string): Promise<string | null> {
   const selected = await open({ directory: true, multiple: false, title });
   return typeof selected === "string" ? selected : null;

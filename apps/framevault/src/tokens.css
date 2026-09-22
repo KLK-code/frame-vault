@@ -1,0 +1,13 @@
+:root {
+  --fv-color-bg: #f7f7f7;
+  --fv-color-surface: #ffffff;
+  --fv-color-text: #202020;
+  --fv-color-muted: #777777;
+  --fv-color-border: #e3e3e3;
+  --fv-color-accent: #6f5cff;
+  --fv-radius-md: 12px;
+  --fv-space-2: 8px;
+  --fv-space-3: 12px;
+  --fv-space-5: 24px;
+  --fv-space-7: 32px;
+}

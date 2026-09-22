@@ -1,0 +1,66 @@
+.app {
+  display: flex;
+  height: 100vh; /* 老浏览器兜底 */
+  height: 100dvh; /* 手机地址栏不会顶掉视口高度 */
+}
+
+.sidebar {
+  width: 220px;
+  padding: 24px;
+  background: #ffffff;
+  border-right: 1px solid #e3e3e3;
+}
+
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar nav button {
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar nav button:hover {
+  background: #f0f5fc;
+  border-color: transparent;
+}
+
+.sidebar nav button.active {
+  background: #e8f1fd;
+  color: #086ddd;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  padding: 32px;
+}
+
+.content h1 {
+  margin: 0 0 12px;
+  font-size: 28px;
+}
+
+.content .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fv-space-2);
+  margin: var(--fv-space-5) 0;
+}
+
+.content pre {
+  padding: var(--fv-space-3);
+  background: var(--fv-color-surface);
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-md);
+  overflow: auto;
+  font-size: 13px;
+}

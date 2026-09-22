@@ -44,7 +44,7 @@ pub fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> AppResult<()> 
     Ok(())
 }
 
-fn read_json<T: DeserializeOwned>(path: &Path) -> AppResult<T> {
+pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> AppResult<T> {
     let text = fs::read_to_string(path)?;
     Ok(serde_json::from_str(&text)?)
 }

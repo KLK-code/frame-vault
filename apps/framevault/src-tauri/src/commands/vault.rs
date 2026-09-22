@@ -1,14 +1,8 @@
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use crate::vault::{self, Entry};
+use crate::vault;
 use std::path::PathBuf;
-use tauri::{Manager, State};
-
-/// 所有命令共用的取路径逻辑
-fn active_vault(state: &AppState) -> AppResult<PathBuf> {
-    let guard = state.vaults.lock()?;
-    guard.active.clone().ok_or(AppError::NotSelected)
-}
+use tauri::State;
 
 #[derive(serde::Serialize)]
 pub struct VaultInfo {
@@ -18,8 +12,8 @@ pub struct VaultInfo {
     pub exists: bool,
 }
 
-/// 列表逻辑抽出来，add / forget / create 复用
-fn vault_list(app: &AppState) -> AppResult<Vec<VaultInfo>> {
+/// 列表逻辑抽出来，add / create / forget 复用
+pub(crate) fn vault_list(app: &AppState) -> AppResult<Vec<VaultInfo>> {
     let guard = app.vaults.lock()?;
 
     Ok(guard
@@ -132,102 +126,6 @@ pub fn forget_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<V
 }
 
 #[tauri::command]
-pub fn save_entry(
-    state: State<'_, AppState>,
-    id: String,
-    title: String,
-    created_at: String,
-) -> AppResult<String> {
-    let vault_dir = active_vault(state.inner())?;
-    println!("[rust] save_entry: {id} -> {}", vault_dir.display());
-
-    let entry = Entry::new(&id, &title, &created_at);
-    let path = vault::write_entry(&vault_dir, &entry)?;
-    Ok(path.display().to_string())
-}
-
-#[tauri::command]
-pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<Entry> {
-    let vault_dir = active_vault(state.inner())?;
-    Ok(vault::read_entry(&vault_dir, &id)?)
-}
-
-/// 列出当前仓库里的所有记录（时间线用）
-#[tauri::command]
-pub fn list_entries(state: State<'_, AppState>) -> AppResult<Vec<Entry>> {
-    let vault_dir = active_vault(state.inner())?;
-    Ok(vault::list_entries(&vault_dir)?)
-}
-
-/// 读当前仓库的身份信息（vault.json）
-#[tauri::command]
-pub fn read_vault_meta(state: State<'_, AppState>) -> AppResult<vault::VaultMeta> {
-    let vault_dir = active_vault(state.inner())?;
-    Ok(vault::read_vault_meta(&vault_dir)?)
-}
-
-// ── 窗口 ──
-// 注意 #[tauri::command(async)]：没有 async 关键字的命令在主线程执行，
-// 在主线程里建窗口会把消息循环搞坏（窗口建出来但关不掉）。
-
-#[tauri::command(async)]
-pub fn open_vault_manager(app: tauri::AppHandle) -> AppResult<()> {
-    if let Some(w) = app.get_webview_window("vault-manager") {
-        w.set_focus()?;
-        return Ok(());
-    }
-
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        "vault-manager",
-        tauri::WebviewUrl::App("index.html".into()),
-    )
-    .title("管理仓库")
-    .inner_size(760.0, 540.0)
-    .resizable(true)
-    .decorations(false) // 自绘标题栏
-    .closable(true)
-    .center()
-    .build()?;
-
-    Ok(())
-}
-
-#[tauri::command(async)]
-pub fn close_vault_manager(app: tauri::AppHandle) -> AppResult<()> {
-    if let Some(w) = app.get_webview_window("vault-manager") {
-        w.close()?;
-    }
-    Ok(())
-}
-
-#[tauri::command(async)]
-pub fn open_settings(app: tauri::AppHandle) -> AppResult<()> {
-    if let Some(w) = app.get_webview_window("settings") {
-        w.set_focus()?;
-        return Ok(());
-    }
-
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        "settings",
-        tauri::WebviewUrl::App("index.html".into()),
-    )
-    .title("设置")
-    .inner_size(720.0, 560.0)
-    .resizable(true)
-    .decorations(false)
-    .closable(true)
-    .center()
-    .build()?;
-
-    Ok(())
-}
-
-#[tauri::command(async)]
-pub fn close_settings(app: tauri::AppHandle) -> AppResult<()> {
-    if let Some(w) = app.get_webview_window("settings") {
-        w.close()?;
-    }
-    Ok(())
+pub fn vault_exists(path: String) -> bool {
+    vault::is_vault(&PathBuf::from(path))
 }

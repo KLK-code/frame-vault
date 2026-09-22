@@ -8,6 +8,31 @@ export type Entry = {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  /** 属于哪个文件夹（= 哪个场景）；null = 仓库根 */
+  folderId: string | null;
+  /** 写入时生效的场景 id */
+  scene: string | null;
+  /** 场景自定义字段的开放区 */
+  fields: Record<string, unknown>;
+};
+
+export type FolderNode = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  order: number;
+  pinned: boolean;
+  /** 自己绑定的场景；null = 继承 */
+  scene: string | null;
+  /** 继承解析后真正生效的场景 */
+  effectiveScene: string;
+};
+
+export type SceneInfo = {
+  id: string;
+  name: string;
+  description: string;
+  builtin: boolean;
 };
 
 export type VaultMeta = {
@@ -48,13 +73,18 @@ export const closeSettings = () => invoke<void>("close_settings");
 
 
 // ── 记录 ──
-export const saveEntry = (id: string, title: string, createdAt: string) =>
-  invoke<string>("save_entry", { id, title, createdAt });
+export const saveEntry = (
+  id: string,
+  title: string,
+  createdAt: string,
+  folderId: string | null = null,
+) => invoke<string>("save_entry", { id, title, createdAt, folderId });
 
 export const loadEntry = (id: string) => invoke<Entry>("load_entry", { id });
 
-/** 列出当前仓库里的所有记录（新的在前） */
-export const listEntries = () => invoke<Entry[]>("list_entries");
+/** 列出记录（新的在前）；给了 folderId 就只看那个场景下的 */
+export const listEntries = (folderId: string | null = null) =>
+  invoke<Entry[]>("list_entries", { folderId });
 
 /** 读当前仓库的身份文件 vault.json */
 export const readVaultMeta = () => invoke<VaultMeta>("read_vault_meta");

@@ -35,19 +35,32 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
-            commands::list_vaults,
-            commands::add_vault,
-            commands::create_vault,
-            commands::switch_vault,
-            commands::forget_vault,
-            commands::save_entry,
-            commands::load_entry,
-            commands::list_entries,
-            commands::read_vault_meta,
-            commands::open_vault_manager,
-            commands::close_vault_manager,
-            commands::open_settings,
-            commands::close_settings,
+            // 仓库
+            commands::vault::list_vaults,
+            commands::vault::add_vault,
+            commands::vault::create_vault,
+            commands::vault::switch_vault,
+            commands::vault::forget_vault,
+            commands::vault::vault_exists,
+            // 场景（= 文件夹 + 主题）
+            commands::folder::list_folders,
+            commands::folder::create_folder,
+            commands::folder::rename_folder,
+            commands::folder::move_folder,
+            commands::folder::reorder_folders,
+            commands::folder::set_folder_pinned,
+            commands::folder::bind_folder_scene,
+            commands::folder::list_scenes,
+            // 记录
+            commands::entry::save_entry,
+            commands::entry::load_entry,
+            commands::entry::list_entries,
+            commands::entry::read_vault_meta,
+            // 窗口
+            commands::window::open_vault_manager,
+            commands::window::close_vault_manager,
+            commands::window::open_settings,
+            commands::window::close_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

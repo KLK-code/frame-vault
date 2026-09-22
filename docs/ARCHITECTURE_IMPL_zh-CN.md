@@ -300,7 +300,11 @@ src/
 │   ├── timeline/
 │   │   └── EntryCard.tsx
 │   └── settings/
-│       └── SettingsPanel.tsx  设置面板（按钮先占位，id 就是将来的接口名）
+│       ├── SettingsPanel.tsx      外壳：左导航 + 右内容（Obsidian 式）
+│       ├── settingsSections.tsx   分类注册表（加一个分类 = 加一行）
+│       └── sections/              每个分类一个文件
+│           ├── AppearanceSection.tsx   外观：实时主题编辑器
+│           └── PlaceholderSection.tsx  还没实现的设置项（按钮占位）
 ├── components/               ── 通用原语：与业务无关，纯 props ──
 │   ├── PageHeader.tsx        统一页头（标题 + 右侧操作区）
 │   ├── Button.tsx

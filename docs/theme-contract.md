@@ -75,7 +75,7 @@
 | 主外壳 | `.app-root`、`.app`、`.sidebar`、`.sidebar nav button`、`.sidebar__footer`、`.sidebar__icon`、`.app__divider`、`.content` |
 | 独立窗口 | `.window`、`.window__body` |
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
-| 设置界面 | `.settings__title`、`.settings__group`、`.settings__rows`、`.settings__row`、`.settings__label`、`.settings__badge`、`.settings__status` |
+| 设置界面 | `.settings`、`.settings__nav`、`.settings__nav-item`、`.settings__content`、`.settings__title`、`.settings__rows`、`.settings__row`、`.settings__label`、`.settings__badge`、`.settings__status`、`.settings__spacer` |
 | 管理仓库 | `.manager__head`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__status` |
 
 命名约定：`.block__element--modifier`。**内部类名不加 `fv-` 前缀**，加了就意味着对外承诺。

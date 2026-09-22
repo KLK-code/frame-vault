@@ -1,0 +1,246 @@
+@layer components {
+.scene-tree {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: var(--fv-space-2) var(--fv-space-2) 0;
+}
+
+.scene-tree__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--fv-space-1) var(--fv-space-2) var(--fv-space-2);
+}
+
+/* 小标题：不抢戏，但比正文弱一档就好，别再浅下去 */
+.scene-tree__title {
+  font-size: var(--fv-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fv-color-muted);
+}
+
+.scene-tree__add {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-text);
+}
+
+.scene-tree__add:hover {
+  background: var(--fv-color-surface-hover);
+}
+
+.scene-tree__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--fv-space-3);
+}
+
+.scene-tree__empty {
+  margin: var(--fv-space-4) var(--fv-space-2);
+  font-size: var(--fv-text-sm);
+  line-height: var(--fv-line-height);
+  color: var(--fv-color-muted);
+}
+
+/* ── 新建场景的小表单 ── */
+.scene-tree__compose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-1);
+  margin: 0 var(--fv-space-1) var(--fv-space-2);
+  padding: var(--fv-space-2);
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+}
+
+.scene-tree__compose input,
+.scene-row__input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-sm);
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.scene-tree__compose select,
+.scene-row__input {
+  font-size: var(--fv-text-sm);
+}
+
+.scene-tree__compose select {
+  padding: 5px 6px;
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-sm);
+  background: var(--fv-color-bg);
+  color: var(--fv-color-text);
+  font-family: inherit;
+}
+
+.scene-tree__compose-actions {
+  display: flex;
+  gap: var(--fv-space-1);
+  margin-top: var(--fv-space-1);
+}
+
+.scene-tree__compose-actions button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.scene-tree__compose-actions button:hover {
+  background: var(--fv-color-surface-hover);
+}
+
+.scene-tree__compose-actions button.is-primary {
+  border-color: var(--fv-color-accent);
+  background: var(--fv-color-accent);
+  color: var(--fv-color-bg);
+}
+
+/* ── 主题分组 ── */
+.scene-group {
+  margin-bottom: var(--fv-space-2);
+}
+
+.scene-group__title {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-1);
+  margin: var(--fv-space-2) var(--fv-space-2) 2px;
+  font-size: var(--fv-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fv-color-muted);
+}
+
+.scene-group__count {
+  font-weight: 400;
+  color: var(--fv-color-muted);
+  opacity: 0.7;
+}
+
+/* ── 场景行（= 一个文件夹）── */
+.scene-row-wrap {
+  position: relative;
+}
+
+.scene-row {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-1);
+  width: 100%;
+  padding: 7px 26px 7px 10px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-base);
+  text-align: left;
+}
+
+.scene-row:hover {
+  background: var(--fv-color-surface-hover);
+}
+
+.scene-row.is-active {
+  background: var(--fv-color-accent-soft);
+  color: var(--fv-color-accent);
+  font-weight: 500;
+}
+
+.scene-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-row__pin {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--fv-color-muted);
+}
+
+/* ⋯ 只在悬停/选中时出现，平时让位给名字 */
+.scene-row__more {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-base);
+  line-height: 1;
+  opacity: 0;
+}
+
+.scene-row-wrap:hover .scene-row__more,
+.scene-row__more:focus-visible {
+  opacity: 1;
+}
+
+.scene-row__more:hover {
+  background: var(--fv-color-surface-active);
+  color: var(--fv-color-text);
+}
+
+.scene-menu {
+  position: absolute;
+  top: calc(50% + 12px);
+  right: 2px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 128px;
+  padding: var(--fv-space-1);
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-bg);
+  box-shadow: var(--fv-shadow-menu);
+}
+
+.scene-menu button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+  text-align: left;
+}
+
+.scene-menu button:hover {
+  background: var(--fv-color-surface-hover);
+}
+
+.scene-menu button.is-danger {
+  color: var(--fv-color-danger);
+}
+}

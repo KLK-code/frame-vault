@@ -43,15 +43,16 @@ pub fn run() {
             commands::vault::forget_vault,
             commands::vault::vault_exists,
             // 场景（= 文件夹 + 主题）
-            commands::folder::list_folders,
+            commands::folder::list_folder_tree,
             commands::folder::create_folder,
             commands::folder::rename_folder,
-            commands::folder::move_folder,
+            commands::folder::delete_folder,
             commands::folder::reorder_folders,
             commands::folder::set_folder_pinned,
             commands::folder::bind_folder_scene,
             commands::folder::list_scenes,
             // 记录
+            commands::entry::new_id,
             commands::entry::save_entry,
             commands::entry::load_entry,
             commands::entry::list_entries,

@@ -18,52 +18,29 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding: var(--fv-space-4) var(--fv-space-3);
+  min-height: 0;
   background: var(--fv-color-surface);
   color: var(--fv-color-text);
 }
 
-.sidebar h2 {
-  margin: var(--fv-space-2) var(--fv-space-2) var(--fv-space-3);
-  font-size: var(--fv-text-base);
-  font-weight: 600;
-  color: var(--fv-color-text);
-}
-
-.sidebar nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* 导航项：Obsidian 那种"几乎无样式、选中才有淡色"的做法 */
-.sidebar nav button {
-  padding: 8px 10px;
-  border: none;
-  border-radius: var(--fv-radius-sm);
-  background: transparent;
-  font-size: var(--fv-text-base);
-  color: var(--fv-color-text);
-  text-align: left;
-}
-
-.sidebar nav button:hover {
-  background: var(--fv-color-surface-hover);
-  color: var(--fv-color-text);
-}
-
-.sidebar nav button.active {
-  background: var(--fv-color-accent-soft);
-  color: var(--fv-color-accent);
-  font-weight: 500;
+/* 出错时别用 alert 打断用户，安静地贴在侧栏底部 */
+.sidebar__error {
+  margin: 0 var(--fv-space-2) var(--fv-space-2);
+  padding: var(--fv-space-2);
+  border: 1px solid var(--fv-color-danger);
+  border-radius: var(--fv-radius-md);
+  color: var(--fv-color-danger);
+  font-size: var(--fv-text-xs);
+  overflow-wrap: anywhere;
 }
 
 /* 侧栏底部：仓库切换器 + 设置按钮 */
 .sidebar__footer {
-  margin-top: auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: var(--fv-space-1);
+  padding: var(--fv-space-2);
 }
 
 .sidebar__icon {
@@ -109,37 +86,16 @@
   outline: none;
 }
 
+/* 右侧舞台：内容区自己滚，标题栏和侧栏不动 */
 .content {
   flex: 1;
   min-width: 0;
-  padding: var(--fv-space-6) var(--fv-space-7);
   overflow: auto;
+  padding: var(--fv-space-5) var(--fv-space-6);
   background: var(--fv-color-bg);
 }
 
-.content h1 {
-  margin: 0 0 var(--fv-space-3);
-  font-size: var(--fv-text-xl);
-  font-weight: 600;
-}
-
-.content .row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fv-space-2);
-  margin: var(--fv-space-4) 0;
-}
-
-.content pre {
-  padding: var(--fv-space-3);
-  background: var(--fv-color-surface);
-  border: 1px solid var(--fv-color-border);
-  border-radius: var(--fv-radius-md);
-  overflow: auto;
-  font-size: var(--fv-text-sm);
-}
-
-/* ── 窄屏（手机）：侧栏变底部标签栏，分隔条隐藏 ── */
+/* ── 窄屏（手机）：侧栏挪到下面，分隔条隐藏 ── */
 @media (max-width: 640px) {
   .app {
     flex-direction: column-reverse;
@@ -147,23 +103,8 @@
 
   .sidebar {
     width: 100% !important;
-    padding: var(--fv-space-2);
-    padding-bottom: calc(var(--fv-space-2) + env(safe-area-inset-bottom));
-  }
-
-  .sidebar h2 {
-    display: none;
-  }
-
-  .sidebar nav {
-    flex-direction: row;
-    gap: 0;
-  }
-
-  .sidebar nav button {
-    flex: 1;
-    min-height: 48px;
-    text-align: center;
+    max-height: 42vh;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .app__divider {
@@ -171,7 +112,7 @@
   }
 
   .content {
-    padding: var(--fv-space-5);
+    padding: var(--fv-space-4);
   }
 }
 }

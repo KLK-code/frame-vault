@@ -35,7 +35,7 @@
 ```text
 ┌─────────────────────────── WebView2（浏览器沙箱） ───────────────────────────┐
 │  前端：TypeScript + React                                                    │
-│  pages/ 页面   components/ 组件   lib/api.ts 唯一出口   styles/ 主题变量      │
+│  features/scene 场景  features/vault 仓库  lib/api.ts 唯一出口  tokens.css   │
 └───────────────────────────────────┬──────────────────────────────────────────┘
                                     │  invoke（请求/响应） / listen（后端推送）
 ┌───────────────────────────────────▼──────────────────────────────────────────┐
@@ -251,170 +251,162 @@ lib.rs（组装）
 
 ## 4. 前端（TypeScript + React）架构
 
-### 4.1 先说现在哪里乱（诚实版）
+### 4.1 曾经的乱，与一次方向性纠错
 
-当前 `src/` 是这样平铺的：`App.tsx` / `App.css` / `tokens.css` / `styles/reset.css` / `lib/api.ts` / `lib/pages.tsx` / `pages/*.tsx` / `VaultManagerWindow.tsx`。文件不多，但**规则不统一**，页面一多就会失控：
+（记录于重构前）当时 `src/` 是平铺的：`App.tsx` / `tokens.css` / `styles/reset.css` / `lib/api.ts` / `lib/pages.tsx` / `pages/*.tsx` / `app/VaultManagerWindow.tsx`。文件不多，但规则不统一：
 
 | 症状 | 具体表现 |
 |---|---|
-| 样式有三种放法 | `App.css` 在根、`tokens.css` 在根、`reset.css` 在 `styles/`、`VaultManagerPage.css` 跟页面同目录 |
-| 页面里什么都干 | 取数据 + 转错误 + 渲染 + 写状态文案，全塞在一个 `VaultPage.tsx` 里 |
-| 没有通用原语 | 按钮、空状态、错误提示每个页面各写一遍 |
-| 注册表位置不对 | `lib/pages.tsx` 里 `import` 了**所有**页面，它是外壳的配置，不是通用工具 |
-| 外壳与页面互相知道 | `App.tsx` 里写死了页面的渲染分支 |
-| 窗口外壳和页面内容平级 | `VaultManagerWindow.tsx` 和 `pages/VaultManagerPage.tsx` 混在一层 |
+| 样式有三种放法 | `App.css` 在根、`tokens.css` 在根、`reset.css` 在 `styles/`、组件自己的跟组件同目录 |
+| 组件里什么都干 | 取数据 + 转错误 + 渲染 + 写状态文案，全塞进一个文件 |
+| 没有通用原语 | 按钮、空状态、错误提示每处各写一遍 |
+| 外壳与内容互相知道 | `App.tsx` 里写死了"当前是哪个页面"的渲染分支 |
 
-### 4.2 目标结构：四层 + 一个约定
+**被推翻的设计（重要）**：那时左侧是固定导航项（时间线 / 图库 / 日历 / 笔记），右侧是"页面"。这个模型错了——
+
+- 左侧就是**场景**（= 一个文件夹 + 它绑定的主题），右侧是**那个场景的主题视图**；
+- 于是 `lib/pages.tsx` 与 `pages/` 整套"页面注册表"被删除，换成 `features/scene/`；
+- 教训：**把入口做成固定菜单，等于提前把数据模型的形状焊死在 UI 里**。
+
+### 4.2 结构：外壳 / 场景 / 业务块 / 资源
 
 ```text
 src/
 ├── main.tsx                  入口：按窗口 label 分派
-├── app/                      ── 外壳层：只管窗口、导航、当前页面 ──
-│   ├── AppShell.tsx          主窗口外壳
-│   ├── AppShell.css
-│   ├── TitleBar.tsx / .css    自绘标题栏（两个窗口共用）
-│   ├── window.css            独立窗口共用的外框布局
+├── App.tsx                   主窗口外壳：左场景树 + 右场景舞台 + 可拖分隔条
+├── App.css
+├── app/                      ── 外壳层：只管窗口与共用外框 ──
+│   ├── TitleBar.tsx / .css     自绘标题栏（各窗口共用）
+│   ├── window.css             独立窗口共用的外框布局
 │   ├── VaultManagerWindow.tsx  管理仓库窗口外壳
-│   ├── SettingsWindow.tsx      设置窗口外壳
-│   ├── navigation.ts         导航项：id / label / 分组 / 图标
-│   └── routes.ts             id → 懒加载组件（React.lazy）
-├── pages/                    ── 页面层：一个页面一个目录 ──
-│   ├── timeline/
-│   │   ├── TimelinePage.tsx
-│   │   └── TimelinePage.css
-│   ├── gallery/
-│   ├── calendar/
-│   ├── vault/
-│   │   ├── VaultPage.tsx
-│   │   └── VaultPage.css
-│   └── Placeholder.tsx
-├── features/                 ── 业务块：被 ≥2 个页面用到才升级到这里 ──
-│   ├── vault/
-│   │   ├── VaultSwitcher.tsx      悬浮菜单：切换 / 添加 / 管理仓库…
-│   │   ├── VaultSwitcher.css
-│   │   ├── VaultManagerPanel.tsx  独立窗口里的管理面板（只被窗口用）
-│   │   ├── VaultManagerPanel.css
-│   │   ├── VaultList.tsx
-│   │   ├── VaultRow.tsx
-│   │   └── useVaults.ts      仓库数据 hook（列表 + 增删切换）
-│   ├── timeline/
-│   │   └── EntryCard.tsx
-│   └── settings/
-│       ├── SettingsPanel.tsx      外壳：左导航 + 右内容（Obsidian 式）
-│       ├── settingsSections.tsx   分类注册表（加一个分类 = 加一行）
-│       └── sections/              每个分类一个文件
-│           ├── AppearanceSection.tsx   外观：实时主题编辑器
-│           └── PlaceholderSection.tsx  还没实现的设置项（按钮占位）
-├── components/               ── 通用原语：与业务无关，纯 props ──
-│   ├── PageHeader.tsx        统一页头（标题 + 右侧操作区）
-│   ├── Button.tsx
-│   ├── Card.tsx
-│   ├── EmptyState.tsx
-│   ├── ErrorNotice.tsx
-│   └── Spinner.tsx
-├── lib/                      ── 数据与工具 ──
-│   ├── api.ts                唯一 invoke 出口
-│   ├── types.ts              与 Rust 对齐的类型（Entry / VaultInfo / …）
-│   ├── useAsync.ts           统一的 加载 / 错误 / 刷新
-│   └── capabilities.ts       （M2）
-├── styles/                   ── 全局样式，只有这三个文件 ──
-│   ├── reset.css
-│   ├── tokens.css
-│   └── layers.css            （M3）
-└── assets/
+│   └── SettingsWindow.tsx      设置窗口外壳
+├── features/scene/           ── 场景层：本项目的"页面层" ──
+│   ├── useFolders.ts          场景数据 + 按主题归类（groups，见 §4.4）
+│   ├── SceneTree.tsx / .css    左侧：主题分组 → 场景行（新建/重命名/置顶/换主题/删除）
+│   ├── SceneHost.tsx / .css    右侧：按 effectiveScene 找视图并渲染（含空态、缺主题提示）
+│   ├── registry.ts            主题 id → 视图组件（**扩展点**）
+│   └── scenes/plain/          内置"普通记录"
+│       ├── PlainScene.tsx
+│       └── PlainScene.css
+├── features/vault/           仓库：悬浮切换菜单 + 独立窗口里的管理面板
+├── features/settings/        设置：左导航 + 右内容
+├── features/theme/           设计令牌 schema + 实时编辑 + 跨窗口同步
+├── lib/api.ts                唯一 invoke / listen 出口 + 与 Rust 对齐的类型
+├── styles/layers.css         层顺序声明（@layer reset, base, components, theme, user）
+├── styles/reset.css
+└── tokens.css                设计令牌：**唯一允许出现裸色值的地方**
 ```
 
 **依赖方向（不许反向）**：
 
 ```text
-app/  ──▶ pages/ ──▶ features/ ──▶ components/
-  │            │            │
-  └────────────┴────────────┴──▶ lib/（api / types / useAsync）
-  所有层都可以用 styles/ 里的变量，但没人 import 别人的样式文件
+App.tsx ──▶ features/* ──▶ lib/api.ts ──▶ (invoke / listen) ──▶ Rust
+   │
+   └──▶ styles/ + tokens.css（只有变量；没人 import 别人的组件样式）
 ```
 
-**外壳已经实现的交互**（都属于「视图与面板开关」类状态，存 `localStorage`，**不进 Vault**——见 §14）：
+**外壳已经实现的交互**（都属于"视图状态"，存 `localStorage`，**不进 Vault**——见 §14）：
 
-- **侧栏宽度可拖动**：分隔条用 Pointer 事件（鼠标和触摸通用），夹在 160~480px 之间；双击复位；聚焦后按 ← / → 也能调；**松手才写 localStorage**（不要每帧写）。
-- **仓库切换悬浮菜单**：侧栏底部的小按钮 → 向上弹出菜单（切换 / 添加 / 管理仓库…），点菜单外面或按 Esc 关闭。管理仓库的**唯一入口**在这个菜单里，点开才是独立窗口。
+- **侧栏宽度可拖动**：分隔条用 Pointer 事件（鼠标与触摸通用），夹在 160~480px；双击复位；聚焦后按 ← / → 也能调；**松手才写 localStorage**（不要每帧写）。
+- **仓库切换悬浮菜单**：侧栏底部的小按钮 → 向上弹出菜单（新建 / 添加 / 管理仓库…）；点菜单外面或按 Esc 关闭。管理仓库的**唯一入口**在这个菜单里，点开才是独立窗口。
 
 ### 4.3 四条规则（这才是"不乱"的关键）
 
 | 规则 | 说明 | 例子 |
 |---|---|---|
-| **一个页面一个目录** | 页面本体 + 它的样式 + **只属于它**的子组件都放里面 | `pages/timeline/` 里可以放 `EntryCard.tsx`，删页面时删一个目录 |
-| **复用要"有人催"** | 第二个页面真要用才从 `pages/` 升级到 `features/`，第三个才升级到 `components/` | `EntryCard` 一开始就放 `pages/timeline/` |
-| **样式与组件同目录同名** | 全局样式只有 `styles/` 下三个文件；其它样式跟它服务的组件并排 | `TimelinePage.css` 与 `TimelinePage.tsx` 同目录 |
-| **外壳不认识页面内部** | 外壳只读 `app/navigation.ts` 的 id/label 和 `app/routes.ts` 的映射 | `AppShell.tsx` 不 `import` 任何 page |
+| **一个主题一个目录** | 主题视图 + 它私有的子组件 + 样式都放一起，删主题只删一个目录 | `scenes/plain/{PlainScene.tsx,PlainScene.css}` |
+| **复用要"有人催"** | 第二个主题真要用才从 `scenes/<id>/` 升级到 `features/scene/`，第三个才升级到通用原语 | 现在只有 `PlainScene` 一个主题，所以什么都不用抽 |
+| **样式与组件同目录同名** | 全局样式只有 `styles/` + `tokens.css`；其余样式跟它服务的组件并排 | `SceneTree.css` 与 `SceneTree.tsx` 同目录 |
+| **外壳不认识场景内部** | 外壳只认 `FolderNode` / `SceneInfo` 这两个契约类型，不认识任何主题的实现 | `App.tsx` 不 import 任何 `scenes/…` 里的东西 |
 
-### 4.4 页面契约（每个页面长什么样）
+### 4.4 场景契约（新东西都在这一节）
+
+**磁盘上扁平，展示层分组**——这是整个前端模型的核心一句话：
+
+```text
+Vault 里                    前端显示层
+folders/<id>/folder.json    ┌ 挑战（主题）
+entries/<id>/entry.json     │   ├ 晨跑打卡     ← scene: builtin.challenge
+   ↑ 只有 folderId 指回去    │   └ 健身房       ← scene: builtin.challenge
+顺序 / 置顶 / 主题绑定         └ 普通记录（主题）
+                              └ 随手记        ← scene: null → builtin.plain
+```
+
+为什么记录不按文件夹物理嵌套：**移动 = 改一个字段**（同步工具只看到一个文件变），删场景不会牵动一堆子目录，索引（SQLite）坏了大不了重建。
+
+前端只做两件事，分别落在两个文件里：
+
+| 地方 | 干什么 | 关键代码 |
+|---|---|---|
+| `useFolders.ts` | 拉数据 + 按 `effectiveScene` **分组** | `groups: SceneGroup[]`（组的先后 = 组内第一个场景在整体排序里的位置，所以置顶某组里的场景整组会浮上来） |
+| `SceneHost.tsx` | 拿当前场景的生效主题，从注册表找视图渲染 | `const View = SCENE_VIEWS[folder.effectiveScene]` |
+
+**主题视图契约**（写新主题只需要满足这个）：
 
 ```tsx
-// pages/timeline/TimelinePage.tsx
-export default function TimelinePage() {
-  const { data, error, loading, reload } = useAsync(listEntries, []);
+// features/scene/scenes/<主题>/XxxScene.tsx
+export type SceneViewProps = { folder: FolderNode; scene: SceneInfo };
 
-  return (
-    <>
-      <PageHeader title="时间线" actions={<Button onClick={reload}>刷新</Button>} />
-      {loading && <Spinner />}
-      {error && <ErrorNotice message={error} onRetry={reload} />}
-      {data?.length === 0 && <EmptyState title="还没有记录" hint="点「新建」开始" />}
-      {data?.map((e) => <EntryCard key={e.id} entry={e} />)}
-    </>
-  );
+export default function XxxScene({ folder, scene }: SceneViewProps) {
+  // 自己决定列什么、怎么录入；数据都写进 entry.fields（核心不解释）
 }
 ```
 
-三条约定：
+四条约定：
 
-1. **默认导出、无 props**（页面自己取数据，不靠外壳喂）；
-2. **页面自己渲染 `PageHeader`**（外壳不替它写标题——这是"每页一套设计"的前提）；
-3. **loading / error / empty 三态用统一原语**，不各写各的文案。
+1. **视图不取"当前仓库"，只认 props 里的 `folder`**——它天然就是"当前场景"；
+2. **记录一律带 `folderId`**：保存时 `saveEntry(id, title, { folderId })`，主题由 Rust 按场景解析，前端不传主题 id；
+3. **loading / error / empty 三态自己处理**（现在还没有通用原语，等第二个主题出现再抽——别提前抽）；
+4. **认不出的主题不许白屏**：`SceneHost` 会显示一条提示并用"普通记录"兜底渲染，场景内容永远看得见。
+
+**注册表就是扩展点**：`registry.ts` 里多一行 `"vendor.xxx": XxxScene`，这个主题就活了；Rust 侧一行都不用改（`entry.fields` 是开放区）。将来主题以包的形式分发时，这里换成动态注册。
 
 ### 4.5 三个复用层级的判定
 
 ```text
-只用一次          → 留在页面目录里（pages/timeline/EntryCard.tsx）
-两个页面都要用     → 升级到 features/（features/timeline/EntryCard.tsx）
-跟业务无关（纯 props）→ 升级到 components/（components/Card.tsx）
+只用一次          → 留在主题目录里（scenes/plain/…）
+两个主题都要用     → 升级到 features/scene/
+跟业务无关（纯 props）→ 升级到通用原语目录
 ```
 
-**不要提前升级**。放进 `components/` 的东西一旦带上业务字段，就会变成"什么都能塞的杂物间"。
+**不要提前升级**。放进通用层的组件一旦带上业务字段，就会变成"什么都能塞的杂物间"。
 
 ### 4.6 样式归属规则
 
 | 场景 | 放哪 | 例子 |
 |---|---|---|
-| 全局变量 / 主题 | `styles/tokens.css` | `--fv-color-text` |
+| 全局变量 / 主题 | 根目录 `tokens.css` | `--fv-color-text` |
 | 浏览器默认样式归零 | `styles/reset.css` | `box-sizing`、`margin: 0` |
-| 外壳布局 | `app/AppShell.css` | `.app`、`.sidebar`、`.content` |
-| 页面 / 组件私有 | 与它同目录同名 | `pages/vault/VaultPage.css` |
+| 层顺序 | `styles/layers.css` | `@layer reset, base, components, theme, user;` |
+| 外壳布局 | `App.css` / `app/window.css` | `.app`、`.sidebar`、`.content` |
+| 组件 / 主题私有 | 与它同目录同名 | `features/scene/SceneTree.css` |
 | 需要绝对隔离 | `*.module.css` | 包装第三方组件时 |
 
-**外壳的类名由外壳拥有**：页面不该去写 `.content` 或 `.sidebar`。页面拿到的只有"一块可用区域"，怎么在里面排版是页面自己的事。
+**每个 CSS 文件都必须包在 `@layer` 里**（否则层顺序形同虚设）；组件里**不许出现裸色值/裸尺寸**，一律用 `--fv-*`。
 
-### 4.7 迁移步骤（每步都能跑，别一次改完）
+**外壳的类名由外壳拥有**：组件不该去写 `.content` 或 `.sidebar`。它拿到的只是"一块可用区域"。
+
+### 4.7 这次重构实际做了什么（可复用为下次的模板）
 
 | 步 | 做什么 | 验证 |
 |---|---|---|
-| 1 | 建目录骨架：`styles/`、`app/`、`components/`、`features/` | `ls src` |
-| 2 | `tokens.css` 与 `styles/reset.css` 都搬到 `styles/`，改 `main.tsx` 的 import | `pnpm dev` 样式不变 |
-| 3 | 抽通用原语：`PageHeader` / `Button` / `EmptyState` / `ErrorNotice` / `Spinner` | 页面里不再有内联的加载文案 |
-| 4 | 建 `lib/types.ts`、`lib/useAsync.ts`；把 `api.ts` 里的类型搬过去 | `tsc --noEmit` 通过 |
-| 5 | 页面搬进目录：`pages/VaultPage.tsx` → `pages/vault/VaultPage.tsx`（同步改 import） | `pnpm dev` 页面正常 |
-| 6 | 抽业务块：把管理页的列表抽成 `features/vault/VaultList.tsx` + `useVaults.ts` | 管理页变薄，逻辑可复用 |
-| 7 | 外壳改名：`App.tsx` → `app/AppShell.tsx`；`lib/pages.tsx` → `app/navigation.ts` + `app/routes.ts`（`React.lazy` 按需加载） | 切页面正常，新增页面只改这两个文件 |
-| 8 | 更新本文档 §4 与 `README` 的结构说明 | — |
+| 1 | Rust 侧先把模型改平：删 `parentId` / 继承 / `move_folder`，加 `delete_folder` / `new_id` / `vault://changed` | `cargo test` 12 passed（含"老文件多出废弃字段仍能读"） |
+| 2 | `api.ts` 对齐契约：`listFolderTree` / `createFolder(name, scene)` / `bindFolderScene` / `saveEntry(…, { folderId })` / `onVaultChanged` | `pnpm exec tsc --noEmit` 干净 |
+| 3 | 写 `useFolders.ts`：数据 + 分组，写操作统一"Rust 回全量列表 → 直接替换"（不做乐观更新） | 新建/改名/置顶/换主题各点一遍 |
+| 4 | 写 `SceneTree` + `SceneHost` + `PlainScene`，改 `App.tsx` 挂上去 | 三处同看：终端 `println!` / 界面 / `folders\`entries\` 目录 |
+| 5 | 删 `lib/pages.tsx`、`pages/`（`grep` 确认没有残留 import） | `pnpm build` 通过 |
+| 6 | 更新本文档 §4 / §5 / §13 与 `theme-contract.md` | 文档里搜不到 `move_folder` / `parentId` |
 
-**纪律**：每一步结束都跑一次 `pnpm exec tsc --noEmit` 和 `pnpm dev` 看一眼；出问题只可能是刚做的那一步。
+**纪律**：每一步结束都跑一次 `pnpm exec tsc --noEmit`（外加 `cargo test`，如果动了 Rust）；出问题只可能是刚做的那一步。
+
+**⚠️ 改了 Rust 命令名必须重启 `pnpm tauri dev`**：Vite 的 HMR 只换前端，跑着的二进制还是旧的命令表，前端会报 `command xxx not found`。
 
 ### 4.8 什么时候引入路由库 / 状态库
 
 | 引入什么 | 触发条件 | 现在需要吗 |
 |---|---|---|
-| react-router 等路由库 | 页面需要 **URL 参数 / 前进后退 / 深链接** | ❌ 不需要，注册表 + `useState` 够用 |
-| Zustand / Jotai 等状态库 | 出现"服务端状态缓存"痛点（同一份远端数据多处使用、需要失效策略） | ❌ 不需要，Rust 是唯一数据源，`useAsync` 够用 |
+| react-router 等路由库 | 需要 **URL 参数 / 前进后退 / 深链接** | ❌ 不需要，"当前场景"就是 `useState` + 一个注册表 |
+| Zustand / Jotai 等状态库 | 出现"服务端状态缓存"痛点（同一份远端数据多处用、要失效策略） | ❌ 不需要，Rust 是唯一数据源，`useFolders` 够用 |
 | CSS-in-JS | 需要运行时主题计算 | ❌ 不需要，CSS 变量就是干这个的 |
 
 **为什么先不引入**：现在前端只是**展示 + 转发**，引入路由和 store 会让"谁说了算"变模糊，也让你多学两个库却解决不了当下的问题。
@@ -432,10 +424,19 @@ export default function TimelinePage() {
 | `switch_vault` | `path` | `void` | 切换当前仓库 | ✅ |
 | `forget_vault` | `path` | `VaultInfo[]` | 从列表移除（**不删磁盘文件**） | ✅ |
 | `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份） | ✅ |
-| `save_entry` | `id` / `title` / `createdAt` | `string`（写入路径） | 写一条记录 | ✅ |
+| `new_id` | — | `string` | 发一个 UUIDv7 记录 id（前端不自己拼时间戳 id） | ✅ |
+| `save_entry` | `id` / `title` / `createdAt?` / `updatedAt?` / `folderId?` | `Entry` | 写一条记录（主题**由所属场景解析**后快照进 `scene`） | ✅ |
 | `load_entry` | `id` | `Entry` | 读一条记录 | ✅ |
-| `list_entries` | — | `Entry[]` | 列当前仓库全部记录（新的在前，坏数据跳过） | ✅ |
+| `list_entries` | `folderId?` | `Entry[]` | 列记录（新的在前；给了 `folderId` 就只看那个场景；坏数据跳过） | ✅ |
 | `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份） | ✅ |
+| `list_folder_tree` | — | `FolderNode[]` | 全部场景（已排序；含 `scene` / `effectiveScene` / `order` / `pinned`） | ✅ |
+| `create_folder` | `name` / `scene?` | `FolderNode[]` | 新建场景：起名 + 选主题，一步完成 | ✅ |
+| `rename_folder` | `id` / `name` | `FolderNode[]` | 给场景改名 | ✅ |
+| `delete_folder` | `id` | `FolderNode[]` | 删场景；**里面还有记录时拒绝**（不让记录变孤儿） | ✅ |
+| `bind_folder_scene` | `id` / `scene?` / `sceneConfig?` | `FolderNode[]` | 换主题（`null` = 退回内置普通记录） | ✅ |
+| `set_folder_pinned` | `id` / `pinned` | `FolderNode[]` | 置顶 / 取消置顶 | ✅ |
+| `reorder_folders` | `orderedIds` | `FolderNode[]` | 排序落盘（拖动排序的命令已就绪，UI 还没接） | ✅ |
+| `list_scenes` | — | `SceneInfo[]` | 可用主题清单（现在只有 `builtin.plain`） | ✅ |
 | `delete_entry` | `id` | `void` | 删除（写 tombstone） | ⬜ |
 | `import_media` | `entryId` / `sourcePath` | `Media` | 导入媒体 | ⬜ M1 |
 | `make_thumbnail` | `mediaId` / `maxSize` | `string` | 生成缩略图并返回路径 | ⬜ M1 |
@@ -449,7 +450,7 @@ export default function TimelinePage() {
 
 | 事件名 | 负载 | 场景 |
 |---|---|---|
-| `vault://changed` | `{ activePath }` | 切换 / 导入仓库后，通知所有页面刷新 |
+| `vault://changed` | `()`（空负载） | 新建 / 导入 / 切换 / 移除仓库后广播：每个窗口据此重载场景树与记录。**每个窗口是独立的 `document`**，只靠 React 状态同步不了 |
 | `sync://progress` | `{ done, total, currentFile }` | 同步进度（长任务必须用事件，不能用 invoke） |
 | `media://imported` | `{ entryId, mediaId }` | 拍照 / 导入完成后通知界面 |
 | `index://rebuilt` | `{ count }` | 索引重建完成 |
@@ -565,10 +566,10 @@ export default function TimelinePage() {
 
 | 阶段 | 后端新增 | 前端新增 | 验收标准 |
 |---|---|---|---|
-| **M0 收尾**（下一步） | 把 `vault.rs` 拆成 `vault/`（model / storage / id / folder）；加 `error.rs`；加 `create_vault` / `list_entries` | `components/VaultSwitcher.tsx`、`components/FolderTree.tsx`、`pages/TimelinePage.tsx`（先假数据） | 新建仓库 → 建一条记录 → 在文件夹里看到它 |
-| **M1 桌面 MVP（单窗口）** | `index/`（SQLite）+ `rebuild_from_vault`；`media-core`（缩略图 / EXIF / 哈希）；`vault/folder.rs` 的排序 / 置顶 / 绑定命令；`workspace/builtin/plain.rs` | 文件夹导航、内置普通记录功能主题、`GalleryPage`、`ReaderPage`（Markdown）、拖动排序与置顶 | 导入照片、生成缩略图、文件夹导航、排序置顶能持久化 |
+| **M0（已完成）** | `vault/` 拆分（model / storage / id / folder / scene）；`error.rs`；`state.rs`；`commands/` 五个模块（21 个命令） | `features/scene/`（场景树 + 场景宿主 + 注册表 + `useFolders`）、`features/vault/`、`lib/api.ts` | 新建仓库 → 新建场景 → 记一条 → 在场景里看到它。**方向修正**：目录嵌套改为「仓库扁平 + 展示层按主题归类」 |
+| **M1 桌面 MVP（单窗口）** | `index/`（SQLite）+ `rebuild_from_vault`；`media-core`（缩略图 / EXIF / 哈希）；`delete_entry` / `update_entry`；`scene.rs` 注册更多内置主题 | 主题视图：普通记录的图库 / 阅读视图、拖动排序与置顶接 UI、`scenes/<主题>/` 骨架 | 导入照片、生成缩略图、场景导航、排序置顶能持久化 |
 | **M2 Android** | `capture/android.rs` + Kotlin 插件（`plugins-native/capture/`） | `lib/capabilities.ts`、`lib/platform/*`、移动外壳与断点 | 从 Entry 调系统相机并自动归档 |
-| **M3 个性化** | 插件宿主骨架、权限校验、`workspace/registry.rs` 支持外部主题 | `styles/layers.css`、外观主题包加载、设置页、功能主题扩展点 | 换外观主题无需重编译；功能主题扩展点可用 |
+| **M3 个性化** | 插件宿主骨架、权限校验、`vault/scene.rs` 支持注册外部主题 | `styles/layers.css`、外观主题包加载、设置页、功能主题扩展点 | 换外观主题无需重编译；功能主题扩展点可用 |
 | **M4 同步** | `storage/webdav.rs`、`sync/`、Stronghold | 同步状态与冲突处理界面 | 两设备互不覆盖、删除可传播 |
 | **M5 开放生态** | Provider 插件化、Marketplace 协议、功能主题插件加载 | 插件市场 / 管理界面 | 侧载 + 自定义 Registry |
 
@@ -617,34 +618,36 @@ export default function TimelinePage() {
 ```json
 {
   "schemaVersion": 1,
-  "id": "0199...",             // UUIDv7
+  "id": "0199...",                       // UUIDv7
   "name": "2026 跑步挑战",
-  "parentId": null,            // null = 根级；不存绝对路径
-  "order": 3,                  // 同级排序，拖动后重写
-  "pinned": true,              // 置顶
-  "workspaceType": "builtin.challenge",   // 绑定的功能主题 id
-  "workspaceConfig": {}        // 主题自己的配置（如目标天数）
+  "order": 3,                            // 全局排序（仓库层面是平的，没有“同级”一说）
+  "pinned": true,                        // 置顶：永远排最前
+  "scene": "builtin.challenge",          // 绑定的主题 id；null / 缺省 = builtin.plain
+  "sceneConfig": {}                      // 主题自己的配置（如目标天数），核心不解释
 }
 ```
 
-**四条规则**：
+**五条规则**：
 
 1. 这些是**用户数据**——排序、置顶、主题绑定、主题业务进度都必须落在 Vault 里，**不能只存在前端内存或 SQLite**（README「工程约定」最后一条就是这个意思）；
 2. 记录自己的排序 / 置顶可以放 `entry.json` 的两个同名字段（不要引入第二套机制）；
 3. 文件夹结构与记录一样用**原子写入**；
-4. 不存绝对路径，父级用 `parentId` 表达。
+4. **不存绝对路径**，也**不存父级**——仓库层面是平的（见 §13.3）；
+5. 新增字段一律 `#[serde(default)]`，而且**删掉的字段留在老文件里也不能报错**（serde 默认忽略未知字段，有单元测试守着这件事）。
 
-### 13.3 解析与继承规则
+### 13.3 生效主题与“归类”
 
 ```text
-某个文件夹的生效主题 = 自己绑定的
-                    ?? 最近的祖先绑定的
-                    ?? builtin.plain（内置普通记录）
+某个场景的生效主题 = 自己绑定的 scene ?? builtin.plain（内置普通记录）
 ```
 
-- 同一文件夹下的记录**共同遵循**该主题（README 原话）；
-- 主题 id 找不到对应实现时 → **回退到 `builtin.plain` 并给出警告**，绝不因为缺插件就显示空白；
-- 嵌套继承的细节（子文件夹能不能覆盖、能不能解绑）尚未定案，列在 PRD §12「仍需后续决策的问题」。
+- **仓库层面是平的**：场景之间没有父子关系，所以没有“继承”这回事——一个场景绑什么主题就是什么主题；
+- 同一场景下的记录**共同遵循**该主题（README 原话）。写入时会把生效主题**快照**进 `entry.scene`：将来场景换了主题，老记录仍能按当时的规则解释；
+- 主题 id 找不到实现时 → **回退到 `builtin.plain` 并给出提示**，绝不因为缺插件显示空白；
+- **“归类”是展示层的事**：前端按 `effectiveScene` 把同类场景聚成一组（“挑战”下面同时挂着跑步和健身房）。想把跑步挪到别组，只改绑定主题，磁盘上的记录一条都不动。
+
+> 为什么不做目录嵌套：嵌套会让“移动”变成一串路径改写，同步工具看到一堆文件变化，索引还得跟着重建。
+> 扁平存放 + 记录上带一个 `folderId`，**移动 = 改一个字段**。
 
 ### 13.4 代码落点与接口
 
@@ -652,37 +655,36 @@ export default function TimelinePage() {
 
 | 文件 | 职责 | 接口（签名级） |
 |---|---|---|
-| `vault/folder.rs` | 文件夹元数据 | `read_folder(&Path, &str) -> io::Result<FolderMeta>`、`write_folder(&Path, &FolderMeta) -> io::Result<()>`、`list_folders(&Path) -> io::Result<Vec<FolderMeta>>`、`children_of(&Path, Option<&str>) -> io::Result<Vec<FolderMeta>>`、`reorder(&Path, Option<&str>, &[String]) -> io::Result<()>` |
-| `workspace/mod.rs` | 功能主题契约 | `trait WorkspaceType { fn id(&self) -> &'static str; fn validate_entry(&self, &Entry) -> AppResult<()>; fn ui_manifest(&self) -> WorkspaceUiManifest }`、`struct WorkspaceUiManifest { id, label, views: Vec<ViewDecl>, default_view: String }` |
-| `workspace/registry.rs` | 按 id 找实现 | `resolve(&str) -> &'static dyn WorkspaceType`（找不到时回退 plain） |
-| `workspace/builtin/plain.rs` | 内置普通记录（M1 唯一实现） | 视图声明：timeline / gallery / reader |
+| `vault/model.rs` | 记录与仓库身份 | `Entry { folder_id, scene, fields, … }`、`VaultMeta`、`SCHEMA_VERSION` / `is_supported` |
+| `vault/folder.rs` | 场景（文件夹）元数据 + 排序 | `read_folder` / `write_folder` / `list_folders` / `delete_folder`、`sort_folders`（置顶→order→名称）、`next_order`、`FolderMeta::effective_scene()` |
+| `vault/scene.rs` | 内置主题登记 | `PLAIN_SCENE`、`builtin_scenes() -> Vec<SceneInfo>`、`is_known(&str) -> bool` |
+| `vault/storage.rs` | 落盘 | `write_json_atomic`（tmp + rename）、`read_json`、`is_vault`、`create_vault`、`list_entries` |
+| `commands/folder.rs` | 场景命令（薄适配器） | `FolderNode` + 8 个命令；**业务规则一条都不在这层** |
 
 **前端**
 
 | 文件 | 职责 | 接口 |
 |---|---|---|
-| `lib/workspace.ts` | 取主题清单与当前文件夹的生效主题 | `listWorkspaceTypes()`、`getWorkspaceFor(folderId)`、`getUiManifest(typeId)` |
-| `pages/WorkspaceHost.tsx` | **内容区宿主**：按 manifest 决定渲染哪个视图 | props: `folderId`、`viewId` |
-| `workspaces/plain/TimelineView.tsx` 等 | 内置主题的各个视图 | props: `entries`、`onOpen` |
-| `components/FolderTree.tsx` | 侧栏文件夹树（导航主入口） | props: `nodes`、`activeId`、`onSelect`、`onReorder`、`onTogglePin` |
+| `features/scene/useFolders.ts` | 场景数据 + 按主题**归类** | `useFolders() -> { folders, scenes, groups, create, rename, remove, togglePinned, bindScene }` |
+| `features/scene/registry.ts` | 主题 id → 视图组件（扩展点） | `SCENE_VIEWS: Record<string, ComponentType<SceneViewProps>>` |
+| `features/scene/SceneHost.tsx` | 右侧宿主：按 `effectiveScene` 渲染 + 空态 + 缺主题兜底 | props: `{ folder: FolderNode \| null, scene: SceneInfo \| null }` |
+| `features/scene/SceneTree.tsx` | 左侧：主题分组 → 场景行 | props: `{ groups, scenes, activeId, onSelect, onCreate, onRename, onDelete, onTogglePinned, onBindScene }` |
+| `features/scene/scenes/plain/PlainScene.tsx` | 内置普通记录视图（也是写新主题的骨架示例） | props: `SceneViewProps` |
 
 **扩展点（M3 之后）**：功能主题以 `manifest + 视图组件` 的形式由插件提供；**UI 扩展点先做 declarative contributions**（声明式：命令、菜单、设置项、标签页元数据），需要复杂 UI 时才上 sandboxed iframe —— 与技术架构文档 §11.3 一致。
 
-### 13.5 命令补充表（M0/M1）
+### 13.5 还没做的命令（M1+）
 
 | 命令 | 参数 | 返回 | 用途 |
 |---|---|---|---|
-| `list_folders` | — | `FolderNode[]` | 侧栏文件夹树（含 order / pinned / 生效主题） |
-| `create_folder` | `name` / `parentId?` | `FolderNode[]` | 新建文件夹 |
-| `rename_folder` | `id` / `name` | `FolderNode[]` | 重命名 |
-| `move_folder` | `id` / `newParentId?` | `FolderNode[]` | 移动（含跨父级） |
-| `reorder_folders` | `parentId?` / `orderedIds` | `FolderNode[]` | 拖动排序落盘 |
-| `set_folder_pinned` | `id` / `pinned` | `FolderNode[]` | 置顶 / 取消置顶 |
-| `bind_workspace` | `folderId` / `workspaceType` | `FolderNode[]` | 绑定功能主题 |
-| `list_workspace_types` | — | `WorkspaceTypeInfo[]` | 可用主题清单 |
+| `delete_entry` | `id` | `void` | 删除记录（写 tombstone，同步时别的设备才知道“这是删了”） |
+| `update_entry` | `id` / `title?` / `fields?` | `Entry` | 只改字段、不动归属（批量编辑用） |
+| `import_media` | `entryId` / `sourcePath` | `Media` | 导入媒体（M1） |
+| `make_thumbnail` | `mediaId` / `maxSize` | `string` | 生成缩略图（M1） |
 | `set_entry_pinned` / `reorder_entries` | `id` / `…` | `Entry[]` | 记录级排序与置顶 |
+| `sync_now` / `sync_status` | — | `SyncReport` / `SyncState` | 手动同步 / 查状态（M4） |
 
-**注意**：这一批命令都返回**整个列表**（而不是只返回被改的那一条）。为什么？因为排序 / 置顶 / 继承都是**相对关系**，只回一条会让前端自己猜规则，两边迟早不一致。**关系型改动，返回全量。**
+**注意**：已经实现的命令请查 §5.1 全表——这里只列还没做的，避免两处各写一份、早晚不一致。
 
 ---
 
@@ -708,18 +710,17 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 **为什么**：一旦把"用户排的序"和"当前打开的视图"混在一起，你会很快遇到"重启后顺序没了"或"切主题把排序重置了"这类 bug，而且很难查。**分区是给未来的自己省时间。**
 
 ---
+## 附录 A：当前已实现清单（更新于 2026-04 场景模型落地）
 
----
+**Rust 外壳**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出、21 个命令注册）；`error.rs`（`AppError` / `AppResult`，命令里不再手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
 
-## 附录 A：当前已实现清单（本文档写作时）
+**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry` / `VaultMeta` / `SCHEMA_VERSION`）、`storage.rs`（tmp + rename 原子写入，列出时跳过坏数据）、`folder.rs`（场景元数据 + 排序）、`scene.rs`（内置主题登记）、`id.rs`（UUIDv7）。
 
-**后端**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出）；`state.rs`（仓库注册表 + `vaults.json` 持久化）；`commands.rs`（8 个命令）；`vault.rs`（`Entry` 模型、原子写入、4 个单元测试）；`examples/demo.rs`。
+**命令层**（`commands/`，薄适配器）：`vault.rs`（7 个）、`folder.rs`（8 个）、`entry.rs`（5 个）、`window.rs`（4 个，全部 `#[tauri::command(async)]`）。
 
-**Rust 侧结构**：`vault/{mod,model,storage,id}.rs`（领域核心，不认识 tauri）、`error.rs`（`AppError` + `AppResult`，命令里不再手写 `map_err`）、`state.rs`、`commands.rs`（12 个命令）。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / 内置普通记录）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：**可拖动侧栏** + 导航 + 页面注册表）；`VaultManagerWindow.tsx`（第二窗口外壳）；`features/vault/VaultSwitcher.tsx`（仓库切换悬浮菜单）；`features/vault/VaultManagerPanel.tsx`（窗口内的管理面板）；`lib/api.ts`（全部命令包装）；`lib/pages.tsx`（注册表）；`pages/{Placeholder,VaultPage}`；`tokens.css`；`styles/reset.css`。
-
-**验证状态**：`cargo test` 4 passed；`cargo check` 干净；`tsc --noEmit` 干净。
+**验证状态**：`cargo test` 12 passed；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 267 KB / CSS 19 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
@@ -732,4 +733,6 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 拿着锁做磁盘 IO | 并发时卡死 | 用 `{ }` 圈小临界区，IO 放锁外 |
 | 文件行尾 CRLF | 编辑器保存后整个文件"变了" | `.gitattributes` + Prettier `endOfLine: "lf"` |
 | 只盯着报错末尾看 | 被十几个连锁错误吓到 | **从第一个 error 开始修**，只看输出开头几十行 |
-
+| 改了 `generate_handler!` 里的命令名 | 界面报 `command xxx not found`，但 `cargo check` 一切正常 | 改 Rust 侧命令名后**必须重启 `pnpm tauri dev`**：HMR 只换前端，跑着的二进制还是旧命令表 |
+| 只在两个窗口里试 | 一个窗口里“命令失效”、主题改了另一个窗口没反应 | Tauri **每个窗口是独立 `document`**；跨窗口只认事件（`emit` + 每个窗口自己 `listen`） |
+| 把 `entries/` 空目录当成仓库根 | 数据变成 `entries/entries/…` 多一层 | `is_vault()` 只认 `vault.json`，导入前必须先校验 |

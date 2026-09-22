@@ -12,8 +12,10 @@ fn empty_object() -> serde_json::Value {
 
 /// 一个**场景** = 一个文件夹 + 绑定的主题。
 ///
-/// - `scene` 为 None 表示"继承父文件夹的场景"；
-/// - `order` / `pinned` 是**用户数据**（拖拽排序与置顶的结果），必须落盘；
+/// **仓库层面是平的**：场景之间没有父子关系。
+/// "归类"是展示层的事——前端按主题把同类场景聚在一起显示（挑战 / 旅游 / 日记…）。
+///
+/// - `order` / `pinned` 是用户数据（排序与置顶的结果），必须落盘；
 /// - `scene_config` 是主题自己的配置（比如挑战的目标天数），核心不解释。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,11 +24,10 @@ pub struct FolderMeta {
     pub id: String,
     pub name: String,
     #[serde(default)]
-    pub parent_id: Option<String>,
-    #[serde(default)]
     pub order: i64,
     #[serde(default)]
     pub pinned: bool,
+    /// 绑定的主题；None 或空 = 内置普通记录
     #[serde(default)]
     pub scene: Option<String>,
     #[serde(default = "empty_object")]
@@ -34,17 +35,24 @@ pub struct FolderMeta {
 }
 
 impl FolderMeta {
-    pub fn new(id: &str, name: &str, parent_id: Option<String>, order: i64) -> Self {
+    pub fn new(id: &str, name: &str, order: i64, scene: Option<String>) -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
             id: id.to_string(),
             name: name.to_string(),
-            parent_id,
             order,
             pinned: false,
-            scene: None,
+            scene: scene.filter(|s| !s.trim().is_empty()),
             scene_config: empty_object(),
         }
+    }
+
+    /// 这个场景最终生效的主题 id（没绑定就是内置普通记录）
+    pub fn effective_scene(&self) -> String {
+        self.scene
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| PLAIN_SCENE.to_string())
     }
 }
 
@@ -101,17 +109,17 @@ pub fn list_folders(vault: &Path) -> AppResult<Vec<FolderMeta>> {
     Ok(out)
 }
 
-/// 删除文件夹本身（里面的记录不动，由上层决定怎么处理）
+/// 删除场景本身（**不碰记录**，调用方要先确认里面没有记录）
 pub fn delete_folder(vault: &Path, id: &str) -> AppResult<()> {
     let dir = folder_dir(vault, id);
     if !dir.is_dir() {
-        return Err(AppError::NotFound(format!("文件夹不存在：{id}")));
+        return Err(AppError::NotFound(format!("场景不存在：{id}")));
     }
     fs::remove_dir_all(dir)?;
     Ok(())
 }
 
-// ── 排序与继承 ──
+// ── 排序 ──
 
 /// 置顶优先 → order 小的在前 → 名称
 pub fn sort_folders(list: &mut [FolderMeta]) {
@@ -123,64 +131,9 @@ pub fn sort_folders(list: &mut [FolderMeta]) {
     });
 }
 
-/// 同级里下一个可用的 order
-pub fn next_order(all: &[FolderMeta], parent_id: Option<&str>) -> i64 {
-    all.iter()
-        .filter(|f| f.parent_id.as_deref() == parent_id)
-        .map(|f| f.order + 1)
-        .max()
-        .unwrap_or(0)
-}
-
-/// 解析某个文件夹**生效的场景**：自己绑定的 → 最近的祖先绑定的 → 内置普通记录。
-/// 找不到文件夹（比如 None = 根）也回落到内置普通记录。
-pub fn effective_scene(all: &[FolderMeta], id: Option<&str>) -> String {
-    let mut current = id;
-    let mut hops = 0;
-
-    while let Some(folder_id) = current {
-        // 防环：正常情况下不可能超过几十层
-        hops += 1;
-        if hops > 64 {
-            break;
-        }
-
-        let Some(folder) = all.iter().find(|f| f.id == folder_id) else {
-            break;
-        };
-
-        if let Some(scene) = &folder.scene {
-            if !scene.trim().is_empty() {
-                return scene.clone();
-            }
-        }
-        current = folder.parent_id.as_deref();
-    }
-
-    PLAIN_SCENE.to_string()
-}
-
-/// 把 `moving` 移到 `new_parent` 下会不会形成环？
-/// （不能把父文件夹移进它自己的子文件夹里）
-pub fn creates_cycle(all: &[FolderMeta], moving: &str, new_parent: Option<&str>) -> bool {
-    let mut current = new_parent;
-    let mut hops = 0;
-
-    while let Some(id) = current {
-        if id == moving {
-            return true;
-        }
-        hops += 1;
-        if hops > 64 {
-            return true; // 数据已经坏了，保守地拒绝
-        }
-        current = all
-            .iter()
-            .find(|f| f.id == id)
-            .and_then(|f| f.parent_id.as_deref());
-    }
-
-    false
+/// 下一个可用的 order（仓库层面是平的，所以没有"同级"一说）
+pub fn next_order(all: &[FolderMeta]) -> i64 {
+    all.iter().map(|f| f.order + 1).max().unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -197,9 +150,9 @@ mod tests {
     fn folders_roundtrip_and_sort() {
         let vault = temp_vault("roundtrip");
 
-        let mut a = FolderMeta::new("f-travel", "旅行", None, 1);
-        let b = FolderMeta::new("f-diary", "日记", None, 0);
-        let mut c = FolderMeta::new("f-pinned", "置顶的", None, 9);
+        let mut a = FolderMeta::new("f-travel", "旅行", 1, Some("builtin.plain".into()));
+        let b = FolderMeta::new("f-diary", "日记", 0, None);
+        let mut c = FolderMeta::new("f-pinned", "置顶的", 9, None);
         c.pinned = true;
 
         write_folder(&vault, &a).unwrap();
@@ -212,67 +165,51 @@ mod tests {
         assert_eq!(list[1].name, "日记", "其余按 order");
         assert_eq!(list[2].name, "旅行");
 
-        // 读回来一致
         a.name = "改名了".into();
         write_folder(&vault, &a).unwrap();
         assert_eq!(read_folder(&vault, &a.id).unwrap().name, "改名了");
 
-        // 删掉一个
         delete_folder(&vault, &b.id).unwrap();
         assert_eq!(list_folders(&vault).unwrap().len(), 2);
     }
 
     #[test]
-    fn scene_inherits_from_nearest_ancestor_then_falls_back() {
-        let root = FolderMeta::new("root", "根", None, 0); // 没绑场景
-        let mut travel = FolderMeta::new("travel", "旅行", Some("root".into()), 0);
-        travel.scene = Some("builtin.travel".into());
-        let sub = FolderMeta::new("sub", "日本", Some("travel".into()), 0); // 没绑，应继承
+    fn effective_scene_falls_back_to_plain() {
+        let bound = FolderMeta::new("a", "挑战", 0, Some("builtin.challenge".into()));
+        assert_eq!(bound.effective_scene(), "builtin.challenge");
 
-        let all = vec![root, travel, sub];
+        let unbound = FolderMeta::new("b", "随手记", 0, None);
+        assert_eq!(unbound.effective_scene(), PLAIN_SCENE);
 
-        assert_eq!(effective_scene(&all, Some("travel")), "builtin.travel");
-        assert_eq!(
-            effective_scene(&all, Some("sub")),
-            "builtin.travel",
-            "子文件夹应当继承最近祖先的场景"
-        );
-        assert_eq!(
-            effective_scene(&all, Some("root")),
-            PLAIN_SCENE,
-            "都没绑定就回落到内置普通记录"
-        );
-        assert_eq!(effective_scene(&all, None), PLAIN_SCENE);
-        assert_eq!(
-            effective_scene(&all, Some("不存在的 id")),
-            PLAIN_SCENE,
-            "找不到也不能崩"
-        );
+        // 空字符串或纯空格也算"没绑定"
+        let blank = FolderMeta::new("c", "空白", 0, Some("   ".into()));
+        assert_eq!(blank.effective_scene(), PLAIN_SCENE);
     }
 
     #[test]
-    fn refuses_to_move_a_folder_into_its_own_child() {
-        let root = FolderMeta::new("root", "根", None, 0);
-        let child = FolderMeta::new("child", "子", Some("root".into()), 0);
-        let grandchild = FolderMeta::new("grand", "孙", Some("child".into()), 0);
-        let other = FolderMeta::new("other", "别的", None, 1);
-
-        let all = vec![root, child, grandchild, other];
-
-        assert!(creates_cycle(&all, "root", Some("child")), "移进自己的子级");
-        assert!(creates_cycle(&all, "root", Some("grand")), "移进自己的孙级");
-        assert!(!creates_cycle(&all, "child", Some("other")), "移到无关分支没问题");
-        assert!(!creates_cycle(&all, "child", None), "移到根没问题");
+    fn next_order_appends_at_the_end() {
+        let a = FolderMeta::new("a", "a", 0, None);
+        let b = FolderMeta::new("b", "b", 5, None);
+        assert_eq!(next_order(&[a, b]), 6);
+        assert_eq!(next_order(&[]), 0);
     }
 
+    /// 老文件里如果有已废弃的字段（比如 parentId），必须还能读出来
     #[test]
-    fn next_order_counts_siblings_only() {
-        let a = FolderMeta::new("a", "a", None, 0);
-        let b = FolderMeta::new("b", "b", None, 1);
-        let child = FolderMeta::new("c", "c", Some("a".into()), 7);
+    fn old_folder_with_removed_fields_still_loads() {
+        let old = r#"{
+            "schemaVersion": 1,
+            "id": "old-1",
+            "name": "老场景",
+            "parentId": "some-parent",
+            "order": 2,
+            "pinned": false,
+            "scene": null
+        }"#;
 
-        let all = vec![a, b, child];
-        assert_eq!(next_order(&all, None), 2);
-        assert_eq!(next_order(&all, Some("a")), 8);
+        let folder: FolderMeta = serde_json::from_str(old).unwrap();
+        assert_eq!(folder.name, "老场景");
+        assert_eq!(folder.order, 2);
+        assert_eq!(folder.effective_scene(), PLAIN_SCENE);
     }
 }

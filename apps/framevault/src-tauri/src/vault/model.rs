@@ -61,6 +61,13 @@ impl Entry {
         self.scene = Some(scene);
         self
     }
+
+    /// 标记为"刚改过"。时间由调用方给（Rust 层不引入时钟依赖，测试才好写）
+    pub fn touch(&mut self, now: &str) {
+        if !now.trim().is_empty() {
+            self.updated_at = now.to_string();
+        }
+    }
 }
 
 /// Vault 的身份文件（vault.json）—— **有它才算 Vault 根目录**

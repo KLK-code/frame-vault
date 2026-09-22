@@ -10,8 +10,8 @@ mod scene;
 mod storage;
 
 pub use folder::{
-    creates_cycle, delete_folder, effective_scene, folder_dir, folder_path, folders_dir,
-    list_folders, next_order, read_folder, sort_folders, write_folder, FolderMeta,
+    delete_folder, folder_dir, folder_path, folders_dir, list_folders, next_order, read_folder,
+    sort_folders, write_folder, FolderMeta,
 };
 pub use id::new_id;
 pub use model::{is_supported, Entry, VaultMeta, SCHEMA_VERSION};

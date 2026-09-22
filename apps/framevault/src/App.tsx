@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import TitleBar from "./app/TitleBar";
+import SceneHost from "./features/scene/SceneHost";
+import SceneTree from "./features/scene/SceneTree";
+import { useFolders } from "./features/scene/useFolders";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
-import { openSettings } from "./lib/api";
-import { PAGES } from "./lib/pages";
+import { confirm, openSettings } from "./lib/api";
 import "./App.css";
 
 function IconSettings() {
@@ -25,14 +27,32 @@ function readWidth(): number {
   return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : DEFAULT_WIDTH;
 }
 
+/**
+ * 主窗口 = 左（场景树）+ 右（场景舞台）。
+ *
+ * 中间那条可拖动的分隔条只影响显示（宽度记在 localStorage），不是数据。
+ */
 function App() {
-  const [activeId, setActiveId] = useState(PAGES[0].id);
+  const { folders, scenes, groups, error, create, rename, remove, togglePinned, bindScene } =
+    useFolders();
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
   const dragging = useRef(false);
   const widthRef = useRef(sidebarWidth);
 
-  const active = PAGES.find((p) => p.id === activeId) ?? PAGES[0];
-  const ActivePage = active.Page;
+  // 选中的场景没了（被删/仓库换了）就自动落到第一个
+  useEffect(() => {
+    if (folders.length === 0) {
+      if (activeId !== null) setActiveId(null);
+      return;
+    }
+    if (!folders.some((folder) => folder.id === activeId)) {
+      setActiveId(folders[0].id);
+    }
+  }, [folders, activeId]);
+
+  const active = folders.find((folder) => folder.id === activeId) ?? null;
+  const activeScene = active ? (scenes.find((s) => s.id === active.effectiveScene) ?? null) : null;
 
   function applyWidth(next: number, persist = false) {
     const clamped = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)));
@@ -69,25 +89,34 @@ function App() {
     document.body.style.userSelect = "none";
   }
 
+  async function handleDelete(folder: { id: string; name: string }) {
+    const ok = await confirm(
+      `删除场景「${folder.name}」？\n里面的记录不会被删除，但会失去归属。`,
+      "删除场景",
+    );
+    if (!ok) return false;
+    return remove(folder.id);
+  }
+
   return (
     <div className="app-root">
       <TitleBar title="FrameVault" />
 
       <main className="app">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
-          <h2>FrameVault</h2>
+          <SceneTree
+            groups={groups}
+            scenes={scenes}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onCreate={create}
+            onRename={rename}
+            onDelete={handleDelete}
+            onTogglePinned={(folder) => togglePinned(folder.id, !folder.pinned)}
+            onBindScene={bindScene}
+          />
 
-          <nav>
-            {PAGES.map(({ id, label }) => (
-              <button
-                key={id}
-                className={id === activeId ? "active" : ""}
-                onClick={() => setActiveId(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          {error && <p className="sidebar__error">{error}</p>}
 
           <div className="sidebar__footer">
             <VaultSwitcher />
@@ -121,7 +150,7 @@ function App() {
         />
 
         <section className="content">
-          <ActivePage />
+          <SceneHost folder={active} scene={activeScene} />
         </section>
       </main>
     </div>

@@ -74,7 +74,10 @@
 | 区域 | 公开类名 |
 |---|---|
 | 标题栏 | `.titlebar`、`.titlebar__title`、`.titlebar__actions`、`.titlebar__btn`、`.titlebar__btn--close` |
-| 主外壳 | `.app-root`、`.app`、`.sidebar`、`.sidebar nav button`、`.sidebar__footer`、`.sidebar__icon`、`.app__divider`、`.content` |
+| 主外壳 | `.app-root`、`.app`、`.sidebar`、`.sidebar__footer`、`.sidebar__icon`、`.app__divider`、`.content` |
+| 场景树（左侧） | `.scene-tree`、`.scene-tree__head`、`.scene-tree__title`、`.scene-tree__add`、`.scene-tree__compose`、`.scene-tree__compose-actions`、`.scene-tree__scroll`、`.scene-tree__empty`、`.scene-group`、`.scene-group__title`、`.scene-group__count`、`.scene-row`、`.scene-row-wrap`、`.scene-row__name`、`.scene-row__pin`、`.scene-row__more`、`.scene-row__input`、`.scene-menu` |
+| 场景舞台（右侧） | `.scene-host`、`.scene-host--empty`、`.scene-host__head`、`.scene-host__name`、`.scene-host__theme`、`.scene-host__notice` |
+| 内置普通记录主题 | `.plain-scene`、`.plain-scene__compose`、`.plain-scene__list`、`.plain-scene__empty`、`.plain-scene__count`、`.plain-scene__error`、`.entry`、`.entry__title`、`.entry__time` |
 | 独立窗口 | `.window`、`.window__body` |
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |

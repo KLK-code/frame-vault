@@ -2,6 +2,7 @@ use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault;
 use std::path::PathBuf;
+use tauri::Emitter;
 use tauri::State;
 
 #[derive(serde::Serialize)]
@@ -38,7 +39,12 @@ pub fn list_vaults(state: State<'_, AppState>) -> AppResult<Vec<VaultInfo>> {
 
 /// 导入一个**已经存在**的 Vault 目录：必须有 vault.json
 #[tauri::command]
-pub fn add_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<VaultInfo>> {
+pub fn add_vault(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> AppResult<Vec<VaultInfo>> {
+    let app_handle = app;
     let app = state.inner();
     let dir = PathBuf::from(&path);
 
@@ -61,12 +67,14 @@ pub fn add_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<Vaul
     }
     app.save()?;
 
+    let _ = app_handle.emit("vault://changed", ());
     vault_list(app)
 }
 
 /// 在指定目录里创建一个新 Vault（可以"收养"已经有 entries/ 的目录）
 #[tauri::command]
 pub fn create_vault(
+    app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
     path: String,
     name: String,
@@ -96,22 +104,33 @@ pub fn create_vault(
     }
     app.save()?;
 
+    let _ = app_handle.emit("vault://changed", ());
     vault_list(app)
 }
 
 #[tauri::command]
-pub fn switch_vault(state: State<'_, AppState>, path: String) -> AppResult<()> {
-    let app = state.inner();
+pub fn switch_vault(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> AppResult<()> {
+    let app_state = state.inner();
     {
-        let mut guard = app.vaults.lock()?;
+        let mut guard = app_state.vaults.lock()?;
         guard.active = Some(PathBuf::from(&path));
     }
-    app.save()?;
+    app_state.save()?;
+
+    let _ = app.emit("vault://changed", ());
     Ok(())
 }
 
 #[tauri::command]
-pub fn forget_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<VaultInfo>> {
+pub fn forget_vault(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> AppResult<Vec<VaultInfo>> {
     let app = state.inner();
     {
         let mut guard = app.vaults.lock()?;
@@ -122,6 +141,7 @@ pub fn forget_vault(state: State<'_, AppState>, path: String) -> AppResult<Vec<V
         }
     }
     app.save()?;
+    let _ = app_handle.emit("vault://changed", ());
     vault_list(app)
 }
 

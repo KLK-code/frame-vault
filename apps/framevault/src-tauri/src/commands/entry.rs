@@ -1,58 +1,98 @@
+//! 记录命令。
+//!
+//! 记录是**扁平**存放的：`entries/<id>/entry.json`，
+//! 归属靠 `folderId` 字段。仓库层面不嵌套，展示层才分组。
+
 use super::active_vault;
 use crate::error::AppResult;
 use crate::state::AppState;
-use crate::vault::{self, Entry};
+use crate::vault::{self, list_entries as read_entries, read_folder, write_entry, Entry};
+use serde::Serialize;
 use tauri::State;
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultMetaInfo {
+    pub schema_version: u32,
+    pub vault_id: String,
+    pub name: String,
+    pub created_at: String,
+}
+
+/// 新建记录时要的 id，由 Rust 统一发放（UUID v7：按时间单调递增，天然适合排序）
+#[tauri::command]
+pub fn new_id() -> String {
+    vault::new_id()
+}
+
+/// 保存一条记录。
+///
+/// 主题由**它所属的场景**决定：记录自己不带主题。
+/// 没指定 folderId 就是"未归类"，用内置普通记录渲染。
 #[tauri::command]
 pub fn save_entry(
     state: State<'_, AppState>,
     id: String,
     title: String,
-    created_at: String,
+    created_at: Option<String>,
+    updated_at: Option<String>,
     folder_id: Option<String>,
-) -> AppResult<String> {
-    let vault_dir = active_vault(state.inner())?;
+) -> AppResult<Entry> {
+    let vault_dir = active_vault(&state)?;
 
-    // 记录属于哪个场景：跟着文件夹走
-    let folders = vault::list_folders(&vault_dir)?;
-    let scene = vault::effective_scene(&folders, folder_id.as_deref());
+    let scene = match folder_id.as_deref() {
+        Some(fid) => read_folder(&vault_dir, fid)?.effective_scene(),
+        None => vault::PLAIN_SCENE.to_string(),
+    };
 
-    let entry = Entry::new(&id, &title, &created_at).in_folder(folder_id, scene.clone());
-    println!(
-        "[rust] save_entry: {id} scene={scene} -> {}",
-        vault_dir.display()
-    );
+    let created = created_at.unwrap_or_default();
+    let mut entry = match vault::read_entry(&vault_dir, &id) {
+        Ok(existing) => existing,
+        Err(_) => Entry::new(&id, &title, &created),
+    };
+    entry.title = title;
+    if entry.created_at.is_empty() {
+        entry.created_at = created.clone();
+    }
+    entry.folder_id = folder_id;
+    entry.scene = Some(scene);
+    entry.touch(updated_at.as_deref().unwrap_or(&created));
 
-    let path = vault::write_entry(&vault_dir, &entry)?;
-    Ok(path.display().to_string())
+    write_entry(&vault_dir, &entry)?;
+    Ok(entry)
 }
 
 #[tauri::command]
 pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<Entry> {
-    let vault_dir = active_vault(state.inner())?;
-    Ok(vault::read_entry(&vault_dir, &id)?)
+    let vault_dir = active_vault(&state)?;
+    vault::read_entry(&vault_dir, &id)
 }
 
-/// 列出记录；给了 folder_id 就只看那个场景下的（None = 全部）
+/// 列出记录。`folder_id` 给 `None` = 全部；给字符串 = 只列这个场景里的。
 #[tauri::command]
 pub fn list_entries(
     state: State<'_, AppState>,
     folder_id: Option<String>,
 ) -> AppResult<Vec<Entry>> {
-    let vault_dir = active_vault(state.inner())?;
-    let mut list = vault::list_entries(&vault_dir)?;
-
-    if let Some(folder) = folder_id {
-        list.retain(|e| e.folder_id.as_deref() == Some(folder.as_str()));
-    }
-
-    Ok(list)
+    let vault_dir = active_vault(&state)?;
+    let all = read_entries(&vault_dir)?;
+    Ok(match folder_id.as_deref() {
+        Some(fid) => all
+            .into_iter()
+            .filter(|e| e.folder_id.as_deref() == Some(fid))
+            .collect(),
+        None => all,
+    })
 }
 
-/// 读当前仓库的身份信息（vault.json）
 #[tauri::command]
-pub fn read_vault_meta(state: State<'_, AppState>) -> AppResult<vault::VaultMeta> {
-    let vault_dir = active_vault(state.inner())?;
-    Ok(vault::read_vault_meta(&vault_dir)?)
+pub fn read_vault_meta(state: State<'_, AppState>) -> AppResult<VaultMetaInfo> {
+    let vault_dir = active_vault(&state)?;
+    let meta = vault::read_vault_meta(&vault_dir)?;
+    Ok(VaultMetaInfo {
+        schema_version: meta.schema_version,
+        vault_id: meta.vault_id,
+        name: meta.name,
+        created_at: meta.created_at,
+    })
 }

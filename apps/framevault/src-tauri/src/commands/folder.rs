@@ -1,75 +1,83 @@
+//! 场景（文件夹）命令。
+//!
+//! 命令层是"适配器"：把前端传来的 JSON 参数翻译成领域层的调用，
+//! 再把领域对象翻译成前端好用的形状。这里唯一的规则是——不写业务规则，
+//! 规则都在 `crate::vault` 里。
+
 use super::active_vault;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
-use crate::vault::{self, FolderMeta, SceneInfo};
-use std::path::Path;
+use crate::vault::{
+    self, delete_folder as delete_folder_meta, is_known_scene, list_folders, new_id, next_order,
+    read_folder, write_folder, FolderMeta, SceneInfo,
+};
+use serde::Serialize;
 use tauri::State;
 
-/// 传给前端的场景节点。`effectiveScene` 是**继承解析之后**真正生效的场景。
-#[derive(serde::Serialize)]
+/// 前端要的形状。字段名用 camelCase（`rename_all` 自动转），
+/// 所以 TS 侧写 `node.effectiveScene` 而不是 `effective_scene`。
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderNode {
     pub id: String,
     pub name: String,
-    pub parent_id: Option<String>,
     pub order: i64,
     pub pinned: bool,
-    /// 自己绑定的（None = 继承父级）
+    /// 用户绑定的主题（可能为空 = 没绑定）
     pub scene: Option<String>,
-    /// 继承解析后真正生效的
+    /// 实际生效的主题（没绑定就是 builtin.plain）
     pub effective_scene: String,
+    pub scene_config: serde_json::Value,
 }
 
-fn to_nodes(vault_dir: &Path) -> AppResult<Vec<FolderNode>> {
-    let all = vault::list_folders(vault_dir)?;
-
-    Ok(all
-        .iter()
-        .map(|f| FolderNode {
-            id: f.id.clone(),
-            name: f.name.clone(),
-            parent_id: f.parent_id.clone(),
+impl From<FolderMeta> for FolderNode {
+    fn from(f: FolderMeta) -> Self {
+        Self {
+            effective_scene: f.effective_scene(),
+            scene_config: f.scene_config.clone(),
+            id: f.id,
+            name: f.name,
             order: f.order,
             pinned: f.pinned,
-            scene: f.scene.clone(),
-            effective_scene: vault::effective_scene(&all, Some(f.id.as_str())),
-        })
-        .collect())
+            scene: f.scene,
+        }
+    }
 }
 
-fn find<'a>(all: &'a [FolderMeta], id: &str) -> AppResult<&'a FolderMeta> {
-    all.iter()
-        .find(|f| f.id == id)
-        .ok_or_else(|| AppError::NotFound(format!("文件夹不存在：{id}")))
+fn to_nodes(vault_dir: &std::path::Path) -> AppResult<Vec<FolderNode>> {
+    Ok(list_folders(vault_dir)?.into_iter().map(FolderNode::from).collect())
 }
 
+/// 场景列表（已排序：置顶 → order → 名称）。
+/// **前端按 `effectiveScene` 分组显示**，这就是"归类"的全部来源。
 #[tauri::command]
-pub fn list_folders(state: State<'_, AppState>) -> AppResult<Vec<FolderNode>> {
-    to_nodes(&active_vault(state.inner())?)
+pub fn list_folder_tree(state: State<'_, AppState>) -> AppResult<Vec<FolderNode>> {
+    let vault_dir = active_vault(&state)?;
+    to_nodes(&vault_dir)
 }
 
+/// 新建场景：起名 + 选主题，一步到位。
 #[tauri::command]
 pub fn create_folder(
     state: State<'_, AppState>,
     name: String,
-    parent_id: Option<String>,
+    scene: Option<String>,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(state.inner())?;
-
+    let vault_dir = active_vault(&state)?;
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Invalid("文件夹名不能为空".into()));
+        return Err(AppError::Invalid("场景名称不能为空".into()));
+    }
+    if let Some(id) = scene.as_deref() {
+        if !is_known_scene(id) {
+            return Err(AppError::Invalid(format!("未知主题：{id}")));
+        }
     }
 
-    let all = vault::list_folders(&vault_dir)?;
-    if let Some(parent) = parent_id.as_deref() {
-        find(&all, parent)?; // 父级必须存在
-    }
-
-    let order = vault::next_order(&all, parent_id.as_deref());
-    let folder = FolderMeta::new(&vault::new_id(), &name, parent_id, order);
-    vault::write_folder(&vault_dir, &folder)?;
-
+    let all = list_folders(&vault_dir)?;
+    let order = next_order(&all);
+    let folder = FolderMeta::new(&new_id(), &name, order, scene);
+    write_folder(&vault_dir, &folder)?;
     to_nodes(&vault_dir)
 }
 
@@ -79,70 +87,39 @@ pub fn rename_folder(
     id: String,
     name: String,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(state.inner())?;
-
+    let vault_dir = active_vault(&state)?;
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Invalid("文件夹名不能为空".into()));
+        return Err(AppError::Invalid("场景名称不能为空".into()));
     }
 
-    let all = vault::list_folders(&vault_dir)?;
-    let mut folder = find(&all, &id)?.clone();
+    let mut folder = read_folder(&vault_dir, &id)?;
     folder.name = name;
-    vault::write_folder(&vault_dir, &folder)?;
-
+    write_folder(&vault_dir, &folder)?;
     to_nodes(&vault_dir)
 }
 
+/// 给场景换主题（`None` = 退回内置普通记录）
 #[tauri::command]
-pub fn move_folder(
+pub fn bind_folder_scene(
     state: State<'_, AppState>,
     id: String,
-    new_parent_id: Option<String>,
+    scene: Option<String>,
+    scene_config: Option<serde_json::Value>,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(state.inner())?;
-    let all = vault::list_folders(&vault_dir)?;
-
-    find(&all, &id)?;
-    if let Some(parent) = new_parent_id.as_deref() {
-        find(&all, parent)?;
-    }
-    if vault::creates_cycle(&all, &id, new_parent_id.as_deref()) {
-        return Err(AppError::Invalid("不能把文件夹移进它自己的子文件夹".into()));
-    }
-
-    let mut folder = find(&all, &id)?.clone();
-    folder.parent_id = new_parent_id.clone();
-    folder.order = vault::next_order(&all, new_parent_id.as_deref());
-    vault::write_folder(&vault_dir, &folder)?;
-
-    to_nodes(&vault_dir)
-}
-
-/// 拖动排序落盘：把 ordered_ids 里的文件夹按数组下标写入 order
-#[tauri::command]
-pub fn reorder_folders(
-    state: State<'_, AppState>,
-    parent_id: Option<String>,
-    ordered_ids: Vec<String>,
-) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(state.inner())?;
-    let all = vault::list_folders(&vault_dir)?;
-
-    for (index, id) in ordered_ids.iter().enumerate() {
-        let Some(folder) = all.iter().find(|f| &f.id == id) else {
-            return Err(AppError::NotFound(format!("文件夹不存在：{id}")));
-        };
-        // 只动同一层的，避免误改别的分支
-        if folder.parent_id != parent_id {
-            continue;
+    let vault_dir = active_vault(&state)?;
+    if let Some(sid) = scene.as_deref() {
+        if !is_known_scene(sid) {
+            return Err(AppError::Invalid(format!("未知主题：{sid}")));
         }
-
-        let mut updated = folder.clone();
-        updated.order = index as i64;
-        vault::write_folder(&vault_dir, &updated)?;
     }
 
+    let mut folder = read_folder(&vault_dir, &id)?;
+    folder.scene = scene.filter(|s| !s.trim().is_empty());
+    if let Some(config) = scene_config {
+        folder.scene_config = config;
+    }
+    write_folder(&vault_dir, &folder)?;
     to_nodes(&vault_dir)
 }
 
@@ -152,45 +129,56 @@ pub fn set_folder_pinned(
     id: String,
     pinned: bool,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(state.inner())?;
-    let all = vault::list_folders(&vault_dir)?;
-
-    let mut folder = find(&all, &id)?.clone();
+    let vault_dir = active_vault(&state)?;
+    let mut folder = read_folder(&vault_dir, &id)?;
     folder.pinned = pinned;
-    vault::write_folder(&vault_dir, &folder)?;
-
+    write_folder(&vault_dir, &folder)?;
     to_nodes(&vault_dir)
 }
 
-/// 给文件夹绑定场景。scene = None / 空字符串 表示"清除绑定，回到继承"。
+/// 按前端给的顺序重排（写回 `order`）。
+/// 只认仓库里真实存在的 id，顺序外的场景保持原位。
 #[tauri::command]
-pub fn bind_folder_scene(
+pub fn reorder_folders(
     state: State<'_, AppState>,
-    id: String,
-    scene: Option<String>,
-    scene_config: Option<serde_json::Value>,
+    ordered_ids: Vec<String>,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(state.inner())?;
-    let all = vault::list_folders(&vault_dir)?;
+    let vault_dir = active_vault(&state)?;
+    let all = list_folders(&vault_dir)?;
 
-    let scene = scene.filter(|s| !s.trim().is_empty());
-    if let Some(s) = scene.as_deref() {
-        if !vault::is_known_scene(s) {
-            return Err(AppError::Invalid(format!("未知的场景：{s}")));
+    for (index, id) in ordered_ids.iter().enumerate() {
+        if let Some(folder) = all.iter().find(|f| &f.id == id) {
+            let mut updated = folder.clone();
+            updated.order = index as i64;
+            write_folder(&vault_dir, &updated)?;
         }
     }
-
-    let mut folder = find(&all, &id)?.clone();
-    folder.scene = scene;
-    if let Some(config) = scene_config {
-        folder.scene_config = config;
-    }
-    vault::write_folder(&vault_dir, &folder)?;
-
     to_nodes(&vault_dir)
 }
 
-/// 当前可用的场景清单（现在只有内置的普通记录）
+/// 删除场景。**里面还有记录时会拒绝**——宁可让用户先处理，
+/// 也不要出现"场景没了、记录变成孤儿"的情况。
+#[tauri::command]
+pub fn delete_folder(state: State<'_, AppState>, id: String) -> AppResult<Vec<FolderNode>> {
+    let vault_dir = active_vault(&state)?;
+    let folder = read_folder(&vault_dir, &id)?;
+
+    let count = vault::list_entries(&vault_dir)?
+        .iter()
+        .filter(|e| e.folder_id.as_deref() == Some(id.as_str()))
+        .count();
+    if count > 0 {
+        return Err(AppError::Invalid(format!(
+            "「{}」里还有 {count} 条记录，请先删除或移走它们",
+            folder.name
+        )));
+    }
+
+    delete_folder_meta(&vault_dir, &id)?;
+    to_nodes(&vault_dir)
+}
+
+/// 已安装的主题列表（现在只有内置的普通记录）
 #[tauri::command]
 pub fn list_scenes() -> Vec<SceneInfo> {
     vault::builtin_scenes()

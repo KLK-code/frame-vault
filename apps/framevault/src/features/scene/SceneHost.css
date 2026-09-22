@@ -1,0 +1,50 @@
+@layer components {
+.scene-host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fv-space-3);
+}
+
+.scene-host--empty {
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-base);
+  line-height: 1.9;
+  text-align: center;
+}
+
+.scene-host__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--fv-space-2);
+}
+
+.scene-host__name {
+  margin: 0;
+  font-size: var(--fv-text-xl);
+  font-weight: 600;
+  color: var(--fv-color-text);
+}
+
+/* 主题标签：告诉用户"这个场景用的是哪套玩法" */
+.scene-host__theme {
+  padding: 2px 8px;
+  border: 1px solid var(--fv-color-border);
+  border-radius: 999px;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  white-space: nowrap;
+}
+
+.scene-host__notice {
+  margin: 0;
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: var(--fv-color-surface);
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+}
+}

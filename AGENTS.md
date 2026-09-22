@@ -201,6 +201,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |
 | 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏、侧栏、设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的外观只走巧思白名单 |
 | 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式，最难查 | 共享组件里不许出现主题 id；需要区分的观感做成 token（如 `--fv-nav-active-bg` / `--fv-nav-active-fg`），由**外观预设**给值 |
+| 跨窗口状态**整份回写** | 主骨架每次重算外观都会写一次盘，把设置窗口刚改的变量 / 刚选的选择冲回旧值 —— 表现为「改了没反应」「切了没用」 | **每个字段只有一个 owner**：overrides / scheme / appearance 只有设置窗口写，applied 只有主骨架写；写盘一律 **patch 合并**（只带自己那一项），广播出去的才是合并后的完整快照 |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 

@@ -3,7 +3,6 @@ import {
   publishTheme,
   readStoredTheme,
   type ColorScheme,
-  type ThemePayload,
 } from "./themeSync";
 
 export type Overrides = Record<string, string>;
@@ -20,8 +19,8 @@ export function useThemeOverrides() {
 
   // 任何改动都广播出去，让主窗口 / 其它窗口跟着变
   useEffect(() => {
-    // 外观预设不归这里管：把当前存的那份一起带上，别把它覆盖掉
-    publishTheme({ ...readStoredTheme(), overrides });
+    // 只写 overrides 这一项：外观预设 / 配色模式由各自的 owner 负责
+    publishTheme({ overrides });
   }, [overrides]);
 
   const set = useCallback((key: string, value: string) => {
@@ -60,8 +59,7 @@ export function useColorScheme() {
   const [scheme, setScheme] = useState<ColorScheme>(() => readStoredTheme().scheme);
 
   useEffect(() => {
-    const payload: ThemePayload = { ...readStoredTheme(), scheme };
-    publishTheme(payload);
+    publishTheme({ scheme });
   }, [scheme]);
 
   return { scheme, setScheme };

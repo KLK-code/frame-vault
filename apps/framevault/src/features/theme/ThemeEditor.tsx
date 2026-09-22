@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TOKEN_GROUPS } from "./tokenSchema";
 import { useColorScheme, useThemeOverrides, type ColorScheme } from "./useThemeOverrides";
-import { PRESETS } from "./presets";
+import { DEFAULT_APPEARANCE, PRESETS, presetName } from "./presets";
 import { useAppearanceChoice } from "./useAppearance";
+import { onThemeChange, readStoredTheme } from "./themeSync";
 import "./ThemeEditor.css";
 
 /** 尽量把任意颜色写法转成 #rrggbb，给 <input type="color"> 用 */
@@ -22,6 +23,9 @@ export default function ThemeEditor() {
   const { overrides, set, reset, resetOne, exportCss } = useThemeOverrides();
   const { scheme, setScheme } = useColorScheme();
   const { choice, setChoice } = useAppearanceChoice();
+  // 真正生效的那一套（由主骨架算好广播过来）：显示出来，改没改一目了然
+  const [applied, setApplied] = useState(() => readStoredTheme().applied);
+  useEffect(() => onThemeChange((payload) => setApplied(payload.applied)), []);
   const [status, setStatus] = useState("");
 
   /** 当前生效值：有覆盖用覆盖，没有就读 tokens 算出来的值 */
@@ -71,6 +75,14 @@ export default function ThemeEditor() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+        <div className="settings__row">
+          <div className="settings__text">
+            <span className="settings__label">现在生效</span>
+            <span className="settings__desc">
+              {presetName(applied || choice || DEFAULT_APPEARANCE)}{applied ? "（" + applied + "）" : "（默认预设）"}
+            </span>
           </div>
         </div>
       </div>

@@ -1,3 +1,4 @@
+use super::allow_vault_assets;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault;
@@ -63,10 +64,11 @@ pub fn add_vault(
         if !guard.known.iter().any(|k| k == &dir) {
             guard.known.push(dir.clone());
         }
-        guard.active = Some(dir);
+        guard.active = Some(dir.clone());
     }
     app.save()?;
 
+    allow_vault_assets(&app_handle, &dir);
     let _ = app_handle.emit("vault://changed", ());
     vault_list(app)
 }
@@ -100,10 +102,11 @@ pub fn create_vault(
         if !guard.known.iter().any(|k| k == &dir) {
             guard.known.push(dir.clone());
         }
-        guard.active = Some(dir);
+        guard.active = Some(dir.clone());
     }
     app.save()?;
 
+    allow_vault_assets(&app_handle, &dir);
     let _ = app_handle.emit("vault://changed", ());
     vault_list(app)
 }
@@ -115,12 +118,15 @@ pub fn switch_vault(
     path: String,
 ) -> AppResult<()> {
     let app_state = state.inner();
+    let dir = PathBuf::from(&path);
     {
         let mut guard = app_state.vaults.lock()?;
-        guard.active = Some(PathBuf::from(&path));
+        guard.active = Some(dir.clone());
     }
     app_state.save()?;
 
+    // 切仓库后必须放行新目录，否则界面里的照片全是碎图
+    allow_vault_assets(&app, &dir);
     let _ = app.emit("vault://changed", ());
     Ok(())
 }

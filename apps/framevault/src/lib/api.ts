@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 
@@ -44,6 +44,30 @@ export type SceneInfo = {
   name: string;
   description: string;
   builtin: boolean;
+};
+
+/**
+ * 一个媒体文件。前六个字段是磁盘上的事实（Rust 的 `media/<id>/meta.json`），
+ * 两个 `*Path` 是命令层算好的绝对路径——前端不拼路径，改布局时只改 Rust。
+ */
+export type MediaItem = {
+  schemaVersion: number;
+  id: string;
+  /** 用户原本的文件名（磁盘上其实叫 orig.<ext>） */
+  name: string;
+  ext: string;
+  mime: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  /** sha256，将来去重与同步校验用 */
+  hash: string;
+  /** 挂在哪条记录上；null = 导入了还没整理 */
+  entryId: string | null;
+  addedAt: string;
+  originalPath: string;
+  /** 缩略图；视频或解不开的格式是 null（那就退回显示原文件） */
+  thumbPath: string | null;
 };
 
 export type VaultMeta = {
@@ -140,6 +164,46 @@ export const loadEntry = (id: string) => invoke<Entry>("load_entry", { id });
 /** 列出记录（新的在前）；给了 folderId 就只看那个场景里的 */
 export const listEntries = (folderId: string | null = null) =>
   invoke<Entry[]>("list_entries", { folderId });
+
+// ── 媒体 ──
+/**
+ * 导入一个文件（复制进 Vault，原文件不动）。
+ * 长任务：Rust 侧是 `#[tauri::command(async)]`，不会占住主线程。
+ */
+export const importMedia = (
+  sourcePath: string,
+  entryId: string | null = null,
+  addedAt = new Date().toISOString(),
+) => invoke<MediaItem>("import_media", { sourcePath, entryId, addedAt });
+
+/** 列出媒体（新的在前）；给了 entryId 就只看那条记录的 */
+export const listMedia = (entryId: string | null = null) =>
+  invoke<MediaItem[]>("list_media", { entryId });
+
+/**
+ * 本地绝对路径 → WebView 能显示的 URL（asset 协议）。
+ * 能读到哪些目录由 Rust 决定：**只放行当前 Vault 和它的缩略图缓存**。
+ */
+export const assetUrl = (path: string) => convertFileSrc(path);
+
+/** 弹系统文件选择器选照片/视频，可多选；取消返回空数组 */
+export async function pickMediaFiles(): Promise<string[]> {
+  const picked = await open({
+    multiple: true,
+    title: "选择要导入的照片或视频",
+    filters: [
+      {
+        name: "照片与视频",
+        extensions: [
+          "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "avif",
+          "mp4", "mov", "m4v", "webm", "avi", "mkv",
+        ],
+      },
+    ],
+  });
+  if (Array.isArray(picked)) return picked;
+  return typeof picked === "string" ? [picked] : [];
+}
 
 /** 读当前仓库的身份文件 vault.json */
 export const readVaultMeta = () => invoke<VaultMeta>("read_vault_meta");

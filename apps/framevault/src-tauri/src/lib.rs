@@ -21,6 +21,12 @@ pub fn run() {
             let config = app.path().app_data_dir()?.join("vaults.json");
             let state = AppState::new(config);
             state.load()?;
+
+            // 启动时就把当前 Vault 放行给 asset 协议（WebView 要靠它显示本地照片）
+            if let Some(dir) = state.vaults.lock().ok().and_then(|guard| guard.active.clone()) {
+                commands::allow_vault_assets(app.handle(), &dir);
+            }
+
             app.manage(state);
             Ok(())
         })
@@ -57,6 +63,9 @@ pub fn run() {
             commands::entry::load_entry,
             commands::entry::list_entries,
             commands::entry::read_vault_meta,
+            // 媒体
+            commands::media::import_media,
+            commands::media::list_media,
             // 窗口
             commands::window::open_vault_manager,
             commands::window::close_vault_manager,

@@ -18,12 +18,23 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# protocol-asset：WebView 显示 Vault 里本地照片的唯一通道（配合 assetProtocol 配置）
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"
 uuid = { version = "1.26.1", features = ["v7"] }
+sha2 = "0.10"
+# 只开我们真的会遇到的格式，别把整个 image 的编解码器都编进来（编译时间和体积都疼）
+image = { version = "0.25", default-features = false, features = [
+    "bmp",
+    "gif",
+    "jpeg",
+    "png",
+    "tiff",
+    "webp",
+] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

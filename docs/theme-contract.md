@@ -36,6 +36,7 @@
 | `--fv-color-on-danger` | `#ffffff` | — | ✅ |
 | `--fv-color-focus-ring` | `#086ddd` | 键盘聚焦环 | ✅ |
 | `--fv-color-selection` | `#d7e6fb` | 文本选中底色 | ✅ |
+| `--fv-color-scrim` | `rgba(0, 0, 0, 0.62)` | 大图 / 对话框背后的遮罩 | ✅ |
 | `--fv-titlebar-height` | `32px` | — | — |
 | `--fv-radius-sm` | `4px` | — | — |
 | `--fv-radius-md` | `6px` | — | — |

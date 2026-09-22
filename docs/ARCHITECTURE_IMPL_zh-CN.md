@@ -185,15 +185,16 @@ lib.rs（组装）
 | `migration.rs` | schemaVersion 迁移 | `migrate_vault(&Path) -> io::Result<()>`、`is_supported(u32) -> bool` | M1 |
 | `tombstone.rs` | 删除标记 | `mark_deleted(&Path, &str) -> io::Result<()>`、`list_tombstones(&Path) -> io::Result<Vec<Tombstone>>` | M4 |
 
-#### `src-tauri/src/commands/` ⬜（当前是单文件 `commands.rs` ✅）
+#### `src-tauri/src/commands/` ✅（五个模块：`vault` / `folder` / `entry` / `media` / `window`）
 接线盒。**一个命令只做三件事：收参数（校验）→ 调领域层 → 把结果/错误转成可序列化的形状。**
 命令超过 6~8 个时拆成目录：
 
 | 文件 | 命令 | 阶段 |
 |---|---|---|
-| `vault.rs`（将来拆出） | `list_vaults` / `add_vault` / `create_vault` / `switch_vault` / `forget_vault` | ✅ 全部 |
-| `entry.rs`（将来拆出） | `save_entry` / `load_entry` / `list_entries` / `read_vault_meta` / ⬜ `delete_entry` | ✅ 除 delete 外 |
-| `media.rs` | `import_media` / `make_thumbnail` | M1 |
+| `vault.rs` | `list_vaults` / `add_vault` / `create_vault` / `switch_vault` / `forget_vault` / `vault_exists` | ✅ 全部 |
+| `folder.rs` | `list_folder_tree` / `create_folder` / `rename_folder` / `delete_folder` / `bind_folder_scene` / `set_folder_pinned` / `reorder_folders` / `list_scenes` | ✅ 全部 |
+| `entry.rs` | `new_id` / `save_entry` / `load_entry` / `list_entries` / `read_vault_meta` / ⬜ `delete_entry` / ⬜ `update_entry` | ✅ 除改删外 |
+| `media.rs` | `import_media`（`async`，含复制 / sha256 / 探尺寸 / 生成缩略图） / `list_media` | ✅ 本轮 |
 | `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
 | `sync.rs` | `sync_now` / `sync_status` / `cancel_sync` | M4 |
 
@@ -431,6 +432,8 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 | `load_entry` | `id` | `Entry` | 读一条记录 | ✅ |
 | `list_entries` | `folderId?` | `Entry[]` | 列记录（新的在前；给了 `folderId` 就只看那个场景；坏数据跳过） | ✅ |
 | `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份） | ✅ |
+| `import_media` | `sourcePath` / `entryId?` / `addedAt` | `MediaItem` | 把一个文件**复制**进 Vault（算 sha256 / 探尺寸 / 生成缩略图）；`async` 命令，不占主线程 | ✅ |
+| `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前；返回原文件与缩略图的**绝对路径**，前端不拼路径） | ✅ |
 | `list_folder_tree` | — | `FolderNode[]` | 全部场景（已排序；含 `scene` / `effectiveScene` / `order` / `pinned`） | ✅ |
 | `create_folder` | `name` / `scene?` | `FolderNode[]` | 新建场景：起名 + 选主题，一步完成 | ✅ |
 | `rename_folder` | `id` / `name` | `FolderNode[]` | 给场景改名 | ✅ |
@@ -440,8 +443,6 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 | `reorder_folders` | `orderedIds` | `FolderNode[]` | 排序落盘（拖动排序的命令已就绪，UI 还没接） | ✅ |
 | `list_scenes` | — | `SceneInfo[]` | 可用主题清单（现在只有 `builtin.plain`） | ✅ |
 | `delete_entry` | `id` | `void` | 删除（写 tombstone） | ⬜ |
-| `import_media` | `entryId` / `sourcePath` | `Media` | 导入媒体 | ⬜ M1 |
-| `make_thumbnail` | `mediaId` / `maxSize` | `string` | 生成缩略图并返回路径 | ⬜ M1 |
 | `open_vault_manager` | — | `void` | 打开管理窗口（已开则聚焦） | ✅ |
 | `close_vault_manager` | — | `void` | 关闭管理窗口 | ✅ |
 | `open_settings` | — | `void` | 打开设置窗口（已开则聚焦） | ✅ |
@@ -612,7 +613,8 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 <用户选的目录>/
 ├── vault.json
 ├── entries/<entry-id>/…            记录本体（不变）
-└── folders/<folder-id>/folder.json 文件夹元数据 ← 新增
+├── folders/<folder-id>/folder.json  场景（文件夹）元数据
+└── media/<media-id>/                媒体本体 + meta.json（见 §13.6）
 ```
 
 `folder.json` 的字段级设计：
@@ -681,14 +683,32 @@ export default function XxxScene({ folder, scene }: SceneViewProps) {
 |---|---|---|---|
 | `delete_entry` | `id` | `void` | 删除记录（写 tombstone，同步时别的设备才知道“这是删了”） |
 | `update_entry` | `id` / `title?` / `fields?` | `Entry` | 只改字段、不动归属（批量编辑用） |
-| `import_media` | `entryId` / `sourcePath` | `Media` | 导入媒体（M1） |
-| `make_thumbnail` | `mediaId` / `maxSize` | `string` | 生成缩略图（M1） |
 | `set_entry_pinned` / `reorder_entries` | `id` / `…` | `Entry[]` | 记录级排序与置顶 |
 | `sync_now` / `sync_status` | — | `SyncReport` / `SyncState` | 手动同步 / 查状态（M4） |
 
 **注意**：已经实现的命令请查 §5.1 全表——这里只列还没做的，避免两处各写一份、早晚不一致。
 
 ---
+
+### 13.6 媒体落点（本轮新增）
+
+```text
+<vault>/media/<media-id>/
+├── orig.jpg      原始文件本体，导入后**不可变**（PRD FV-SYN-003）
+└── meta.json     原名 / 扩展名 / MIME / 大小 / 宽高 / sha256 / entryId / addedAt
+```
+
+四条规则：
+
+1. **磁盘上叫 `orig.<ext>`，不用用户的原文件名**——导入路径与存储分离（PRD §6.1），躲开中文 / 空格 / 重名 / 大小写；原名只在 meta 里做展示；
+2. **换归属 = 改 meta 里的 `entryId`**，不搬动几 GB 的文件（和记录扁平化同一个理由）；导入时也是“先落盘、再挂到记录上”两步；
+3. **缩略图不进 Vault**：`%APPDATA%/com.framevault.app/thumbs/<vault-id>/<media-id>.jpg`，可随时重建（PRD FV-SYN-002）；
+4. **媒体进 WebView 的唯一通道是 asset 协议**：Cargo 开 `protocol-asset` + `tauri.conf.json` 开 `assetProtocol`，运行时只 `allow_directory` **当前 Vault 和它的缩略图缓存**——不用 `**` 把整台机器打开。前端一律走 `assetUrl()`（`api.ts` 里包着 `convertFileSrc`），绝不手拼路径。
+
+> 为什么缩略图放本机：它是**派生数据**。放进 Vault 只会让同步白搬几 GB，还会在每台设备上各自冲突；丢了在导入时重建即可。
+
+**导入流程（一次导入 = 一条记录）**：选文件 → 建一条记录（标题取输入框内容，没写就用日期）→ 逐个 `import_media` → 刷新列表。
+标题兜底写在前端，因为“一次导入算一条记录”是工作流选择，不是数据规则——换主题可以换一套录入流程。
 
 ## 14. 前后端状态分区（别用一个 page 状态走天下）
 
@@ -716,13 +736,13 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **Rust 外壳**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出、21 个命令注册）；`error.rs`（`AppError` / `AppResult`，命令里不再手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
 
-**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry` / `VaultMeta` / `SCHEMA_VERSION`）、`storage.rs`（tmp + rename 原子写入，列出时跳过坏数据）、`folder.rs`（场景元数据 + 排序）、`scene.rs`（内置主题登记）、`id.rs`（UUIDv7）。
+**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry` / `VaultMeta` / `SCHEMA_VERSION`）、`storage.rs`（tmp + rename 原子写入，列出时跳过坏数据）、`folder.rs`（场景元数据 + 排序）、`scene.rs`（内置主题登记）、`media.rs`（媒体导入 / 哈希 / 尺寸 / 缩略图）、`id.rs`（UUIDv7）。
 
-**命令层**（`commands/`，薄适配器）：`vault.rs`（7 个）、`folder.rs`（8 个）、`entry.rs`（5 个）、`window.rs`（4 个，全部 `#[tauri::command(async)]`）。
+**命令层**（`commands/`，薄适配器，23 个命令）：`vault.rs`（7 个）、`folder.rs`（8 个）、`entry.rs`（5 个）、`media.rs`（2 个，导入是 `async`）、`window.rs`（4 个，全部 `async`）。另外命令层还负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
 **前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/{TitleBar,VaultManagerWindow,SettingsWindow}`；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` / 内置普通记录）；`features/vault/*`（切换菜单 + 管理面板）；`features/settings/*`；`features/theme/*`（令牌 schema + 实时编辑 + 跨窗口同步）；`lib/api.ts`（唯一 `invoke` / `listen` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
-**验证状态**：`cargo test` 12 passed；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 267 KB / CSS 19 KB）。
+**验证状态**：`cargo test` 18 passed（媒体 6 条：复制 / 哈希 / 尺寸 / 缩略图 / 视频不探尺寸 / 失败不留半成品目录）；`cargo check` / `cargo build` 干净；`tsc --noEmit` 干净；`pnpm build` 通过（JS 270 KB / CSS 21 KB）。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
@@ -738,3 +758,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 改了 `generate_handler!` 里的命令名 | 界面报 `command xxx not found`，但 `cargo check` 一切正常 | 改 Rust 侧命令名后**必须重启 `pnpm tauri dev`**：HMR 只换前端，跑着的二进制还是旧命令表 |
 | 只在两个窗口里试 | 一个窗口里“命令失效”、主题改了另一个窗口没反应 | Tauri **每个窗口是独立 `document`**；跨窗口只认事件（`emit` + 每个窗口自己 `listen`） |
 | 把 `entries/` 空目录当成仓库根 | 数据变成 `entries/entries/…` 多一层 | `is_vault()` 只认 `vault.json`，导入前必须先校验 |
+| 忘了开 asset 协议 | 照片全是碎图，控制台里 `asset://` 被拒 | Cargo 开 `protocol-asset` + `tauri.conf.json` 的 `assetProtocol.enable`，运行时还要 `asset_protocol_scope().allow_directory(vault, true)` |
+| 切换仓库后照片全碎 | 新 Vault 没被放行 | `switch_vault` / `create_vault` / `add_vault` 和启动时都要调 `allow_vault_assets` |
+| 带 alpha 的 PNG 存成 JPEG | 缩略图报错：Jpeg 不支持 Rgba8 | 先 `.to_rgb8()` 再 `save` |
+| 图省事用 `**` 放行 asset 范围 | WebView 能读整台机器的文件，前端一旦被注入就完蛋 | 只放行当前 Vault + 它的缩略图目录 |

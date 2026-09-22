@@ -5,6 +5,7 @@
 
 mod folder;
 mod id;
+mod media;
 mod model;
 mod scene;
 mod storage;
@@ -14,6 +15,10 @@ pub use folder::{
     sort_folders, write_folder, FolderMeta,
 };
 pub use id::new_id;
+pub use media::{
+    import_media, list_media, media_dir, media_item_dir, media_meta_path, original_path,
+    read_media, write_media, write_thumbnail, MediaMeta,
+};
 pub use model::{is_supported, Entry, VaultMeta, SCHEMA_VERSION};
 pub use scene::{builtin_scenes, is_known as is_known_scene, SceneInfo, PLAIN_SCENE};
 pub use storage::{

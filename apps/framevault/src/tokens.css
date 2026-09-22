@@ -32,6 +32,7 @@
     --fv-color-on-danger: #ffffff;
     --fv-color-focus-ring: #086ddd; /* 键盘聚焦环 */
     --fv-color-selection: #d7e6fb; /* 文本选中底色 */
+    --fv-color-scrim: rgba(0, 0, 0, 0.62); /* 大图 / 对话框背后的遮罩 */
 
     /* ── 尺寸 ── */
     --fv-titlebar-height: 32px;
@@ -98,6 +99,7 @@
     --fv-color-on-danger: #ffffff;
     --fv-color-focus-ring: #6ea8fe;
     --fv-color-selection: #33465f;
+    --fv-color-scrim: rgba(0, 0, 0, 0.78);
 
     --fv-shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45);
   }

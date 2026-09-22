@@ -1,0 +1,8 @@
+# 统一换行：仓库里一律存 LF，Windows 上也不会因编辑器差异产生整文件 diff
+* text=auto eol=lf
+
+# 明确标记二进制，避免误转换
+*.png binary
+*.ico binary
+*.icns binary
+*.webp binary

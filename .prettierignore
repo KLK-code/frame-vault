@@ -1,0 +1,8 @@
+# 文档不参与格式化：免得随手 Ctrl+S 就把 PRD / 架构文档整篇重排
+*.md
+
+# 依赖与构建产物
+node_modules/
+dist/
+target/
+src-tauri/gen/

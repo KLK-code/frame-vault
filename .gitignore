@@ -1,0 +1,7 @@
+/.vscode
+/SandBox
+
+# 依赖与构建产物（建立 workspace 后会在仓库根出现）
+node_modules/
+dist/
+/target/

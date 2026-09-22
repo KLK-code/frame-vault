@@ -9,11 +9,12 @@
 }
 
 .window__body {
-  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   padding: var(--fv-space-5) var(--fv-space-6);
-  overflow: auto;
+  /* 同 .content：长写属性，别用 overflow 简写 */
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-gutter: stable;
 }
 

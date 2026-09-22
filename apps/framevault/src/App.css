@@ -88,10 +88,12 @@
 
 /* 右侧舞台：内容区自己滚，标题栏和侧栏不动 */
 .content {
-  overflow-x: hidden;
   flex: 1;
   min-width: 0;
-  overflow: auto;
+  /* 只允许纵向滚。横向一旦能滚，就会和纵向滚动条互相触发、让可用宽度反复跳（见 AGENTS §9）。
+     注意：这里必须用长写属性——写 overflow: auto 简写会把上面的 overflow-x 重置回 auto。 */
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-gutter: stable;
   padding: var(--fv-space-5) var(--fv-space-6);
   background: var(--fv-color-bg);

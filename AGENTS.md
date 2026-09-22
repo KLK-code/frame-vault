@@ -183,6 +183,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 给骨架做分支时漏了"窗口外壳" | 窗口**拖不动、关不掉**，只能强杀进程 —— 而且只在"窄窗口 + 桌面平台"同时成立时才出现 | 自绘标题栏（`TitleBar`）属于**窗口外壳**，不属于任何一套骨架：Windows 的窗口是 `decorations: false`，没它就等于没边框。规则：**除真移动端（系统自己管窗口）外，每套骨架都必须在最上面渲染 TitleBar**；整屏弹层要用 `position: absolute` 盖在骨架内，别用 `fixed; inset: 0` 把标题栏一起盖掉 |
 | 改了窗口尺寸 / 最小尺寸只改了一份配置 | 两个平台行为不一致（比如 Windows 能缩到 360、mac 还是 640） | 窗口块在 `tauri.conf.json` 与 `tauri.macos.conf.json` 里各有一份（平台配置是整体替换，不是逐字段合并）：**改尺寸要同时改两处**，改完 `grep -n minWidth` 对一眼 |
 | 滚动条引起的内容抖动（两种机制，都要治） | 拖动窗口时缩略图**反复变大变小**（网格列数在 2↔3 之间横跳） | ①**纵向**：布局“宽度决定列数、列数决定高度”时，滚动条出现/消失会让容器宽度跳 15px → 滚动容器加 `scrollbar-gutter: stable;`；②**横向↔纵向互相触发**：一点点横向溢出 → 出现横向滚动条（吃掉高度）→ 内容变高 → 出现纵向滚动条（吃掉宽度）→ 横向不再溢出 → 横向滚动条消失 → 宽度回来 → 又溢出……**无限循环**。所以纵向滚动容器还要 `overflow-x: hidden;`（结构上禁止横向滚动），并让可能超宽的按钮行 `flex-wrap: wrap;` |
+| 用 `overflow: auto` 简写又想单独控制一个轴 | 写了 `overflow-x: hidden` 却毫无效果（简写把它重置回 auto）；修复“看起来改了但没生效” | 简写会重置**两个**轴，跟书写顺序无关的错觉最坑人。要单独控制就**全用长写**：`overflow-x: hidden; overflow-y: auto;`；插在简写**之前**必被覆盖 |
 | 在移动端调 `open_vault_manager` / `open_settings` | 第二个窗口开不出来，调用失败或毫无反应 | **Android / iOS 只有一个 WebView 窗口**：这两样在移动端必须做成**内嵌页面**（见 `app/MobileShell.tsx`） |
 | 在 macOS 上给窗口设 `decorations: false` | 去掉的不只是标题栏，而是整个 `Titled` style mask —— **圆角、阴影、边缘拖拽缩放一起没了**。mac 上要原生外观就得 `decorations: true` + `titleBarStyle: Overlay` + `hiddenTitle`（见 §12 的 `tauri.macos.conf.json`） |
 

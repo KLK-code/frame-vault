@@ -853,6 +853,7 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 | `features/scene/useFolders.ts` | 场景数据 + 按主题**归类** | `useFolders() -> { folders, scenes, groups, create, rename, remove, togglePinned, bindScene }` |
 | `features/scene/registry.ts` | 主题 id → 视图组件（扩展点） | `SCENE_VIEWS: Record<string, ComponentType<SceneViewProps>>` |
 | `features/scene/SceneHost.tsx` | 右侧宿主：按 `effectiveScene` 渲染 + 空态 + 缺主题兜底 | props: `{ folder: FolderNode \| null, scene: SceneInfo \| null }` |
+| `features/scene/EntryMenu.tsx` | 记录的**右键菜单**（桌面右键 / 触摸长按）；条目由调用方给，删除走 `useSceneData.remove`（写墓碑 + 可撤销提示） |
 | `features/scene/SceneTree.tsx` | 左侧：文件夹树（**三种分组方式**：按主题 = 磁盘的样子 / 按场景 / 平铺，记在 localStorage）+ 主题的建改删 | props: `{ folders, groups, topicGroups, topics, scenes, activeId, onSelect, onCreate, onRename, onDelete, onTogglePinned, onBindScene, onCreateTopic, onRenameTopic, onDeleteTopic, onToggleCollapsed }` |
 | `features/scene/scenes/plain/PlainScene.tsx` | 内置普通记录视图（也是写新主题的骨架示例） | props: `SceneViewProps` |
 
@@ -975,5 +976,8 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 用同一条规则同时管"扫描"和"落点" | 「科研」也是"没有 folder.json 的一级目录"，于是"没有文件夹的记录放哪"就没有确定答案了 | 扫描按**结构**，写路径按**名字**（`ensure_uncategorized` 只认「未归类」） |
 | 窄屏规则放进 `styles/compact.css` 却不生效 | 那个文件先于组件样式导入，同优先级下组件赢（规则静默失效） | 用复合选择器抬优先级（`.settings .settings__row`、`.settings.settings`），照文件里 `.md-field .md-field__btn` 的写法 |
 | 在 flex 链上靠百分比高度撑满 | 某一环高度不确定时塌成内容高度（左栏竖线只画一半） | 高度用 flex 传：`display:flex; flex-direction:column` + `flex:1; min-height:0` |
+| 直接跑 `target/debug/framevault.exe` | 调试构建指向 vite dev server，没起 dev server 时窗口只有"拒绝连接" | 一律 `pnpm tauri dev` |
+| 写作台自动保存 + 按 `updatedAt` 重载草稿 | 存一次 → 重载一次 → 刚敲的字被盖回去（丢字） | 重载依赖只认"哪一篇"；待写内容带篇 id 存 ref，切篇/失焦/卸载补写 |
+| 触摸屏上的"右键删除" | 没有右键 = 功能不存在 | 长按兜底（500ms，鼠标不参与）；菜单做成公共件 `EntryMenu` |
 | 两套骨架各自 `useState` 存"当前选中的场景" | 跨过断点换骨架时组件重挂载，选择重置成第一个场景 | 共用状态挂在公共父节点（`App`）上，经 `SceneShellProps` 传下去；骨架里只留视图开关 |
 | 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 只热替换组件代码，而**编辑器实例只在挂载时创建一次**（`useEffect(…, [])` 里 `new EditorView`），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲一遍**。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |

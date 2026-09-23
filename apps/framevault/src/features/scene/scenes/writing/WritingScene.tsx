@@ -62,6 +62,10 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
   const [draft, setDraft] = useState<Draft>({ text: "", meta: {} });
   const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState<MediaItem | null>(null);
+  /** 照片卡片收起 / 展开 —— 视图开关，按 README 的状态分区记在 localStorage */
+  const [photosOpen, setPhotosOpen] = useState(
+    () => localStorage.getItem("fv.writingPhotosOpen") !== "0",
+  );
 
   const ordered = [...data.entries].sort((a, b) => data.dateOf(b).localeCompare(data.dateOf(a)));
   const current = ordered.find((entry) => entry.id === selectedId) ?? ordered[0] ?? null;
@@ -86,6 +90,14 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
       ...writeValues(current, scene.id, fields, values),
     });
     if (ok) setDirty(false);
+  }
+
+  function togglePhotos() {
+    setPhotosOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem("fv.writingPhotosOpen", next ? "1" : "0");
+      return next;
+    });
   }
 
   async function createEntry() {
@@ -153,6 +165,64 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 {dirty && <span className="writing__dirty">未保存</span>}
               </header>
 
+              {/* 照片在上、正文在下：写作时先看见"这一篇配了什么图"，右上角的按钮能把它收起来 */}
+              <section className="writing__photos">
+                <header className="writing__photos-head">
+                  <span className="writing__photos-label">
+                    <SceneIcon name="photo" size={14} />
+                    照片 {photos.length}
+                  </span>
+                  {/* 收起 / 展开的按钮在**右上角**（像参考图那样），点一下把整条照片收掉 */}
+                  <button
+                    type="button"
+                    className="writing__photos-toggle"
+                    aria-expanded={photosOpen}
+                    aria-label={photosOpen ? "收起照片" : "展开照片"}
+                    title={photosOpen ? "收起照片" : "展开照片"}
+                    onClick={togglePhotos}
+                  >
+                    <span className="writing__photos-caret">{photosOpen ? "︿" : "﹀"}</span>
+                  </button>
+                </header>
+
+                {photosOpen && (
+                  <div className="writing__photos-body">
+                    {photos.map((item) => {
+                      // displayableSrc 给的是磁盘路径，必须过 assetUrl 才能在 WebView 里显示
+                      const src = displayableSrc(item);
+                      const video = item.mime.startsWith("video/");
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="writing__photo"
+                          onClick={() => setPreview(item)}
+                          title={item.file}
+                        >
+                          {src ? (
+                            <img loading="lazy" src={assetUrl(src)} alt={item.file} />
+                          ) : (
+                            <span className="writing__photo-fallback">
+                              {video ? "▶" : "?"} {item.ext.toUpperCase()}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      className="writing__photo is-add"
+                      onClick={() => void data.attachPhotos(current.id)}
+                      disabled={data.busy !== null}
+                    >
+                      <span className="writing__photo-plus">＋</span>
+                      导入照片
+                    </button>
+                  </div>
+                )}
+              </section>
+
               {metaFields.length > 0 && (
                 <div className="writing__meta">
                   <SceneFields
@@ -171,6 +241,9 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 <MarkdownWysiwyg
                   value={draft.text}
                   onChange={(next) => {
+                    // 编辑器挂载时会把内容回灌一次（自己的 value 又报回来），那不算用户改动 ——
+                    // 不挡住的话，刚打开一篇就亮着"未保存"（验证时看到的）
+                    if (next === draft.text) return;
                     setDraft((prev) => ({ ...prev, text: next }));
                     setDirty(true);
                   }}
@@ -188,14 +261,6 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 </button>
                 <button
                   type="button"
-                  className="writing__btn"
-                  onClick={() => void data.attachPhotos(current.id)}
-                  disabled={data.busy !== null}
-                >
-                  ＋ 加照片
-                </button>
-                <button
-                  type="button"
                   className="writing__btn is-danger"
                   onClick={() => void data.remove(current)}
                   disabled={data.busy !== null}
@@ -204,29 +269,6 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 </button>
                 <span className="writing__hint">所见即所得：标题、列表、引用直接就是排好的样子，粘一整篇 Markdown 进来也会自动排版。改完记得保存</span>
               </div>
-
-              {photos.length > 0 && (
-                <ul className="writing__photos">
-                  {photos.map((item) => {
-                    // displayableSrc 给的是磁盘路径，必须过 assetUrl 才能在 WebView 里显示
-                    const src = displayableSrc(item);
-                    const video = item.mime.startsWith("video/");
-                    return (
-                      <li key={item.id}>
-                        <button type="button" onClick={() => setPreview(item)} title={item.file}>
-                          {src ? (
-                            <img loading="lazy" src={assetUrl(src)} alt={item.file} />
-                          ) : (
-                            <span className="writing__photo-fallback">
-                              {video ? "▶" : "?"} {item.ext.toUpperCase()}
-                            </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
             </article>
           )}
         </div>

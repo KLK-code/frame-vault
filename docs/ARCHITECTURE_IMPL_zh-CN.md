@@ -193,7 +193,7 @@ lib.rs（组装）
 |---|---|---|
 | `vault.rs` | `list_vaults` / `add_vault` / `create_vault` / `switch_vault` / `forget_vault` / `vault_exists` | ✅ 全部 |
 | `folder.rs` | `list_folder_tree` / `create_folder` / `rename_folder` / `delete_folder` / `bind_folder_scene` / `set_folder_pinned` / `reorder_folders` / `list_scenes` / **主题**：`list_topics` / `create_topic` / `rename_topic` / `delete_topic` | ✅ 全部 |
-| `entry.rs` | `new_id` / `save_entry` / `update_entry` / `delete_entry` / `restore_entry` / `load_entry` / `list_entries` / `read_vault_meta` | ✅ 全部 |
+| `entry.rs` | `new_id` / `save_entry` / `update_entry` / `delete_entry` / `restore_entry` / `load_entry` / `list_entries` / `reorder_entries` / `read_vault_meta` | ✅ 全部 |
 | `media.rs` | `import_media`（`async`，含复制 / sha256 / 探尺寸 / 生成缩略图） / `list_media` | ✅ 本轮 |
 | `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
 | `sync.rs` | `sync_now` / `sync_status` / `cancel_sync` | M4 |
@@ -545,7 +545,8 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 | `delete_entry` | `id` / `deletedAt` | `EntryView` | **把整个记录目录挪进回收站**（`.framevault/trash/`，保留原目录名）并写墓碑；撤销 = 挪回来 | ✅ |
 | `restore_entry` | `id` / `now` | `EntryView` | 撤销删除：挪回原场景（场景没了就回「未归类」），清墓碑 | ✅ |
 | `load_entry` | `id` | `EntryView` | 读一条记录（含 `note`，来自 `note.md`） | ✅ |
-| `list_entries` | `folderId?` / `includeDeleted?` | `EntryView[]` | 列记录（新的在前；**墓碑默认不出现**，要看回收站才传 `includeDeleted`）。内部是**扫盘**：场景目录下的记录 + 未归类容器 + 回收站 | ✅ |
+| `list_entries` | `folderId?` / `includeDeleted?` | `EntryView[]` | 列记录（**手动排过的块在前按 order，没排过的按时间降序**；**墓碑默认不出现**，要看回收站才传 `includeDeleted`）。内部是**扫盘**：场景目录下的记录 + 未归类容器 + 回收站 | ✅ |
+| `reorder_entries` | `orderedIds` | `EntryView[]` | 手动排序：把当前场景的记录 id 按**新顺序**整表发来，按位置写 `order` 0..n（只认活记录，没发到的不动；order 改动不触发目录改名）。返回该场景全量 | ✅ |
 | `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份与布局版本；**v1 仓库在这里被拒**） | ✅ |
 | `import_media` | `sourcePath` / `entryId` / `nameTemplate?` / `addedAt` | `MediaItem` | 把一个文件**复制进记录目录**，按模板命名（算 sha256 / 探尺寸 / 生成缩略图）；`entryId` **必填**，`async` 命令，不占主线程 | ✅ |
 | `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前）：**从各条记录的 `media[]` 汇总**（不再扫 `media/`），返回原文件与缩略图的**绝对路径** | ✅ |
@@ -559,7 +560,7 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 | `delete_folder` | `id` | `FolderNode[]` | 删场景；**里面还有记录时拒绝**（不让记录变孤儿） | ✅ |
 | `bind_folder_scene` | `id` / `scene?` / `sceneConfig?` | `FolderNode[]` | 换主题（`null` = 退回内置普通记录） | ✅ |
 | `set_folder_pinned` | `id` / `pinned` | `FolderNode[]` | 置顶 / 取消置顶 | ✅ |
-| `reorder_folders` | `orderedIds` | `FolderNode[]` | 排序落盘（拖动排序的命令已就绪，UI 还没接） | ✅ |
+| `reorder_folders` | `orderedIds` | `FolderNode[]` | 排序落盘（SceneTree 拖拽已接：三种分组模式均可拖，**只允许同组内**重排，提交的是全量显示顺序） | ✅ |
 | `list_scenes` | — | `SceneInfo[]` | 可用主题清单（现在只有 `builtin.plain`） | ✅ |
 | `open_vault_manager` | — | `void` | 打开管理窗口（已开则聚焦） | ✅ |
 | `close_vault_manager` | — | `void` | 关闭管理窗口 | ✅ |
@@ -982,4 +983,4 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 触摸屏上的"右键删除" | 没有右键 = 功能不存在 | 长按兜底（500ms，鼠标不参与）；菜单做成公共件 `EntryMenu` |
 | 两套骨架各自 `useState` 存"当前选中的场景" | 跨过断点换骨架时组件重挂载，选择重置成第一个场景 | 共用状态挂在公共父节点（`App`）上，经 `SceneShellProps` 传下去；骨架里只留视图开关 |
 | 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 只热替换组件代码，而**编辑器实例只在挂载时创建一次**（`useEffect(…, [])` 里 `new EditorView`），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲一遍**。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |
-| 想让场景内的面板（列表 / 照片 / 编辑器）各自独立滚动 | 给内层 `flex:1; min-height:0` 之后**整页还在滚** —— 断点在祖先：`.scene-host` 用 `min-height: 100%` 只是"最小高度"，内容一高容器跟着长，整条收缩链从它这里作废（2026-09 写作台实测：编辑器把 `.writing` 撑到 2000+px）；另外 grid 的 `1fr` 行默认是 `minmax(auto, 1fr)`，auto 下限会被列表的自然高度撑爆 | 锚点层用**确定的 `height: 100%`**（`.scene-host`）；中间每一环都显式写：grid 行 `minmax(0, 1fr)`、flex 子项 `min-height: 0`，一层都不能省；滚动容器照 §4.6 长写。怀疑哪层断了就给各层加临时彩色 `outline` 看谁的框跟着内容长 |
+| 想让场景内的面板（列表 / 照片 / 编辑器）各自独立滚动 | 给内层 `flex:1; min-height:0` 之后**整页还在滚** —— 断点在祖先：`.scene-host` 用 `min-height: 100%` 只是"最小高度"，内容一高容器跟着长，整条收缩链从它这里作废（2026-09 写作台实测：编辑器把 `.writing` 撑到 2000+px）；改成 `height: 100%` 后**又断了一次**——上方加了兄弟元素（视图标签行），100% + 标签行高度 = 依旧溢出；另外 grid 的 `1fr` 行默认是 `minmax(auto, 1fr)`，auto 下限会被列表的自然高度撑爆 | 锚点层**挂在 flex 链上**：父级（`.content`）改纵向 flex，锚点用 `flex: 1; min-height: 0` —— 上方加多少兄弟元素都严格吃剩余高度；中间每一环都显式写：grid 行 `minmax(0, 1fr)`、flex 子项 `min-height: 0`，一层都不能省；滚动容器照 §4.6 长写。怀疑哪层断了就临时给各层加彩色 `outline`，看谁的框跟着内容长 |

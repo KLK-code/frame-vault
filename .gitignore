@@ -9,3 +9,4 @@ dist/
 
 # ZCode 会话产物
 /.zcode
+/target-auto/

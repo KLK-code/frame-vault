@@ -34,6 +34,9 @@
       gap: var(--fv-space-1);
       width: 100%;
       padding-right: 0;
+      /* 图标栏不用滚，别为滚动条预留位置：`scrollbar-gutter: stable` 会在右边占掉约 9px，
+         把 34px 的按钮整体往左挤，图标看着就不在栏中间（截图上量出来差 4.5px）。 */
+      scrollbar-gutter: auto;
     }
 
     /* 方形按钮：图标在栏里居中，选中态那一块也是正的 */

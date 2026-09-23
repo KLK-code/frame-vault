@@ -106,8 +106,13 @@ const editorTheme = EditorView.theme({
     scrollbarGutter: "stable",
     fontFamily: "inherit",
     lineHeight: "var(--fv-line-height)",
+    // CM6 基础样式把内容**顶对齐**（align-items: flex-start）：空白笔记时内容只有一行高，
+    // 下面一大片区域不属于 .cm-content —— 点那儿等于点在编辑器外面，光标进不去（之前就是这样）。
+    // 拉成 stretch，再让内容至少撑满一屏，整块区域才都能点。
+    alignItems: "stretch",
   },
   ".cm-content": {
+    minHeight: "100%",
     padding: "var(--fv-space-4)",
     fontFamily: "inherit",
     caretColor: "var(--fv-color-accent)",
@@ -222,7 +227,23 @@ function Surface({ value, onChange }: Props) {
     instance.scrollDOM.scrollTop = 0;
   }, [value]);
 
-  return <div className="md-wysiwyg__host" ref={host} />;
+  /**
+   * 点在**内容以外**的地方（空白笔记下面那一大片、或卡片的内边距）也要能开始写。
+   *
+   * CM6 只在自己的 `.cm-content` 上接鼠标事件，所以光标得我们自己放：
+   * 聚焦 + 落到文末 —— 与 Obsidian 一致（点空白区就是"接着写"）。
+   * 落在 `.cm-content` 里的点击一概不管，交给 CM6 自己定位（那才是精确点选）。
+   */
+  function onHostMouseDown(event: React.MouseEvent) {
+    const instance = view.current;
+    if (!instance) return;
+    if ((event.target as HTMLElement).closest(".cm-content")) return;
+    event.preventDefault();
+    instance.focus();
+    instance.dispatch({ selection: { anchor: instance.state.doc.length } });
+  }
+
+  return <div className="md-wysiwyg__host" ref={host} onMouseDown={onHostMouseDown} />;
 }
 
 export default function MarkdownWysiwyg(props: Props) {

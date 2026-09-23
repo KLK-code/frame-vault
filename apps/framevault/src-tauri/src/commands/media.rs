@@ -110,8 +110,8 @@ pub fn import_media(
 
     allow_vault_assets(&app, &vault_dir);
     println!(
-        "[rust] import_media: {} → {} ({})",
-        meta.original_name,
+        "[rust] import_media: {} → {}（{}）",
+        source_path,
         meta.file,
         entry.title
     );

@@ -93,7 +93,7 @@
 | `Entry` | 新增 `day: String`（`#[serde(default)]`）：**创建日的本地日期**，前端在 `save_entry` 时给。没有它，Rust 没有时区就算不出目录名（从 trash 恢复时尤其需要）；正文不进 JSON；新增 `media: Vec<MediaMeta>`（`#[serde(default)]`，媒体元数据收进记录）；`deletedAt` 保留；新增 `sceneVersion: u32`（`#[serde(default)]`）——**为 VISION §3.10 的"场景版本管理 / 用户自定义数据结构迁移"留位**：将来要知道"这条记录是哪一版场景结构写的"，现在加成本近零，晚加只能靠 `updatedAt` 时间窗猜 |
 | `note.md` | **不是字段**：`Entry.note` 用 `#[serde(skip)]`，读时从 `note.md` 填、写时写回 `note.md` |
 | `FolderMeta` | `name` = 净化后的目录名（§3.2）；其余不动 |
-| `MediaMeta` | 新增 `file: String`（**磁盘上的实际文件名 = 它现在的名字**，界面与路径都用它）；原来的 `name` **改名为 `originalName`**（只记导入前的原名，`#[serde(alias = "name")]` 读老文件）—— 2026-09-23 修正：起初界面到处显示 `name`，看上去像"JSON 记的是源文件信息"；`id` / `hash` / 尺寸 / `takenAt` 保留；缩略图仍按 `id` 键存应用数据目录（改名不影响） |
+| `MediaMeta` | `file: String`（**磁盘上的实际文件名 = 它唯一的名字**，界面与路径都用它）；**导入前的原名不存**（2026-09-23 修正：原稿把原文件名留在 `name` 里"展示用"，结果界面显示的正是它，看上去像"JSON 记的是源文件信息"）；`id` / `hash` / 尺寸 / `takenAt` 保留；缩略图仍按 `id` 键存应用数据目录（改名不影响） |
 | `VaultMeta` | 新增 `layout: u32`（`#[serde(default = "2")]`） |
 
 ## 5. 扫描与对账（磁盘为准）

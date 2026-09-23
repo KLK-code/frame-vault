@@ -45,13 +45,10 @@ export default function MediaLightbox({ item, onClose, footer }: Props) {
 
         <div className="lightbox__bar">
           <span className="lightbox__caption">
-            {/* 显示的是**磁盘上的名字**（导入时按模板生成的那个）；原名只在这里提一句来历 */}
+            {/* 显示的是**磁盘上的名字**（导入时按模板生成的那个）—— 媒体只有这一个名字 */}
             {item.file} · {formatBytes(item.bytes)}
             {item.width ? ` · ${item.width}×${item.height}` : ""}
             {item.takenAt ? ` · 拍摄于 ${item.takenAt.replace("T", " ")}` : ""}
-            {item.originalName && item.originalName !== item.file
-              ? ` · 导入时原名 ${item.originalName}`
-              : ""}
           </span>
           <button onClick={onClose}>关闭</button>
         </div>

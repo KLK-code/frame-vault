@@ -77,12 +77,10 @@ export type MediaMeta = {
   schemaVersion: number;
   id: string;
   /**
-   * **这个文件现在叫什么**：磁盘上的实际文件名（导入时按模板生成，之后跟着改名走）。
-   * 界面显示、排序、路径拼接都用它。
+   * **它叫什么**：磁盘上的实际文件名（导入时按模板生成，之后跟着改名走）。
+   * 界面显示、排序、路径拼接全用它 —— **媒体只有这一个名字**（导入前的原名不留）。
    */
   file: string;
-  /** 导入那一刻的原始文件名 —— 只作来历（"这张原本叫什么"），不是它现在的名字 */
-  originalName: string;
   ext: string;
   mime: string;
   bytes: number;

@@ -41,21 +41,3 @@ export function parseMarkdown(text: string): MdRoot {
   // remark 返回的是 mdast 类型；这里刻意只做一次收窄（理由见上面的类型说明）
   return processor.parse(text) as unknown as MdRoot;
 }
-
-/** 一眼看得出「这是 Markdown」的**块级**构造 */
-const MD_BLOCKS = ["heading", "list", "code", "blockquote", "table", "thematicBreak"];
-
-/**
- * 这段文本是不是"带结构的 Markdown"。
- *
- * 只认**块级**构造：普通文本里几乎撞不上（网页文本项目符号是 "•"、标题没有 "##"），
- * 所以拿它当"要不要按 Markdown 解析这段粘贴内容"的判据是安全的。
- * 反过来，**行内**构造（`**粗**`、链接、`code`）在普通文本里太常见，一律不计入 ——
- * 判据保守一点，最多是少解析一次，不会把用户粘的富文本改坏。
- */
-export function looksLikeMarkdown(text: string): boolean {
-  if (!text.trim()) return false;
-  const walk = (node: MdNode): boolean =>
-    MD_BLOCKS.includes(node.type) || (node.children ?? []).some(walk);
-  return walk(parseMarkdown(text));
-}

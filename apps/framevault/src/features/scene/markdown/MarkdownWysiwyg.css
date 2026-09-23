@@ -1,5 +1,8 @@
 @layer components {
-  /* 所见即所得正文：只吃 --fv-* token，跟 MarkdownView 的排版尽量一致 */
+  /* 所见即所得正文（CodeMirror 6）：只吃 --fv-* token，排版跟 MarkdownView 尽量一致。
+     注意：**结构性那几条（滚动容器 / 字号 / 内边距 / 光标）不在这个文件里** ——
+     CM6 往 document 注入的是未分层样式，压不过它，所以那几条走 `MarkdownWysiwyg.tsx` 的
+     `EditorView.theme`（值同样是 --fv-*）。这里只管装饰出来的样式。 */
   .md-wysiwyg {
     border: 1px solid var(--fv-color-border);
     border-radius: var(--fv-radius-md);
@@ -7,147 +10,102 @@
     overflow: hidden;
   }
   .md-wysiwyg:focus-within { border-color: var(--fv-color-accent); }
+  .md-wysiwyg__host { display: block; }
 
-  .md-wysiwyg .milkdown { display: block; }
-  .md-wysiwyg .ProseMirror {
-    min-height: 320px;
-    max-height: 70vh;
-    overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-    padding: var(--fv-space-4);
-    outline: none;
-    color: var(--fv-color-text);
-    font-size: var(--fv-text-base);
-    line-height: var(--fv-line-height);
-    overflow-wrap: anywhere;
-  }
-  .md-wysiwyg .ProseMirror > *:first-child { margin-top: 0; }
-  .md-wysiwyg .ProseMirror > *:last-child { margin-bottom: 0; }
-
-  .md-wysiwyg .ProseMirror h1,
-  .md-wysiwyg .ProseMirror h2,
-  .md-wysiwyg .ProseMirror h3,
-  .md-wysiwyg .ProseMirror h4,
-  .md-wysiwyg .ProseMirror h5,
-  .md-wysiwyg .ProseMirror h6 {
-    margin: var(--fv-space-4) 0 var(--fv-space-2);
+  /* ── 标题：行级样式（装饰给整行挂类名）── */
+  .md-wysiwyg .cm-fv-h1,
+  .md-wysiwyg .cm-fv-h2,
+  .md-wysiwyg .cm-fv-h3,
+  .md-wysiwyg .cm-fv-h4,
+  .md-wysiwyg .cm-fv-h5,
+  .md-wysiwyg .cm-fv-h6 {
     color: var(--fv-color-text-strong);
     font-weight: 650;
     line-height: 1.35;
   }
-  .md-wysiwyg .ProseMirror h1 { font-size: var(--fv-text-xl); }
-  .md-wysiwyg .ProseMirror h2 { font-size: var(--fv-text-lg); }
-  .md-wysiwyg .ProseMirror h3 { font-size: var(--fv-text-base); }
-  .md-wysiwyg .ProseMirror h4,
-  .md-wysiwyg .ProseMirror h5,
-  .md-wysiwyg .ProseMirror h6 { font-size: var(--fv-text-sm); color: var(--fv-color-muted); }
+  .md-wysiwyg .cm-fv-h1 { font-size: var(--fv-text-xl); }
+  .md-wysiwyg .cm-fv-h2 { font-size: var(--fv-text-lg); }
+  .md-wysiwyg .cm-fv-h3 { font-size: var(--fv-text-base); }
+  .md-wysiwyg .cm-fv-h4,
+  .md-wysiwyg .cm-fv-h5,
+  .md-wysiwyg .cm-fv-h6 {
+    color: var(--fv-color-muted);
+    font-size: var(--fv-text-sm);
+  }
 
-  .md-wysiwyg .ProseMirror p { margin: 0 0 var(--fv-space-3); }
-  .md-wysiwyg .ProseMirror blockquote {
-    margin: 0 0 var(--fv-space-3);
-    padding: var(--fv-space-1) 0 var(--fv-space-1) var(--fv-space-3);
+  /* ── 引用 ── */
+  .md-wysiwyg .cm-fv-quote {
+    padding-left: var(--fv-space-3);
     border-left: 3px solid var(--fv-color-border-strong);
     color: var(--fv-color-muted);
   }
-  .md-wysiwyg .ProseMirror ul,
-  .md-wysiwyg .ProseMirror ol { margin: 0 0 var(--fv-space-3); padding-left: var(--fv-space-5); }
-  .md-wysiwyg .ProseMirror li { margin: var(--fv-space-1) 0; }
-  .md-wysiwyg .ProseMirror li > p { margin: 0; }
-  .md-wysiwyg .ProseMirror code {
+
+  /* ── 列表 ── */
+  .md-wysiwyg .cm-fv-bullet {
+    padding-right: var(--fv-space-1);
+    color: var(--fv-color-muted);
+  }
+  .md-wysiwyg .cm-fv-check {
+    margin-right: var(--fv-space-1);
+    vertical-align: middle;
+    accent-color: var(--fv-color-accent);
+  }
+
+  /* ── 行内记号 ── */
+  .md-wysiwyg .cm-fv-strong { font-weight: 650; }
+  .md-wysiwyg .cm-fv-em { font-style: italic; }
+  .md-wysiwyg .cm-fv-strike { text-decoration: line-through; }
+  .md-wysiwyg .cm-fv-inline-code {
     padding: 1px 4px;
+    border-radius: var(--fv-radius-sm);
+    background: var(--fv-color-surface-active);
     font-family: var(--fv-font-mono);
     font-size: .92em;
-    background: var(--fv-color-surface-active);
-    border-radius: var(--fv-radius-sm);
   }
-  .md-wysiwyg .ProseMirror pre {
-    margin: 0 0 var(--fv-space-3);
-    padding: var(--fv-space-3);
-    overflow-x: auto;
+  /* 链接：accent 色、不带下划线（跟 Obsidian 一致） */
+  .md-wysiwyg .cm-fv-link {
+    color: var(--fv-color-accent);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* ── 围栏代码块：逐行铺底，首尾行起圆角 ── */
+  .md-wysiwyg .cm-fv-code {
+    padding: 0 var(--fv-space-3);
     background: var(--fv-color-surface);
-    border: 1px solid var(--fv-color-border);
-    border-radius: var(--fv-radius-md);
+    font-family: var(--fv-font-mono);
+    font-size: var(--fv-text-sm);
   }
-  .md-wysiwyg .ProseMirror pre code { padding: 0; background: transparent; font-size: var(--fv-text-sm); }
-  .md-wysiwyg .ProseMirror a { color: var(--fv-color-accent); text-decoration: underline; text-underline-offset: 2px; }
-  .md-wysiwyg .ProseMirror hr { margin: var(--fv-space-5) 0; border: none; border-top: 1px solid var(--fv-color-border); }
-  .md-wysiwyg .ProseMirror img { max-width: 100%; border-radius: var(--fv-radius-md); }
-  .md-wysiwyg .ProseMirror table { border-collapse: collapse; font-size: var(--fv-text-sm); }
-  .md-wysiwyg .ProseMirror th,
-  .md-wysiwyg .ProseMirror td {
+  .md-wysiwyg .cm-fv-code-first { border-radius: var(--fv-radius-md) var(--fv-radius-md) 0 0; }
+  .md-wysiwyg .cm-fv-code-last { border-radius: 0 0 var(--fv-radius-md) var(--fv-radius-md); }
+
+  /* ── 分隔线 ── */
+  .md-wysiwyg .cm-fv-hr {
+    margin: var(--fv-space-4) 0;
+    border-top: 1px solid var(--fv-color-border);
+  }
+
+  /* ── 表格（只读渲染，光标进表格会露回管道符）── */
+  .md-wysiwyg .cm-fv-table {
+    margin: var(--fv-space-2) 0;
+    border-collapse: collapse;
+    font-size: var(--fv-text-sm);
+  }
+  .md-wysiwyg .cm-fv-table th,
+  .md-wysiwyg .cm-fv-table td {
     padding: var(--fv-space-1) var(--fv-space-3);
     border: 1px solid var(--fv-color-border);
     text-align: left;
   }
-  .md-wysiwyg .ProseMirror th { background: var(--fv-color-surface); font-weight: 600; }
-
-  /* 空文档时给个提示（ProseMirror 的空段落靠 ::before 画） */
-  .md-wysiwyg .ProseMirror p.is-empty::before,
-  .md-wysiwyg .ProseMirror .is-empty::before {
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    color: var(--fv-color-muted);
-    pointer-events: none;
-  }
-
-  /* ── 光标所在块的源码态 ──
-     DOM 结构一个字不动，只把这一块藏掉，源码文本域插在它原来的位置上。
-     排版跟着它渲染时的样子走（字号 / 缩进 / 外边距），切换前后高度才不会跳。 */
-  .md-wysiwyg .ProseMirror .md-wysiwyg__live-hidden { display: none; }
-
-  .md-wysiwyg__live { margin: 0 0 var(--fv-space-3); }
-  .md-wysiwyg__live--h1,
-  .md-wysiwyg__live--h2,
-  .md-wysiwyg__live--h3,
-  .md-wysiwyg__live--h4,
-  .md-wysiwyg__live--h5,
-  .md-wysiwyg__live--h6 { margin: var(--fv-space-4) 0 var(--fv-space-2); }
-  .md-wysiwyg__live--item { margin: var(--fv-space-1) 0; }
-  /* 引用保留缩进，跟渲染态的 blockquote 对齐 */
-  .md-wysiwyg__live--quote { padding-left: var(--fv-space-3); }
-
-  .md-wysiwyg__live-input {
-    display: block;
-    box-sizing: border-box;
-    width: 100%;
-    margin: 0;
-    padding: 0 var(--fv-space-2);
-    border: 1px solid var(--fv-color-accent);
-    border-radius: var(--fv-radius-sm);
+  .md-wysiwyg .cm-fv-table th {
     background: var(--fv-color-surface);
-    color: var(--fv-color-text);
-    font-family: var(--fv-font-mono);
-    font-size: var(--fv-text-base);
-    line-height: var(--fv-line-height);
-    /* 高度由脚本按内容撑，不要滚动条 */
-    overflow: hidden;
-    resize: none;
-    outline: none;
-    tab-size: 2;
+    font-weight: 600;
   }
-  .md-wysiwyg__live--h1 .md-wysiwyg__live-input,
-  .md-wysiwyg__live--h2 .md-wysiwyg__live-input,
-  .md-wysiwyg__live--h3 .md-wysiwyg__live-input { font-weight: 650; line-height: 1.35; }
-  .md-wysiwyg__live--h1 .md-wysiwyg__live-input { font-size: var(--fv-text-xl); }
-  .md-wysiwyg__live--h2 .md-wysiwyg__live-input { font-size: var(--fv-text-lg); }
-  .md-wysiwyg__live--h3 .md-wysiwyg__live-input { font-size: var(--fv-text-base); }
-  .md-wysiwyg__live--h4 .md-wysiwyg__live-input,
-  .md-wysiwyg__live--h5 .md-wysiwyg__live-input,
-  .md-wysiwyg__live--h6 .md-wysiwyg__live-input {
-    font-size: var(--fv-text-sm);
-    font-weight: 650;
-    line-height: 1.35;
-    color: var(--fv-color-muted);
-  }
-  .md-wysiwyg__live--quote .md-wysiwyg__live-input { color: var(--fv-color-muted); }
-  .md-wysiwyg__live--table .md-wysiwyg__live-input { font-size: var(--fv-text-sm); }
 
-  /* 解析不了：原节点没动，源码留着让用户自己修 */
-  .md-wysiwyg__live-error {
-    margin: var(--fv-space-1) 0 0;
-    color: var(--fv-color-danger);
-    font-size: var(--fv-text-sm);
+  /* ── 图片（只渲染 http(s) / data）── */
+  .md-wysiwyg .cm-fv-img {
+    max-width: 100%;
+    border-radius: var(--fv-radius-md);
+    vertical-align: bottom;
   }
 }

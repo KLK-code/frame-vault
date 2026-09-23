@@ -10,8 +10,12 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@milkdown/kit": "^7.22.1",
-    "@milkdown/react": "^7.22.1",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/state": "6.7.5",
+    "@codemirror/view": "6.43.12",
+    "@lezer/markdown": "1.7.2",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "~2.7.3",
     "@tauri-apps/plugin-opener": "^2",

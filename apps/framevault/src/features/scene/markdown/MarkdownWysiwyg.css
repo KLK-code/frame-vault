@@ -8,9 +8,14 @@
     border-radius: var(--fv-radius-md);
     background: var(--fv-color-paper);
     overflow: hidden;
+    /* 写作台里吃满剩余高度：sheet 是纵向 flex，编辑器是最后一个子项 */
+    flex: 1;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
   }
   .md-wysiwyg:focus-within { border-color: var(--fv-color-accent); }
-  .md-wysiwyg__host { display: block; }
+  .md-wysiwyg__host { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
   /* ── 标题：行级样式（装饰给整行挂类名）── */
   .md-wysiwyg .cm-fv-h1,

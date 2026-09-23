@@ -223,38 +223,39 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
     <div className="writing">
       <SceneNotice message={data.notice} onUndo={data.undo} onDismiss={data.dismissNotice} />
 
-      <div className="writing__bar">
-        <span className="writing__count">{ordered.length} 篇</span>
-        <div className="writing__bar-actions">
-          <button
-            type="button"
-            className="writing__btn"
-            onClick={() => void data.reload()}
-            disabled={data.busy !== null}
-          >
-            <SceneIcon name="refresh" size={14} /> 刷新
-          </button>
+      {data.error && <p className="writing__error">{data.error}</p>}
+
+      {ordered.length === 0 ? (
+        <div className="writing__empty">
+          <SceneIcon name="book" size={30} />
+          <p>还没有记录。写下一篇开始 —— 正文支持 Markdown。</p>
           <button
             type="button"
             className="writing__btn is-primary"
             onClick={() => void createEntry()}
             disabled={data.busy !== null}
           >
-            写新的一篇
+            <SceneIcon name="edit" size={14} /> 写新的一篇
           </button>
-        </div>
-      </div>
-
-      {data.error && <p className="writing__error">{data.error}</p>}
-
-      {ordered.length === 0 ? (
-        <div className="writing__empty">
-          <SceneIcon name="book" size={30} />
-          <p>还没有记录。点右上角「写新的一篇」开始 —— 正文支持 Markdown。</p>
         </div>
       ) : (
         <div className={compact ? "writing__body is-compact" : "writing__body"}>
-          <ul className="writing__list">
+          <div className="writing__side">
+            {/* 列表自己的头：篇数在左，新建按钮是 Obsidian 式的小图标（自动保存之后顶栏就没有存在的必要了） */}
+            <div className="writing__list-head">
+              <span className="writing__count">{ordered.length} 篇</span>
+              <button
+                type="button"
+                className="writing__new"
+                title="写新的一篇"
+                aria-label="写新的一篇"
+                onClick={() => void createEntry()}
+                disabled={data.busy !== null}
+              >
+                <SceneIcon name="edit" size={16} />
+              </button>
+            </div>
+            <ul className="writing__list">
             {ordered.map((entry) => (
               <li key={entry.id}>
                 <button
@@ -276,7 +277,8 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 </button>
               </li>
             ))}
-          </ul>
+            </ul>
+          </div>
 
           {current && (
             <article className="writing__sheet">
@@ -296,25 +298,23 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 </span>
               </header>
 
-              {/* 照片在上、正文在下：写作时先看见"这一篇配了什么图"，右上角的按钮能把它收起来 */}
+              {/* 照片在上、正文在下：写作时先看见"这一篇配了什么图"。
+              **整行都是开关**：点哪儿都能收起 / 展开，右侧箭头指示当前状态 */}
               <section className="writing__photos">
-                <header className="writing__photos-head">
+                <button
+                  type="button"
+                  className="writing__photos-head"
+                  aria-expanded={photosOpen}
+                  aria-label={photosOpen ? "收起照片" : "展开照片"}
+                  title={photosOpen ? "收起照片" : "展开照片"}
+                  onClick={togglePhotos}
+                >
                   <span className="writing__photos-label">
                     <SceneIcon name="photo" size={14} />
                     照片 {photos.length}
                   </span>
-                  {/* 收起 / 展开的按钮在**右上角**（像参考图那样），点一下把整条照片收掉 */}
-                  <button
-                    type="button"
-                    className="writing__photos-toggle"
-                    aria-expanded={photosOpen}
-                    aria-label={photosOpen ? "收起照片" : "展开照片"}
-                    title={photosOpen ? "收起照片" : "展开照片"}
-                    onClick={togglePhotos}
-                  >
-                    <span className="writing__photos-caret">{photosOpen ? "︿" : "﹀"}</span>
-                  </button>
-                </header>
+                  <span className={photosOpen ? "writing__photos-caret is-open" : "writing__photos-caret"} />
+                </button>
 
                 {photosOpen && (
                   <div className="writing__photos-body">

@@ -6,3 +6,6 @@ node_modules/
 dist/
 /target/
 /.pnpm-store
+
+# ZCode 会话产物
+/.zcode

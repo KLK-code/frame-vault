@@ -1,9 +1,16 @@
 @layer components {
-  .writing { display: grid; gap: var(--fv-space-3); min-width: 0; }
+  /* 写作台吃满舞台剩余高度（编辑器才能撑到底）；顶部留一点呼吸空隙 */
+  .writing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fv-space-3);
+    min-width: 0;
+    flex: 1;
+    min-height: 0;
+    padding-top: var(--fv-space-4);
+  }
 
-  .writing__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--fv-space-2); flex-wrap: wrap; }
   .writing__count { color: var(--fv-color-muted); font-size: var(--fv-text-sm); }
-  .writing__bar-actions { display: flex; gap: var(--fv-space-2); flex-wrap: wrap; }
 
   .writing__btn {
     display: inline-flex;
@@ -35,9 +42,29 @@
   }
   .writing__empty p { margin: 0; font-size: var(--fv-text-sm); }
 
-  /* 宽屏：左列表 + 右写作台；窄屏：上下堆叠 */
-  .writing__body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--fv-space-4); min-width: 0; }
-  .writing__body.is-compact { grid-template-columns: minmax(0, 1fr); }
+  /* 宽屏：左列表 + 右写作台；窄屏：上下堆叠。body 吃满 .writing 剩下的高度。
+  行必须 minmax(0,1fr)：auto 行会被列表的自然高度撑爆，整页跟着滚、列表就没有自己的滚动条了 */
+  .writing__body { display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: var(--fv-space-4); min-width: 0; flex: 1; min-height: 0; }
+  .writing__body.is-compact { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+
+  /* 列表列自己的头：篇数 + 新建小图标（Obsidian 式）。列表在剩余高度里自己滚 */
+  .writing__side { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--fv-space-2); min-width: 0; min-height: 0; }
+  .writing__body.is-compact .writing__side { grid-template-rows: auto auto; }
+  .writing__list-head { display: flex; align-items: center; justify-content: space-between; gap: var(--fv-space-2); }
+  .writing__new {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--fv-radius-sm);
+    background: transparent;
+    color: var(--fv-color-muted);
+    cursor: pointer;
+  }
+  .writing__new:hover { background: var(--fv-color-surface-hover); color: var(--fv-color-text); }
+  .writing__new:disabled { opacity: .5; cursor: default; }
 
   .writing__list {
     display: grid;
@@ -46,7 +73,7 @@
     margin: 0;
     padding: 0;
     list-style: none;
-    max-height: 60vh;
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-gutter: stable;
@@ -70,7 +97,8 @@
   .writing__item-day { font-size: var(--fv-text-xs); color: var(--fv-color-muted); font-variant-numeric: tabular-nums; }
   .writing__item-summary { font-size: var(--fv-text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .writing__sheet { display: grid; gap: var(--fv-space-3); min-width: 0; }
+  /* 写作台一屏：纵向排，编辑器吃剩余全部高度（flex:1 在 .md-wysiwyg 上） */
+  .writing__sheet { display: flex; flex-direction: column; gap: var(--fv-space-3); min-width: 0; min-height: 0; }
   .writing__head { display: flex; align-items: baseline; gap: var(--fv-space-3); flex-wrap: wrap; }
   .writing__date { margin: 0; font-size: var(--fv-text-lg); color: var(--fv-color-text-strong); }
   .writing__time { color: var(--fv-color-muted); font-size: var(--fv-text-sm); font-variant-numeric: tabular-nums; }
@@ -79,15 +107,46 @@
   .writing__meta { max-width: 320px; }
 
 
-  /* 照片卡片：在正文上面，头一行是可点开的「照片 N」，右上角那颗就是收起按钮 */
-  .writing__photos { display: flex; flex-direction: column; gap: var(--fv-space-3); padding: var(--fv-space-3); background: var(--fv-color-surface); border-radius: var(--fv-radius-lg); }
-  .writing__photos-head { display: flex; align-items: center; justify-content: space-between; gap: var(--fv-space-2); }
+  /* 照片卡片：在正文上面，配色 / 边框与编辑器卡完全一致（同一张纸）。**整行头都是开关**，
+  右侧箭头指示状态；**刻意不做悬浮变色**——同一张纸上两块灰深浅不一比没有反馈更难看（用户实测反馈） */
+  .writing__photos { display: flex; flex-direction: column; gap: var(--fv-space-3); padding: var(--fv-space-3); background: var(--fv-color-paper); border: 1px solid var(--fv-color-border); border-radius: var(--fv-radius-md); }
+  .writing__photos-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fv-space-2);
+    margin: calc(-1 * var(--fv-space-3));
+    padding: var(--fv-space-3);
+    border: none;
+    border-radius: var(--fv-radius-md);
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
+  }
   .writing__photos-label { display: flex; align-items: center; gap: var(--fv-space-2); color: var(--fv-color-text); font-size: var(--fv-text-sm); font-weight: 600; }
-  .writing__photos-toggle { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: none; border-radius: var(--fv-radius-sm); background: transparent; color: var(--fv-color-muted); font-family: inherit; }
-  .writing__photos-toggle:hover { background: var(--fv-color-surface-hover); color: var(--fv-color-text); }
-  .writing__photos-caret { font-size: var(--fv-text-base); line-height: 1; }
+  /* 纯 CSS 箭头：收起朝下、展开朝上，带一点过渡让状态变化看得见 */
+  .writing__photos-caret {
+    width: 8px;
+    height: 8px;
+    border-right: 1.5px solid var(--fv-color-muted);
+    border-bottom: 1.5px solid var(--fv-color-muted);
+    transform: rotate(45deg);
+    transition: transform 0.15s ease;
+  }
+  .writing__photos-head:hover .writing__photos-caret { border-color: var(--fv-color-text); }
+  .writing__photos-caret.is-open { transform: rotate(-135deg); }
 
-  .writing__photos-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 132px)); gap: var(--fv-space-2); }
+  /* 照片区与整页解耦：图多时**自己滚**（约两行的高度上限），不把写作台越撑越高。
+  纵向滚动容器照 AGENTS §9 的规矩：长写 overflow + scrollbar-gutter，横向结构性禁止 */
+  .writing__photos-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 132px));
+    gap: var(--fv-space-2);
+    max-height: 300px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
   .writing__photo { display: grid; place-items: center; width: 100%; padding: 0; border: 1px solid var(--fv-color-border); border-radius: var(--fv-radius-md); background: var(--fv-color-paper); cursor: pointer; overflow: hidden; }
   .writing__photo img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
   .writing__photo.is-add { position: relative; aspect-ratio: 1 / 1; border-style: dashed; border-color: var(--fv-color-border-strong); color: var(--fv-color-muted); font-family: inherit; font-size: var(--fv-text-xs); gap: 2px; }

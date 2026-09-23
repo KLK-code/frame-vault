@@ -93,14 +93,15 @@ function toggleWrap(marker: string): StateCommand {
  */
 const editorTheme = EditorView.theme({
   "&": {
+    // 跟着 .md-wysiwyg（flex 容器）撑满：写作台里编辑器吃剩余全部高度
+    height: "100%",
     color: "var(--fv-color-text)",
     fontSize: "var(--fv-text-base)",
     backgroundColor: "transparent",
   },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
-    minHeight: "320px",
-    maxHeight: "70vh",
+    height: "100%",
     overflowX: "hidden",
     overflowY: "auto",
     scrollbarGutter: "stable",

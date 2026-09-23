@@ -17,7 +17,7 @@
 | [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md) | **存储规范 v2（已实施）**：Obsidian 式人可读层级 —— 场景/记录按文件夹组织、正文落 `note.md`、媒体导入时按模板命名；六条语义（含**不做旧布局兼容**）已落地，偏差见文末 |
 | [docs/PROPOSAL_wysiwyg_live_source_zh-CN.md](./docs/PROPOSAL_wysiwyg_live_source_zh-CN.md) | **编辑器 Live Source（已废止）**：写作台里"光标所在块翻成源码盒子"的块级方案，实测撞到「盒子 + 选区被困」的体验上限，已被下条取代、代码已删除；留档备查 |
 | [docs/PROPOSAL_editor_codemirror6_zh-CN.md](./docs/PROPOSAL_editor_codemirror6_zh-CN.md) | **编辑器内核迁移（已实施）**：ProseMirror/Milkdown → CodeMirror 6，真·Obsidian 式即时渲染（源码即真值、无盒子、选区全篇自由），取代上条的块级方案 |
-| [docs/PROPOSAL_topics_scenes_zh-CN.md](./docs/PROPOSAL_topics_scenes_zh-CN.md) | **主题 / 场景 / 文件夹（讨论稿）**：主题 = 记录的内容（科研/旅游/挑战，磁盘上外层一层目录），场景 = 记录的方式（随心记/认真写作/拍照打卡，UI 与录入据它特化），文件夹 = 两者的容器；四条旧认识（场景=文件夹、主题=功能主题、主题=外观、目录嵌套不做）作废 |
+| [docs/PROPOSAL_topics_scenes_zh-CN.md](./docs/PROPOSAL_topics_scenes_zh-CN.md) | **主题 / 场景 / 文件夹（讨论稿）**：主题 = 用户自己的分组（叫"科研"或叫"打卡"都行，App 不预设语义，磁盘上就是一层目录），场景 = 记录方式（随心记/认真写作/拍照打卡，UI 与录入据它特化），文件夹 = 绑一个场景 + 声明这批记录的字段；四条旧认识（场景=文件夹、主题=功能主题、主题=外观、目录嵌套不做）作废 |
 | [docs/ALIGNMENT_vision_vs_plans_zh-CN.md](./docs/ALIGNMENT_vision_vs_plans_zh-CN.md) | **对齐记录**：愿景 × 两份计划（存储 v2 / 编辑器换 CM6）的结构冲突与扩展位 —— 哪些必须现在改、哪些是固有代价、哪些只是措辞不一致 |
 | [docs/REFERENCES.md](./docs/REFERENCES.md) | 参考项目清单（学习用，含许可证红线） |
 

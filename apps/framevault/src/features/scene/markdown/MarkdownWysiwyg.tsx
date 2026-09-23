@@ -431,6 +431,8 @@ function createLiveSource(ctx: Ctx, emit: (markdown: string) => void): Plugin {
    */
   function relocate(doc: ProseNode, rec: LiveActive, tr: Transaction): LiveActive | null {
     const pos = tr.mapping.map(rec.pos, 1);
+    // nodeAt 越界会抛 RangeError，映射后的位置先量一下
+    if (pos < 0 || pos > doc.content.size) return null;
     const node = doc.nodeAt(pos);
     if (!node || node.type.name !== rec.typeName) return null;
     rec.pos = pos;
@@ -603,6 +605,7 @@ function createLiveSource(ctx: Ctx, emit: (markdown: string) => void): Plugin {
       const source = rec.ta ? rec.ta.value : rec.source;
       let pos = rec.pos;
       for (const tr of trs) pos = tr.mapping.map(pos, 1);
+      if (pos < 0 || pos > newState.doc.content.size) return null;
       const node = newState.doc.nodeAt(pos);
       // 这一块已经不在原地了（被删 / 被换）→ 什么都不做，用户的改动落空总比改错地方强
       if (!node || node.type.name !== rec.typeName) return null;

@@ -8,7 +8,7 @@ import type { SceneManifest } from "../../manifest";
  */
 const manifest: SceneManifest = {
   presentation: {
-    icon: "bolt", eyebrow: "MAKE IT HAPPEN", suggestedAppearance: "preset.ember",
+    icon: "bolt", suggestedAppearance: "preset.ember",
   },
   entryFields: [
     { key: "text", label: "打卡心得", type: "textarea", note: true, placeholder: "记录今天的进步…" },

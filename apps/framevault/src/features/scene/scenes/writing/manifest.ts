@@ -11,7 +11,7 @@ import type { SceneManifest } from "../../manifest";
  */
 const manifest: SceneManifest = {
   presentation: {
-    icon: "book", eyebrow: "WRITING", suggestedAppearance: "preset.paper",
+    icon: "book", suggestedAppearance: "preset.paper",
   },
   entryFields: [
     { key: "location", label: "地点", type: "text", placeholder: "在哪里写的" },

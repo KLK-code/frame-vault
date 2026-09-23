@@ -387,7 +387,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 |---|---|---|
 | `entryFields` | 这个主题的记录上有什么字段（核心生成录入控件与展示） | 普通记录的「正文」 |
 | `configSchema` | 这个场景的设置表单形状（存 `folder.sceneConfig`） | 挑战的「目标天数」「规则」 |
-| `presentation` | 图标名、类别短语、推荐外观，全部是纯数据 | 宿主与外壳经注册表读取，不导入主题内部实现 |
+| `presentation` | 图标名、推荐外观，全部是纯数据（类别短语随舞台横幅一起删了，2026-09） | 宿主与外壳经注册表读取，不导入主题内部实现 |
 
 **当前四个内置主题**：普通日记 `builtin.plain`、旅行 `builtin.travel`、挑战 `builtin.challenge`、**写作台 `builtin.writing`**。前三个视图各调用一次 `useSceneData`，再把结果传给共用录入和时间线；挑战另有照片墙展示；**写作台是唯一自己编排界面的主题**：左侧篇列表 + 右侧一整块所见即所得的编辑区（`MarkdownWysiwyg`，用 `React.lazy` 按需加载），表单仍交给 `SceneFields`、大图仍用 `MediaLightbox`，它没有一处自己写的输入控件。时间线按 `dateOf` 倒序显示，编辑合并本主题字段并保留其他命名空间与未知字段。`SceneHost` 按场景 id 与主题 id 给视图设置 key，切换场景时重置草稿和预览，避免串场景。
 

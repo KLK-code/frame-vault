@@ -41,8 +41,6 @@ export type SceneManifest = {
     icon: "book" | "mountain" | "bolt";
     /** 推荐的**外观预设** id（如 preset.tide）。只是推荐：用户选过外观就听用户的 */
     suggestedAppearance?: string;
-    /** 类别短语（如 DAILY JOURNAL），挂在标题上方那行，和图标同一行 */
-    eyebrow: string;
   };
   /** 这个主题的记录上有什么字段（核心据此生成录入与展示） */
   entryFields?: FieldDecl[];

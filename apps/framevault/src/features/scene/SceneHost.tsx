@@ -1,7 +1,6 @@
 import type { FolderNode, SceneInfo } from "../../lib/api";
 import { sceneOf } from "./registry";
 import PlainScene from "./scenes/plain/PlainScene";
-import SceneIcon from "./SceneIcon";
 import "./SceneHost.css";
 
 type Props = {
@@ -12,40 +11,34 @@ type Props = {
 };
 
 /**
- * 右侧 = 当前场景的舞台。
+ * 右侧 = 当前场景（记录方式）的舞台。
  *
- * 它只做三件事：显示场景名与主题、按 `effectiveScene` 找视图、把视图渲染出来。
- * 具体"记录长什么样、怎么录入"全部由主题视图决定——核心不掺和。
+ * **只做两件事**：按 `effectiveScene` 找视图、把视图渲染出来。
+ * 具体"记录长什么样、怎么录入"全部由场景视图决定 —— 核心不掺和。
+ *
+ * **刻意没有标题区**（2026-09 删掉的）：以前这里横着一条"场景自我标榜"的横幅
+ * （场景图标 + 标语 + 文件夹名 + 场景徽章），占了 164px 却什么信息都不给 ——
+ * 文件夹名侧栏里就写着，场景是"怎么记"而不是内容，没必要在正文上方再喊一遍。
+ * 舞台现在整块归内容。
  */
 export default function SceneHost({ folder, scene, onSceneConfigChange }: Props) {
   if (!folder) {
     return (
       <div className="scene-host scene-host--empty">
         <p>
-          左边选一个场景开始记录，
+          左边选一个文件夹开始记录，
           <br />
-          或者点「场景」旁边的小 ＋ 新建一个。
+          或者点「文件夹」旁边的小 ＋ 新建一个。
         </p>
       </div>
     );
   }
 
   const View = sceneOf(folder.effectiveScene)?.View;
-  const presentation = sceneOf(folder.effectiveScene)?.manifest.presentation;
 
-  // data-scene 挂在**舞台容器**上：主题的样式作用域碰不到外壳（标题栏 / 侧栏 / 设置窗口）
+  // data-scene 挂在**舞台容器**上：场景的样式作用域碰不到外壳（标题栏 / 侧栏 / 设置窗口）
   return (
     <div className="scene-host" data-scene={folder.effectiveScene}>
-      <header className="scene-host__head">
-        <div className="scene-host__intro">
-          <span className="scene-host__eyebrow"><SceneIcon name={presentation?.icon} size={16} />{presentation?.eyebrow ?? "FRAMEVAULT"}</span>
-          <div className="scene-host__heading">
-            <h1 className="scene-host__name">{folder.name}</h1>
-            <span className="scene-host__theme">{scene ? scene.name : folder.effectiveScene}</span>
-          </div>
-        </div>
-      </header>
-
       {!View && (
         <p className="scene-host__notice">
           主题「{folder.effectiveScene}」没有安装，暂时用普通记录显示。

@@ -6,7 +6,7 @@ import type { SceneManifest } from "../../manifest";
  */
 const manifest: SceneManifest = {
   presentation: {
-    icon: "book", eyebrow: "DAILY JOURNAL", suggestedAppearance: "preset.paper",
+    icon: "book", suggestedAppearance: "preset.paper",
   },
   entryFields: [
     // note: true = 正文落磁盘上的 note.md（记录目录里能直接打开的那个文件）

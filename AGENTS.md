@@ -169,7 +169,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   否则一百个主题会发明一百种格式，Vault 就不再是开放格式；
   不会（卡片多大、点哪里、按什么排序显示）→ 留给主题，随便写。
 - **公共件**：`features/scene/mediaFormat.ts`（格式化 / 能否显示）、`MediaLightbox.tsx`（大图 / 视频）、`SceneFields.tsx`（声明→表单）、`SceneNotice.tsx`（可撤销提示）已经抽出来了，新主题直接复用，**别写第五份**。
-- **内置主题共用能力、各自编排**：普通日记 / 旅行 / 挑战共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除）；**写作台自己编排界面**（左侧篇列表 + 右侧一整块所见即所得的编辑区），但同样只走 `useSceneData`、表单走 `SceneFields`、编辑器走 `MarkdownWysiwyg`、大图走 `MediaLightbox` —— 它没有一处自己写的输入控件。`manifest.presentation` 只声明图标名 / 类别短语 / 推荐外观；外壳只经注册表读取。普通日记是 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`，**写作台**是 `builtin.writing`（一屏一篇的长文写作，正文所见即所得）。
+- **内置主题共用能力、各自编排**：普通日记 / 旅行 / 挑战共用 `SceneComposer`（录入 / 防重复提交）与 `EntryTimeline`（时间线 / 编辑 / 媒体 / 删除）；**写作台自己编排界面**（左侧篇列表 + 右侧一整块所见即所得的编辑区），但同样只走 `useSceneData`、表单走 `SceneFields`、编辑器走 `MarkdownWysiwyg`、大图走 `MediaLightbox` —— 它没有一处自己写的输入控件。`manifest.presentation` 只声明图标名 / 推荐外观（**2026-09 起没有「类别短语」了** —— 它只服务于舞台横幅，横幅已删）；外壳只经注册表读取。普通日记是 `builtin.plain`，旅行是 `builtin.travel`，挑战是 `builtin.challenge`，**写作台**是 `builtin.writing`（一屏一篇的长文写作，正文所见即所得）。
 - **外观与功能主题靠 CSS 作用域分开，不许互相引用**：
   - **外观主题**（一套值 = 一个预设）挂 `:root[data-appearance="preset.x"]`，**所有窗口、所有区域**都读它；用户手调的单值覆盖优先级最高（内联在 `documentElement` 上）。**外壳**（标题栏 / 侧栏 / 选中行 / 设置窗口）的风格属于外观，**不许**跟着“当前场景是哪个主题”变。
   - **功能主题的巧思**只挂它自己的**舞台容器**（`data-scene` 在舞台那一层，**不在** `.app-root`），所以主题样式在作用域上碰不到外壳；允许的只有白名单：图标、`--fv-scene-banner`，以及主题视图自己的排版。

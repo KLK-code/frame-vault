@@ -51,7 +51,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **平台差异只允许出现在两处**：后端 `commands/window.rs`（窗口 builder 的 `#[cfg(target_os = "macos")]` 分支）
   与前端 `lib/platform.ts`（唯一的 OS 判断）。**别在别处写 `if (isMac)` / `#[cfg]`**——
   每多一处，就多一处“只在一边编译过”的机会。真要加第三处，先改这一条。
-- **两套骨架**：桌面 = 左场景树 + 右场景舞台（`App.tsx` 里的 `DesktopShell`）；手机 = 顶部场景切换 + 主题渲染区 + 底部标签栏（`app/MobileShell.tsx`）。
+- **两套骨架**：桌面 = 左文件夹树（可收起成一条图标栏）+ 右场景舞台（`App.tsx` 里的 `DesktopShell`）；手机 = 顶部场景切换 + 主题渲染区 + 底部标签栏（`app/MobileShell.tsx`）。
   两者**共用同一份能力与数据**（`useFolders` / `useActiveFolder` / `useSceneData` / `SceneHost`），**区别只有编排**。
   **共用状态挂在 `App` 上，不挂在骨架里**（`SceneShellProps` = 场景树 + 当前选中的场景 + 它的主题信息，
   由 `App` 调用 `useFolders` / `useActiveFolder` / `useAppearance` 后传下去）。

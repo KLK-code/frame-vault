@@ -21,6 +21,29 @@
   min-height: 0;
   background: var(--fv-color-surface);
   color: var(--fv-color-text);
+  /* 展开 / 收起时宽度平滑过渡（只动宽度，不动布局里的其他东西） */
+  transition: width 0.16s ease;
+}
+
+/* 收起来之后：只剩一条图标栏 */
+.sidebar.is-collapsed {
+  align-items: center;
+  padding-top: var(--fv-space-3);
+}
+
+.sidebar__rail {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-text);
+}
+
+.sidebar__rail:hover {
+  background: var(--fv-color-surface-hover);
 }
 
 /* 出错时别用 alert 打断用户，安静地贴在侧栏底部 */

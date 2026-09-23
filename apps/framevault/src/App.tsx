@@ -25,11 +25,30 @@ function IconSettings() {
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 480;
 const DEFAULT_WIDTH = 240;
+/** 收起来之后只剩一条图标栏（像 ChatGPT / Claude 那种） */
+const RAIL_WIDTH = 48;
 const WIDTH_KEY = "fv.sidebarWidth";
+const COLLAPSED_KEY = "fv.sidebarCollapsed";
 
 function readWidth(): number {
   const saved = Number(localStorage.getItem(WIDTH_KEY));
   return Number.isFinite(saved) && saved >= MIN_WIDTH ? saved : DEFAULT_WIDTH;
+}
+
+function readCollapsed(): boolean {
+  return localStorage.getItem(COLLAPSED_KEY) === "1";
+}
+
+/** 侧栏图标（一个方框 + 左边一竖 = "侧栏"），收起后点它展开 */
+function IconPanel({ flip }: { flip?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1.6" y="2.6" width="12.8" height="10.8" rx="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6.2 2.6v10.8" stroke="currentColor" strokeWidth="1.3" />
+      {flip && <path d="M8.6 6.4 11 8l-2.4 1.6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
+      {!flip && <path d="M11 6.4 8.6 8 11 9.6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
+    </svg>
+  );
 }
 
 /**
@@ -58,6 +77,8 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
   } = tree;
   const { activeId, setActiveId, active } = selected;
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
+  // 收起来 = 只剩一条图标栏；这是"视图与面板开关"，按 README 的状态分区放 localStorage
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const dragging = useRef(false);
   const widthRef = useRef(sidebarWidth);
 
@@ -96,6 +117,14 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
     document.body.style.userSelect = "none";
   }
 
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
+
   async function handleDelete(folder: { id: string; name: string }) {
     const ok = await confirm(
       `删除文件夹「${folder.name}」？\n里面的记录不会被删除，但会失去归属。`,
@@ -110,6 +139,20 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
       <TitleBar title="FrameVault" />
 
       <main className="app">
+        {/* 收起来时只剩这一条：一个图标，点它展开 */}
+        {collapsed ? (
+          <aside className="sidebar is-collapsed" style={{ width: RAIL_WIDTH }}>
+            <button
+              className="sidebar__rail"
+              title="展开文件夹列表"
+              aria-label="展开文件夹列表"
+              aria-expanded={false}
+              onClick={toggleCollapsed}
+            >
+              <IconPanel flip />
+            </button>
+          </aside>
+        ) : (
         <aside className="sidebar" style={{ width: sidebarWidth }}>
           <SceneTree
             folders={folders}
@@ -127,6 +170,7 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
             onCreateTopic={(name) => createTopic(name)}
             onRenameTopic={(topic, next) => renameTopic(topic, next)}
             onDeleteTopic={(topic) => deleteTopic(topic)}
+            onToggleCollapsed={toggleCollapsed}
           />
 
           {error && <p className="sidebar__error">{error}</p>}
@@ -138,29 +182,32 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
             </button>
           </div>
         </aside>
+        )}
 
-        <div
-          className="app__divider"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="拖动调整侧栏宽度，双击复位"
-          aria-valuenow={sidebarWidth}
-          aria-valuemin={MIN_WIDTH}
-          aria-valuemax={MAX_WIDTH}
-          tabIndex={0}
-          onPointerDown={startDrag}
-          onDoubleClick={() => applyWidth(DEFAULT_WIDTH, true)}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowLeft") {
-              e.preventDefault();
-              applyWidth(widthRef.current - 16, true);
-            }
-            if (e.key === "ArrowRight") {
-              e.preventDefault();
-              applyWidth(widthRef.current + 16, true);
-            }
-          }}
-        />
+        {!collapsed && (
+          <div
+            className="app__divider"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="拖动调整侧栏宽度，双击复位"
+            aria-valuenow={sidebarWidth}
+            aria-valuemin={MIN_WIDTH}
+            aria-valuemax={MAX_WIDTH}
+            tabIndex={0}
+            onPointerDown={startDrag}
+            onDoubleClick={() => applyWidth(DEFAULT_WIDTH, true)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                applyWidth(widthRef.current - 16, true);
+              }
+              if (e.key === "ArrowRight") {
+                e.preventDefault();
+                applyWidth(widthRef.current + 16, true);
+              }
+            }}
+          />
+        )}
 
         <section className="content">
           <SceneHost

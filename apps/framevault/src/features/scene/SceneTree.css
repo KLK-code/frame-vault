@@ -10,46 +10,101 @@
 .scene-tree__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 2px;
   padding: var(--fv-space-1) var(--fv-space-2) var(--fv-space-2);
 }
 
-/* 小标题：不抢戏，但比正文弱一档就好，别再浅下去 */
-.scene-tree__title {
-  font-size: var(--fv-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--fv-color-muted);
-}
-
-/* 分组方式切换：三个小药丸，当前那个是实心的（纯展示层，不影响磁盘） */
-.scene-tree__modes {
-  display: flex;
-  gap: 2px;
-  margin-left: auto;
+/* 分组方式：一个按钮 + 向下弹的菜单（手感与底部的仓库切换器一致） */
+.scene-tree__group {
+  position: relative;
+  flex: 1;
+  min-width: 0;
   margin-right: var(--fv-space-1);
 }
 
-.scene-tree__modes button {
-  padding: 2px 6px;
+.scene-tree__group-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-1);
+  width: 100%;
+  padding: 4px 6px;
   border: none;
   border-radius: var(--fv-radius-sm);
   background: transparent;
   color: var(--fv-color-muted);
   font-family: inherit;
   font-size: var(--fv-text-xs);
-  line-height: 1.4;
-}
-
-.scene-tree__modes button:hover {
-  background: var(--fv-color-surface-hover);
-  color: var(--fv-color-text);
-}
-
-.scene-tree__modes button.is-active {
-  background: var(--fv-color-surface-hover);
-  color: var(--fv-color-text);
   font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.scene-tree__group-btn:hover {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+}
+
+.scene-tree__group-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-tree__group-caret {
+  flex: 0 0 auto;
+  opacity: 0.55;
+}
+
+.scene-tree__group-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: var(--fv-space-1);
+  background: var(--fv-color-bg);
+  border: 1px solid var(--fv-color-border);
+  border-radius: var(--fv-radius-md);
+  box-shadow: var(--fv-shadow-menu);
+}
+
+.scene-tree__group-menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-text);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
+}
+
+.scene-tree__group-menu button:hover {
+  background: var(--fv-color-surface-hover);
+}
+
+.scene-tree__group-menu button.is-active {
+  background: var(--fv-color-accent-soft);
+  color: var(--fv-color-accent);
+}
+
+.scene-tree__group-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fv-space-2);
+}
+
+.scene-tree__group-check {
+  font-size: var(--fv-text-xs);
+}
+
+.scene-tree__group-hint {
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
 }
 
 .scene-tree__add {

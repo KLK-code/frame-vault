@@ -283,7 +283,7 @@ src/
 │   └── SettingsWindow.tsx      设置窗口外壳
 ├── features/scene/           ── 场景层：本项目的"页面层" ──
 │   ├── useFolders.ts          场景数据 + 按主题归类（groups，见 §4.4）
-│   ├── SceneTree.tsx / .css    左侧：主题分组 → 场景行（新建/重命名/置顶/换主题/删除）
+│   ├── SceneTree.tsx / .css    左侧：文件夹树（三种分组：按主题/按场景/平铺）+ 主题与文件夹的增删改
 │   ├── SceneHost.tsx / .css    右侧：按 effectiveScene 找视图并渲染（含空态、缺主题提示）
 │   ├── registry.ts            主题 id → 视图组件（**扩展点**）
 │   ├── SceneComposer.tsx/.css  共用快捷录入（照片 / 文字，防重复提交）
@@ -852,7 +852,7 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 | `features/scene/useFolders.ts` | 场景数据 + 按主题**归类** | `useFolders() -> { folders, scenes, groups, create, rename, remove, togglePinned, bindScene }` |
 | `features/scene/registry.ts` | 主题 id → 视图组件（扩展点） | `SCENE_VIEWS: Record<string, ComponentType<SceneViewProps>>` |
 | `features/scene/SceneHost.tsx` | 右侧宿主：按 `effectiveScene` 渲染 + 空态 + 缺主题兜底 | props: `{ folder: FolderNode \| null, scene: SceneInfo \| null }` |
-| `features/scene/SceneTree.tsx` | 左侧：主题分组 → 场景行 | props: `{ groups, scenes, activeId, onSelect, onCreate, onRename, onDelete, onTogglePinned, onBindScene }` |
+| `features/scene/SceneTree.tsx` | 左侧：文件夹树（**三种分组方式**：按主题 = 磁盘的样子 / 按场景 / 平铺，记在 localStorage）+ 主题的建改删 | props: `{ folders, groups, topicGroups, topics, scenes, activeId, onSelect, onCreate, onRename, onDelete, onTogglePinned, onBindScene, onCreateTopic, onRenameTopic, onDeleteTopic, onToggleCollapsed }` |
 | `features/scene/scenes/plain/PlainScene.tsx` | 内置普通记录视图（也是写新主题的骨架示例） | props: `SceneViewProps` |
 
 **扩展点（M3 之后）**：功能主题以 `manifest + 视图组件` 的形式由插件提供；**UI 扩展点先做 declarative contributions**（声明式：命令、菜单、设置项、标签页元数据），需要复杂 UI 时才上 sandboxed iframe —— 与技术架构文档 §11.3 一致。

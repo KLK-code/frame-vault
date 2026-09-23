@@ -25,6 +25,11 @@ type Props = {
   onCreateTopic: (name: string) => Promise<boolean>;
   onRenameTopic: (topic: string, newName: string) => Promise<boolean>;
   onDeleteTopic: (topic: string) => Promise<boolean>;
+  /**
+   * 收起侧栏。只有桌面骨架会给（手机端的场景列表是整屏弹层，收起没意义）——
+   * 没给就不显示这个按钮。
+   */
+  onToggleCollapsed?: () => void;
 };
 
 /** 导航怎么分组 —— 纯 UI 的事，不影响磁盘上东西怎么放（AGENTS：分组是展示层的事） */
@@ -42,10 +47,10 @@ function readGrouping(): Grouping {
 /** 创建时选"新建主题…"用的哨兵值（主题名不可能是它，带个箭头） */
 const NEW_TOPIC = "__new__";
 
-const GROUPINGS: { id: Grouping; label: string; title: string }[] = [
-  { id: "topic", label: "主题", title: "按主题分组（文件夹在磁盘上放哪儿，就这么显示）" },
-  { id: "scene", label: "场景", title: "按场景分组：把同一种记录方式的文件夹聚在一起，跨主题" },
-  { id: "flat", label: "平铺", title: "不分组的平铺列表" },
+const GROUPINGS: { id: Grouping; label: string; hint: string }[] = [
+  { id: "topic", label: "按主题", hint: "文件夹在磁盘上放哪儿，就这么显示" },
+  { id: "scene", label: "按场景", hint: "同一种记录方式聚在一起，跨主题" },
+  { id: "flat", label: "平铺", hint: "不分组，一行一个" },
 ];
 
 function IconBookmark() {
@@ -58,6 +63,17 @@ function IconBookmark() {
         strokeWidth="1.2"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+/** 收起侧栏：一个方框 + 左竖线 + 向左的箭头 */
+function IconCollapse() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <rect x="1" y="1.8" width="10" height="8.4" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M4.4 1.8v8.4" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M6.6 4.6 5.2 6l1.4 1.4" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   );
 }
@@ -97,6 +113,7 @@ export default function SceneTree({
   onCreateTopic,
   onRenameTopic,
   onDeleteTopic,
+  onToggleCollapsed,
 }: Props) {
   const [creating, setCreating] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -108,6 +125,8 @@ export default function SceneTree({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [topicMenu, setTopicMenu] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<Grouping>(readGrouping);
+  const [groupMenu, setGroupMenu] = useState(false);
+  const groupBox = useRef<HTMLDivElement>(null);
   const createInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -117,6 +136,25 @@ export default function SceneTree({
   useEffect(() => {
     localStorage.setItem(GROUPING_KEY, grouping);
   }, [grouping]);
+
+  // 点菜单外面 / 按 Esc 就关掉（跟底部的仓库切换器同一套手感）
+  useEffect(() => {
+    if (!groupMenu) return;
+    function onDown(e: MouseEvent) {
+      if (groupBox.current && !groupBox.current.contains(e.target as Node)) setGroupMenu(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setGroupMenu(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [groupMenu]);
+
+  const current = GROUPINGS.find((item) => item.id === grouping) ?? GROUPINGS[0];
 
   /** 平铺：所有文件夹按后端给的顺序（置顶 → order → 名称） */
   const flat = useMemo(
@@ -352,23 +390,58 @@ export default function SceneTree({
   return (
     <div className="scene-tree">
       <div className="scene-tree__head">
-        <span className="scene-tree__title">文件夹</span>
-        <div className="scene-tree__modes" role="group" aria-label="分组方式">
-          {GROUPINGS.map((item) => (
-            <button
-              key={item.id}
-              className={grouping === item.id ? "is-active" : ""}
-              title={item.title}
-              aria-pressed={grouping === item.id}
-              onClick={() => setGrouping(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
+        {/* 「文件夹 · 按主题 ▾」——一个按钮搞定"这是什么 / 怎么分组"，
+            点开才看到三种分组方式（跟底部的仓库切换器同一套按钮手感） */}
+        <div className="scene-tree__group" ref={groupBox}>
+          <button
+            className="scene-tree__group-btn"
+            title={`分组方式：${current.label}（${current.hint}）`}
+            aria-haspopup="menu"
+            aria-expanded={groupMenu}
+            onClick={() => setGroupMenu((v) => !v)}
+          >
+            <span className="scene-tree__group-name">文件夹 · {current.label}</span>
+            <span className="scene-tree__group-caret">▾</span>
+          </button>
+
+          {groupMenu && (
+            <div className="scene-tree__group-menu" role="menu">
+              {GROUPINGS.map((item) => (
+                <button
+                  key={item.id}
+                  role="menuitemradio"
+                  aria-checked={grouping === item.id}
+                  className={grouping === item.id ? "is-active" : ""}
+                  onClick={() => {
+                    setGrouping(item.id);
+                    setGroupMenu(false);
+                  }}
+                >
+                  <span className="scene-tree__group-item">
+                    {item.label}
+                    {grouping === item.id && <span className="scene-tree__group-check">✓</span>}
+                  </span>
+                  <span className="scene-tree__group-hint">{item.hint}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <button className="scene-tree__add" title="新建文件夹" onClick={openCreate}>
           <IconPlus />
         </button>
+        {/* 收起按钮刻意不带 aria-expanded：它不是"展开/收起一个菜单"，按下去就是换骨架；
+            而 WebView2 会把 aria-expanded 映射成 ExpandCollapse，自动化点它反而不触发 onClick */}
+        {onToggleCollapsed && (
+          <button
+            className="scene-tree__add"
+            title="收起侧栏"
+            aria-label="收起侧栏"
+            onClick={onToggleCollapsed}
+          >
+            <IconCollapse />
+          </button>
+        )}
       </div>
 
       {creating && (

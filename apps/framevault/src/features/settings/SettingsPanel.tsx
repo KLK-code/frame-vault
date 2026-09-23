@@ -33,7 +33,8 @@ export default function SettingsPanel() {
                 onClick={() => setActiveId(section.id)}
               >
                 <span className="settings__nav-icon">{section.icon}</span>
-                {section.label}
+                {/* 包一层是为了窄屏能只留图标（见 SettingsPanel.css 的窄屏块） */}
+                <span className="settings__nav-label">{section.label}</span>
               </button>
             ))
           )}

@@ -5,6 +5,71 @@
      3) 触摸目标的下限参考 iOS 44pt / Android 48dp。 */
 @layer components {
   @media (max-width: 640px) {
+    /* ── 设置面板：手机长宽比下左栏只留图标、卡片里的行改成上下堆叠 ──
+       不然"标签 + 固定宽控件"挤在 200px 里，标签会被压成一字一行。
+       这些是"没有哪个组件该独自负责"的布局调整，所以放这里（AGENTS §6）。
+
+       ⚠️ **必须抬优先级**：这个文件在 main.tsx 里**先于**组件样式导入，
+       同优先级下组件里的规则会赢（我把这块从组件样式挪过来时踩过一次，
+       结果是"规则明明写在这儿却完全不生效"）。所以一律写成复合选择器，
+       跟上面 `.md-field .md-field__btn` 一个道理；`.settings` 自己用双类名压过
+       `SettingsPanel.css` 里那条 `grid-template-columns`。 */
+    .settings.settings {
+      grid-template-columns: 46px 1fr;
+    }
+
+    .settings .settings__nav {
+      align-items: center;
+      padding: var(--fv-space-4) var(--fv-space-1) var(--fv-space-3);
+    }
+
+    /* 图标栏里塞不下搜索框；要搜的时候用宽窗口 */
+    .settings .settings__search {
+      display: none;
+    }
+
+    .settings .settings__list {
+      align-items: center;
+      gap: var(--fv-space-1);
+      padding-right: 0;
+    }
+
+    .settings .settings__nav-item {
+      justify-content: center;
+      padding: 8px;
+      border-radius: var(--fv-radius-md);
+    }
+
+    .settings .settings__nav-label {
+      display: none;
+    }
+
+    .settings .settings__content {
+      padding: var(--fv-space-4) var(--fv-space-3) var(--fv-space-5);
+    }
+
+    .settings .settings__card {
+      padding: 0 var(--fv-space-3);
+    }
+
+    /* 行改成上下堆叠：标签在上、控件在下并撑满一行 */
+    .settings .settings__row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--fv-space-2);
+    }
+
+    /* 主题编辑器右侧那一列控件在窄屏下不再固定 250px */
+    .settings .theme-editor__control {
+      width: auto;
+      justify-content: flex-start;
+    }
+
+    .settings .theme-editor__select,
+    .settings .theme-editor__text {
+      width: 100%;
+    }
+
     /* Markdown 输入工具栏：手机上的按钮要够大（用复合选择器压过组件里的默认高度） */
     .md-field .md-field__btn,
     .md-field .md-field__mode {

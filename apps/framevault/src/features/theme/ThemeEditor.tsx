@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { TOKEN_GROUPS } from "./tokenSchema";
 import { useColorScheme, useThemeOverrides, type ColorScheme } from "./useThemeOverrides";
-import { DEFAULT_APPEARANCE, PRESETS, presetName } from "./presets";
+import { PRESETS } from "./presets";
 import { useAppearanceChoice } from "./useAppearance";
-import { onThemeChange, readStoredTheme } from "./themeSync";
 import "./ThemeEditor.css";
 
 /** 尽量把任意颜色写法转成 #rrggbb，给 <input type="color"> 用 */
@@ -23,9 +22,6 @@ export default function ThemeEditor() {
   const { overrides, set, reset, resetOne, exportCss } = useThemeOverrides();
   const { scheme, setScheme } = useColorScheme();
   const { choice, setChoice } = useAppearanceChoice();
-  // 真正生效的那一套（由主骨架算好广播过来）：显示出来，改没改一目了然
-  const [applied, setApplied] = useState(() => readStoredTheme().applied);
-  useEffect(() => onThemeChange((payload) => setApplied(payload.applied)), []);
   const [status, setStatus] = useState("");
 
   /** 当前生效值：有覆盖用覆盖，没有就读 tokens 算出来的值 */
@@ -57,10 +53,7 @@ export default function ThemeEditor() {
         <div className="settings__row">
           <div className="settings__text">
             <span className="settings__label">整套配色</span>
-            <span className="settings__desc">
-              换的是整个软件的样子（所有窗口）。「跟随主题」= 听当前场景主题的推荐；
-              下面单独调过的值始终优先。
-            </span>
+            <span className="settings__desc">换的是整个软件的样子；单独调过的值优先</span>
           </div>
           <div className="theme-editor__control">
             <select
@@ -68,21 +61,14 @@ export default function ThemeEditor() {
               value={choice}
               onChange={(e) => setChoice(e.target.value)}
             >
+              {/* 选项里只放名字 —— 说明在下拉里排一长串反而看不清 */}
               <option value="">跟随主题</option>
               {PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} · {p.desc}
+                  {p.name}
                 </option>
               ))}
             </select>
-          </div>
-        </div>
-        <div className="settings__row">
-          <div className="settings__text">
-            <span className="settings__label">现在生效</span>
-            <span className="settings__desc">
-              {presetName(applied || choice || DEFAULT_APPEARANCE)}{applied ? "（" + applied + "）" : "（默认预设）"}
-            </span>
           </div>
         </div>
       </div>
@@ -92,7 +78,7 @@ export default function ThemeEditor() {
         <div className="settings__row">
           <div className="settings__text">
             <span className="settings__label">配色模式</span>
-            <span className="settings__desc">深色主题是覆盖同一批变量，组件不用改</span>
+            <span className="settings__desc">切深色只换一组值，布局不变</span>
           </div>
           <div className="theme-editor__control">
             <select

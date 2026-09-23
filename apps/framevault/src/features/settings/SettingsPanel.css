@@ -96,8 +96,9 @@
   }
 
   .settings__spacer {
-    height: var(--fv-space-5);
+    height: var(--fv-space-4);
   }
+
 
   .settings__group-title {
     margin: var(--fv-space-5) 0 var(--fv-space-2);
@@ -117,12 +118,13 @@
     border-radius: var(--fv-radius-lg);
   }
 
+  /* 行矮一点：设置里几十行，省下来的高度比留白值钱 */
   .settings__row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--fv-space-5);
-    padding: var(--fv-space-4) 0;
+    gap: var(--fv-space-4);
+    padding: var(--fv-space-3) 0;
   }
 
   .settings__text {

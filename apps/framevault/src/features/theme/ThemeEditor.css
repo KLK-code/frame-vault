@@ -14,7 +14,7 @@
   }
 
   .theme-editor__select {
-    padding: 5px 8px;
+    padding: 4px 8px;
     border: 1px solid var(--fv-color-border);
     border-radius: var(--fv-radius-sm);
     background: var(--fv-color-bg);

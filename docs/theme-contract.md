@@ -119,7 +119,7 @@
 | 大图 / 视频预览 | `.lightbox`、`.lightbox__body`、`.lightbox__media`、`.lightbox__footer`、`.lightbox__bar`、`.lightbox__caption`、`.lightbox__unsupported`、`.lightbox__hint` |
 | 独立窗口 | `.window`、`.window__body` |
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
-| 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
+| 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__nav-label`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
 | 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
 | Markdown 输入控件 | `.md-field`、`.md-field__head`、`.md-field__bar`、`.md-field__btn`、`.md-field__modes`、`.md-field__mode`、`.md-field__input`、`.md-field__preview`、`.md-field__empty` |
 | 主题的 manifest 声明（`FieldDecl.note` / `SceneManifest.mediaNameTemplate`） | **承诺语义，不承诺字段名之外的形状**：`note: true` 的多行字段 = 这条记录的正文（落磁盘上的 `note.md`，不进 `entry.json`），一个主题最多一个；`mediaNameTemplate` = 媒体导入时的命名模板（纯数据，可用 `{date}` / `{scene}` / `{title}` / `{field:<key>}` / `{n}`），不声明就走核心默认 `{date}_{scene}_{n}`。两者都由核心渲染 / 执行，主题不写实现 |

@@ -515,8 +515,10 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 **输入侧（同一层）有两种编辑器，主题只挑"用哪个"**：
 
 - `MarkdownField.tsx` = textarea + 语法工具栏 + 编辑 / 预览切换。`SceneFields` 渲染多行字段时用的就是它，所以**所有主题自动都有**；
-- `MarkdownWysiwyg.tsx` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，装 `commonmark` + `gfm`）：边写边渲染、语法符号不出现。现在只有写作台用它，**`React.lazy` 按需加载**（它带着 ProseMirror 家族；实测静态引入会把主包从 417.9 KB 顶到约 752 KB，懒加载后是主包 417.9 KB + 独立 chunk 334.0 KB / gzip 102.1 KB，写作台之外一行都不下载）；
+- `MarkdownWysiwyg.tsx` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，装 `commonmark` + `gfm`）：边写边渲染、语法符号不出现。现在只有写作台用它，**`React.lazy` 按需加载**（它带着 ProseMirror 家族；实测静态引入会把主包从 417.9 KB 顶到约 752 KB，懒加载后是主包 417.97 KB + 独立 chunk 349.6 KB / gzip 107.4 KB —— 数字是 2026-09 加上 Live Source 与自装的 prosemirror-history 之后重新量的，写作台之外一行都不下载）；
 - **剪贴板是它最容易缺的那一半**：ProseMirror 默认只处理剪贴板里的 HTML，纯文本会被原样当字面文字 —— 粘一整篇 `.md` 进来就是一堆源码（实测：粘 `FrameVault_Technical_Architecture_zh-CN.md`、`AGENTS.md`、`theme-contract.md` 都是这样）。所以它自己接了 `EditorProps.handlePaste`，靠 `EditorView.someProp` 里"编辑器 props 先于插件"的顺序压过插件：纯文本、或来源（VS Code 的 `vscode-editor-data`）声明是 Markdown 的，用 `parserCtx` 解析成 Slice 再 `replaceSelection`；带 HTML 的富文本，只有当纯文本里带**块级** Markdown（`looksLikeMarkdown`，在 `src/markdown/parse.ts`）时才抢。复制出去交给 `@milkdown/kit/plugin/clipboard`，剪贴板里给的是 Markdown 文本 —— 两头对得上，笔记才能在这个软件和编辑器之间来回搬。
+
+- **光标所在块显示源码（Live Source）**：光标落进标题 / 段落 / 引用 / 列表项 / 表格时，**这一块**临时换成源码文本域（`## `、`> `、`- `、表格管道符、`**粗**`、`[链接](url)` 都看得见、直接改），光标离开再解析回节点、恢复渲染（Obsidian Live Preview 式）。实现全在 `MarkdownWysiwyg.tsx`：**不动 DOM 结构** —— 给这一块挂一条节点装饰 `display:none`，再在它位置上插一条 widget 装 `<textarea>`（跟 `@milkdown/components` 的代码块组件同一路数，不引 CodeMirror）。widget 的 `stopEvent` 让 PM 无视文本域里的一切事件，文本域拿焦点时 `view.hasFocus()` 也是 false，所以 PM 不会来抢 DOM 选区。源码态**不进 PM 的输入管线**：光标离开 / 文本域失焦时一次性提交**一个**事务，所以 Ctrl+Z 一步退回。Esc = 放弃这次源码编辑。
 
 **编辑引擎 ≠ 渲染引擎**：`MarkdownView` 负责"把 Markdown 显示成排版"（只读投影，核心唯一的渲染器，主题不许另写）；`MarkdownWysiwyg` 负责"让你不看见语法符号地打字"（可写，是全仓库唯一 import `@milkdown/*` 的地方）。两者之间只有磁盘上那一串 Markdown 文本，所以**记录用哪个编辑器敲的，磁盘格式、渲染器、主题都不知道**。
 
@@ -915,3 +917,10 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 把 `data-scene` 挂在 `.app-root` 上给主题选配色 | 功能主题连带改掉了整个软件的外观（标题栏 / 侧栏 / 设置窗口），三个主题看起来像三个 App | 外观挂 `:root[data-appearance]`（全窗口），`data-scene` 只挂**舞台容器**；功能主题的视觉只走巧思白名单（图标 / banner） |
 | 在共享组件的样式里写死某个主题 id | `SceneTree.css` 里 `[data-scene="builtin.travel"]` 那条：第四个主题（或第三方主题）**不报错、不提示**，只是少一条样式 | 共享组件里不许出现主题 id；要区分的观感做成 token（如 `--fv-nav-active-bg`），由**外观预设**给值 |
 | 用一次整文件写回改文档 | 读到一半就写回，会把文件尾部**整段截断**（本文件就栽过一次） | 改文档用定位替换（`edit` / 按行 splice），别用"读全文再写回"；写完 `tail` 看一眼尾部 |
+| 用 NodeView 给标题 / 段落 / 引用 / 列表项换 DOM | 这些块的排版规则（`li > p`、`.ProseMirror > *:first-child`…）全挂在 ProseMirror **默认生成的 DOM** 上，NodeView 必须多包一层壳，层级一变换样式就整片歪 | 结构一个字不动：`Decoration.node(...)` 挂 `display:none` 把这一块藏起来，`Decoration.widget(...)` 在它的位置插文本域 |
+| `doc.canReplace(from, to, ...)` 传文档位置 | 它的 `from` / `to` 是**第几个子节点**（下标），不是位置。传位置进去它要么瞎返回 `true` 放行非法替换（最后在 fitter 里炸 `RangeError: Index 7 out of range`），要么把合法编辑误判成不合法 | 要按位置试，就用真正的 `new ReplaceStep(from, to, slice).apply(doc).failed` —— 它跟后面那次提交走同一套规则 |
+| 源码态里按 Esc 退出，120ms 后又自己跳回源码态 | 退出只把状态清空，光标还停在原来那块上，进块定时器一响就把刚退出的那块又打开了 —— 看起来就是"Esc 没用" | 记一笔 `muted`（这个位置暂时别进去），光标一动就清掉 |
+| 退出源码态后 Ctrl+Z / 打字全落空 | 被聚焦的 `<textarea>` 一移除，焦点掉到 `<body>`，ProseMirror 再也收不到键盘事件 | 退出时 `view.focus()` 把焦点还给编辑器：退出 = 回到文档里 |
+| 以为 `.use(history)` 就有撤销栈 | `@milkdown/plugin-history` 的两个东西在这里都不生效：①它的 `$prose` provider 拿不到 `historyProviderConfig` 那个 slice，`prosemirror-history` 压根没进插件表（实测 `undo()` 直接返回 `false`，Ctrl+Z 静默无效）；②它的 `historyKeymap` 等 `KeymapReady` 之后才往 keymap 管理器里加，而编辑器状态那边一拿到 `KeymapReady` 就把 keymap 建好了 | 自己装、自己绑：`.use($prose(() => historyPlugin()))` + `.use($prose(() => keymap({ "Mod-z": undo, "Shift-Mod-z": redo, "Mod-y": redo })))`（都来自 `@milkdown/kit/prose/*`）。判据：处理函数里打印 `undo(state, dispatch, view)` 的返回值，`false` 就是 state 插件没进去 |
+| widget 的 `toDOM` 每次传一个新函数 | PM 靠**函数身份**判等（`WidgetType.eq` 比 `this.toDOM == other.toDOM`），不认识就把 DOM 拔了重插 —— 文本域一被移除就丢焦点和光标 | 把 `toDOM`（连同 `stopEvent`）存进那块的状态记录里，身份保持稳定，重复重画才会复用同一个元素 |
+| 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 热替换了组件代码，但 **Milkdown 编辑器实例只在挂载时创建一次**（`@milkdown/react` 的 `useEditor` 用 `useCallback(getEditor, [])` 缓存旧工厂），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的（2026-09 粘贴修复实测：坏条目创建于提交前 6 分钟，新实例粘贴正常） | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的粘一次**：判据函数（`looksLikeMarkdown`）跑通 ≠ 运行时粘贴通。另外，字面粘贴过的老条目存盘时语法字符已被序列化器转义（`\>`、`\*\*`、`\[…\]\(…\)`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |

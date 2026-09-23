@@ -1,4 +1,9 @@
-//! 场景（文件夹）命令。
+//! 文件夹与**主题**命令。
+//!
+//! - **文件夹**：带 `folder.json` 的目录，名字就是目录名（改名会连目录一起改，
+//!   除非用户自己手动改过 —— 那就永久不再自动改）；
+//! - **主题**：不带 `folder.json` 的一级目录（用户自己分的组）。**它不存字段**，
+//!   就是磁盘上的位置 —— 所以命令只有"建 / 改名 / 删"三个。
 //!
 //! 命令层是"适配器"：把前端传来的 JSON 参数翻译成领域层的调用，
 //! 再把领域对象翻译成前端好用的形状。这里唯一的规则是——不写业务规则，
@@ -8,8 +13,10 @@ use super::active_vault;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::{
-    self, delete_folder as delete_folder_meta, find_folder_dir, is_known_scene, list_folders,
-    new_id, next_order, read_folder, save_folder, FolderMeta, SceneInfo,
+    self, create_folder_in, create_topic as vault_create_topic, delete_folder as delete_folder_meta,
+    delete_topic as vault_delete_topic, find_folder_dir, is_known_scene, list_folders, new_id,
+    next_order, read_folder, rename_topic as vault_rename_topic, save_folder, topic_dir, FolderMeta,
+    SceneInfo,
 };
 use serde::Serialize;
 use tauri::State;
@@ -23,11 +30,14 @@ pub struct FolderNode {
     pub name: String,
     pub order: i64,
     pub pinned: bool,
-    /// 用户绑定的主题（可能为空 = 没绑定）
+    /// 用户绑定的场景（记录方式）；null = 没绑定，用内置「随心记」
     pub scene: Option<String>,
-    /// 实际生效的主题（没绑定就是 builtin.plain）
+    /// 实际生效的场景 id（没绑定就是内置随心记）
     pub effective_scene: String,
     pub scene_config: serde_json::Value,
+    /// 所属**主题**（外层目录名）；null = 直接摆在仓库根下，没有主题。
+    /// 派生数据（磁盘位置 → 这里的名字），不进 `folder.json`
+    pub topic: Option<String>,
 }
 
 impl From<FolderMeta> for FolderNode {
@@ -40,6 +50,7 @@ impl From<FolderMeta> for FolderNode {
             order: f.order,
             pinned: f.pinned,
             scene: f.scene,
+            topic: f.topic,
         }
     }
 }
@@ -48,36 +59,45 @@ fn to_nodes(vault_dir: &std::path::Path) -> AppResult<Vec<FolderNode>> {
     Ok(list_folders(vault_dir)?.into_iter().map(FolderNode::from).collect())
 }
 
-/// 场景列表（已排序：置顶 → order → 名称）。
-/// **前端按 `effectiveScene` 分组显示**，这就是"归类"的全部来源。
+/// 文件夹列表（已排序：置顶 → order → 名称）。每项都带着它所在的**主题**。
 #[tauri::command]
 pub fn list_folder_tree(state: State<'_, AppState>) -> AppResult<Vec<FolderNode>> {
     let vault_dir = active_vault(&state)?;
     to_nodes(&vault_dir)
 }
 
-/// 新建场景：起名 + 选主题，一步到位。
+/// 新建文件夹：起名 + 选场景 + 选放哪个主题下，一步到位。
+///
+/// `topic`：`Some("科研")` = 建在那个主题目录里；`None` = 直接建在仓库根下（**没有主题**）。
+/// 主题不存在会报错（前端应当先 `create_topic_cmd`）—— 不悄悄替用户建目录。
 #[tauri::command]
 pub fn create_folder(
     state: State<'_, AppState>,
     name: String,
     scene: Option<String>,
+    topic: Option<String>,
 ) -> AppResult<Vec<FolderNode>> {
     let vault_dir = active_vault(&state)?;
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Invalid("场景名称不能为空".into()));
+        return Err(AppError::Invalid("名称不能为空".into()));
     }
     if let Some(id) = scene.as_deref() {
         if !is_known_scene(id) {
-            return Err(AppError::Invalid(format!("未知主题：{id}")));
+            return Err(AppError::Invalid(format!("未知场景：{id}")));
         }
     }
+
+    let parent = match topic.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(topic_name) => topic_dir(&vault_dir, topic_name)
+            .ok_or_else(|| AppError::NotFound(format!("主题不存在：{topic_name}")))?,
+        None => vault_dir.clone(),
+    };
 
     let all = list_folders(&vault_dir)?;
     let order = next_order(&all);
     let folder = FolderMeta::new(&new_id(), &name, order, scene);
-    vault::create_folder(&vault_dir, &folder)?;
+    create_folder_in(&folder, &parent)?;
     to_nodes(&vault_dir)
 }
 
@@ -90,7 +110,7 @@ pub fn rename_folder(
     let vault_dir = active_vault(&state)?;
     let name = name.trim().to_string();
     if name.is_empty() {
-        return Err(AppError::Invalid("场景名称不能为空".into()));
+        return Err(AppError::Invalid("名称不能为空".into()));
     }
 
     let dir = find_folder_dir(&vault_dir, &id)?;
@@ -172,8 +192,48 @@ pub fn delete_folder(state: State<'_, AppState>, id: String) -> AppResult<Vec<Fo
     to_nodes(&vault_dir)
 }
 
-/// 已安装的主题列表（现在只有内置的普通记录）
+/// 可用的**场景**（记录方式）清单：随心记 / 认真写作 / 拍照打卡…
+/// 场景是代码（决定界面与录入怎么特化），所以清单来自内置注册表。
 #[tauri::command]
 pub fn list_scenes() -> Vec<SceneInfo> {
     vault::builtin_scenes()
+}
+
+/// **主题**清单：根下那些不带 `folder.json` 的一级目录（用户自己分的组）。
+/// 空主题（里面还没放文件夹）也要列出来，否则用户建完看不见它。
+#[tauri::command]
+pub fn list_topics(state: State<'_, AppState>) -> AppResult<Vec<String>> {
+    let vault_dir = active_vault(&state)?;
+    Ok(vault::topic_dirs(&vault_dir)
+        .into_iter()
+        .filter_map(|dir| dir.file_name().map(|n| n.to_string_lossy().to_string()))
+        .collect())
+}
+
+/// 新建主题 = 建一个目录（**不写任何文件**：主题没有字段，位置就是它自己）
+#[tauri::command]
+pub fn create_topic(state: State<'_, AppState>, name: String) -> AppResult<Vec<String>> {
+    let vault_dir = active_vault(&state)?;
+    vault_create_topic(&vault_dir, &name)?;
+    list_topics(state)
+}
+
+/// 主题改名 = 改目录名（里面的文件夹跟着换主题，因为它们的位置变了）
+#[tauri::command]
+pub fn rename_topic(
+    state: State<'_, AppState>,
+    name: String,
+    new_name: String,
+) -> AppResult<Vec<String>> {
+    let vault_dir = active_vault(&state)?;
+    vault_rename_topic(&vault_dir, &name, &new_name)?;
+    list_topics(state)
+}
+
+/// 删除主题：**里面还有东西就拒绝**（跟删文件夹同一条规矩）
+#[tauri::command]
+pub fn delete_topic(state: State<'_, AppState>, name: String) -> AppResult<Vec<String>> {
+    let vault_dir = active_vault(&state)?;
+    vault_delete_topic(&vault_dir, &name)?;
+    list_topics(state)
 }

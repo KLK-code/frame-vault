@@ -22,6 +22,36 @@
   color: var(--fv-color-muted);
 }
 
+/* 分组方式切换：三个小药丸，当前那个是实心的（纯展示层，不影响磁盘） */
+.scene-tree__modes {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: var(--fv-space-1);
+}
+
+.scene-tree__modes button {
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-family: inherit;
+  font-size: var(--fv-text-xs);
+  line-height: 1.4;
+}
+
+.scene-tree__modes button:hover {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+}
+
+.scene-tree__modes button.is-active {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+  font-weight: 600;
+}
+
 .scene-tree__add {
   display: grid;
   place-items: center;
@@ -140,6 +170,28 @@
   opacity: 0.7;
 }
 
+/* 主题的 ⋯（重命名 / 删除）：只在悬停这一组时露出来 */
+.scene-group__more {
+  margin-left: auto;
+  padding: 0 4px;
+  border: none;
+  border-radius: var(--fv-radius-sm);
+  background: transparent;
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  line-height: 1.2;
+  opacity: 0;
+}
+
+.scene-group:hover .scene-group__more {
+  opacity: 1;
+}
+
+.scene-group__more:hover {
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-text);
+}
+
 /* ── 场景行（= 一个文件夹）── */
 .scene-row-wrap {
   position: relative;
@@ -175,6 +227,18 @@
 .scene-row__name {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 平铺时行尾的主题小标签 —— 提醒它其实住在哪个目录下 */
+.scene-row__tag {
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: var(--fv-radius-sm);
+  background: var(--fv-color-surface-hover);
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-xs);
+  line-height: 1.6;
   white-space: nowrap;
 }
 

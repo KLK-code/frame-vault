@@ -5,14 +5,20 @@
 //! ```text
 //! <用户选的目录>/
 //! ├── vault.json                      身份文件（有它才算 Vault）
-//! ├── .framevault/trash/<entryId>/    删掉的记录挪这儿（撤销 = 挪回去）
-//! ├── 未归类/                          不属于任何场景的记录（根下**没有 folder.json** 的容器）
-//! └── <场景目录>/                      一级目录 + folder.json = 一个场景
-//!     └── 2026-09-22 早跑 3km/         二级目录 = 一条记录
-//!         ├── entry.json
-//!         ├── note.md
-//!         └── 2026-09-23_晨跑打卡_01.jpg
+//! ├── .framevault/trash/<原目录名>/    删掉的记录挪这儿（撤销 = 挪回去）
+//! ├── 科研/                            **主题**：一级目录且**没有 folder.json**（用户自己分的组）
+//! │   └── <文件夹>/                    主题里面才是文件夹（带 folder.json）
+//! │       └── 2026-09-22 早跑 3km/     再里面是记录
+//! │           ├── entry.json
+//! │           ├── note.md
+//! │           └── 2026-09-23_晨跑打卡_01.jpg
+//! ├── <文件夹>/                        也可以直接摆在根下 = **没有主题**
+//! └── 未归类/                          没有文件夹的记录（默认容器）
 //! ```
+//!
+//! **认目录只有一条规则**：一级目录带 `folder.json` = 文件夹；不带 = **容器**（主题）。
+//! 容器里既可以放文件夹（"这个主题下的文件夹"），也可以直接放记录（「未归类」就是这种）。
+//! 根下直接摆文件夹 = 没有主题 —— 分类是用户自己的事，App 不要求他分主题。
 //!
 //! 三条规矩：
 //! 1. **磁盘为准**：归属从物理位置派生 —— 记录在哪个场景目录里就是哪个场景的；
@@ -188,43 +194,118 @@ pub fn read_vault_meta(dir: &Path) -> AppResult<VaultMeta> {
 
 // ── 场景目录 ──
 
-/// 根下带 `folder.json` 的一级目录 = 场景
-pub fn scene_dirs(vault: &Path) -> Vec<PathBuf> {
+/// 根下**没有** `folder.json` 的一级目录 = **主题容器**（「未归类」也是其中之一）
+pub fn topic_dirs(vault: &Path) -> Vec<PathBuf> {
     root_dirs(vault)
         .into_iter()
-        .filter(|dir| folder_json_path(dir).is_file())
+        .filter(|dir| !folder_json_path(dir).is_file())
         .collect()
 }
 
-/// 根下**没有** `folder.json` 的一级目录 = 「未归类」容器（按结构识别，不按名字）
-pub fn uncategorized_dir(vault: &Path) -> Option<PathBuf> {
-    root_dirs(vault)
-        .into_iter()
-        .find(|dir| !folder_json_path(dir).is_file())
-}
+/// 所有文件夹：`(目录, 它在哪个主题下)`。根下直接摆的文件夹没有主题（`None`）。
+///
+/// 这是"主题 = 磁盘上的位置"这条规矩的唯一落点：**不存字段，只认目录**。
+pub fn folder_dirs(vault: &Path) -> Vec<(PathBuf, Option<String>)> {
+    let mut out = Vec::new();
 
-/// 拿「未归类」容器；仓库里没有就建一个（新建仓库时有，用户删了就得补回来）
-pub fn ensure_uncategorized(vault: &Path) -> AppResult<PathBuf> {
-    match uncategorized_dir(vault) {
-        Some(dir) => Ok(dir),
-        None => {
-            let dir = vault.join(UNCATEGORIZED);
-            fs::create_dir_all(&dir)?;
-            Ok(dir)
+    for dir in root_dirs(vault) {
+        if folder_json_path(&dir).is_file() {
+            out.push((dir, None)); // 根下直接摆 = 没有主题
+            continue;
+        }
+        let topic = dir.file_name().map(|n| n.to_string_lossy().to_string());
+        for child in child_dirs(&dir) {
+            if folder_json_path(&child).is_file() {
+                out.push((child, topic.clone()));
+            }
         }
     }
+
+    out
 }
 
-/// 按 id 找场景目录（扫一级目录里的 `folder.json`）
+/// 按名字找主题容器
+pub fn topic_dir(vault: &Path, name: &str) -> Option<PathBuf> {
+    let wanted = naming::sanitize(name);
+    topic_dirs(vault)
+        .into_iter()
+        .find(|dir| dir.file_name().map(|n| n.to_string_lossy().to_string()) == Some(wanted.clone()))
+}
+
+/// 新建主题：一个没有 `folder.json` 的目录（撞名加 ` (2)`）
+pub fn create_topic(vault: &Path, name: &str) -> AppResult<PathBuf> {
+    let name = naming::sanitize(name);
+    if name.is_empty() {
+        return Err(AppError::Invalid("主题名不能为空".into()));
+    }
+    let dir = vault.join(naming::unique_child_name(vault, &name, None));
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// 主题改名：就是改目录名（里面的文件夹跟着换主题 —— 因为它们的位置变了）
+pub fn rename_topic(vault: &Path, name: &str, new_name: &str) -> AppResult<PathBuf> {
+    let dir =
+        topic_dir(vault, name).ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
+    let new_name = naming::sanitize(new_name);
+    if new_name.is_empty() {
+        return Err(AppError::Invalid("主题名不能为空".into()));
+    }
+
+    let current = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    if current == new_name {
+        return Ok(dir);
+    }
+
+    let target = vault.join(naming::unique_child_name(vault, &new_name, None));
+    fs::rename(&dir, &target)?;
+    Ok(target)
+}
+
+/// 删除主题：**里面还有东西就拒绝**（跟删文件夹同一条规矩 —— 宁可让用户先处理）
+pub fn delete_topic(vault: &Path, name: &str) -> AppResult<()> {
+    let dir =
+        topic_dir(vault, name).ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
+
+    let inside: Vec<PathBuf> = child_dirs(&dir)
+        .into_iter()
+        .filter(|child| folder_json_path(child).is_file() || entry_json_path(child).is_file())
+        .collect();
+    if !inside.is_empty() {
+        return Err(AppError::Invalid(format!(
+            "「{name}」里还有 {} 项内容，请先把它们挪走或删掉",
+            inside.len()
+        )));
+    }
+
+    fs::remove_dir_all(&dir)?;
+    Ok(())
+}
+
+/// 拿「未归类」容器（**按名字**）：没有就建一个。
+///
+/// 为什么这里按名字、扫描却按结构：**扫描**是"磁盘上有什么就是什么"（任何容器都能装记录），
+/// 而**写路径**得有个说得准的落点 —— "没有文件夹的记录放哪儿"必须有确定答案，
+/// 不能随仓库里恰好有几个主题而变。
+pub fn ensure_uncategorized(vault: &Path) -> AppResult<PathBuf> {
+    let dir = topic_dir(vault, UNCATEGORIZED).unwrap_or_else(|| vault.join(UNCATEGORIZED));
+    fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// 按 id 找文件夹目录（根下 + 每个主题容器下的一级）
 pub fn find_folder_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
-    for dir in scene_dirs(vault) {
+    for (dir, _) in folder_dirs(vault) {
         if let Ok(folder) = read_json::<FolderMeta>(&folder_json_path(&dir)) {
             if folder.id == id {
                 return Ok(dir);
             }
         }
     }
-    Err(AppError::NotFound(format!("场景不存在：{id}")))
+    Err(AppError::NotFound(format!("文件夹不存在：{id}")))
 }
 
 // ── 记录 ──
@@ -233,6 +314,19 @@ pub fn find_folder_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
 /// 删场景前的"非空判定"靠它 —— 判据是**物理位置**，不管 `entry.json` 里的归属字段写了谁。
 pub fn entry_dirs_in(parent: &Path) -> Vec<PathBuf> {
     child_entry_dirs(parent)
+}
+
+fn child_dirs(parent: &Path) -> Vec<PathBuf> {
+    let Ok(items) = fs::read_dir(parent) else {
+        return Vec::new();
+    };
+    let mut out: Vec<PathBuf> = items
+        .flatten()
+        .map(|item| item.path())
+        .filter(|path| path.is_dir())
+        .collect();
+    out.sort();
+    out
 }
 
 fn child_entry_dirs(parent: &Path) -> Vec<PathBuf> {
@@ -249,21 +343,31 @@ fn child_entry_dirs(parent: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// 仓库里**活着的**记录目录：
-/// 每个场景目录下的二级目录、以及「未归类」容器 / 根下直接摆着的记录目录。
+/// 仓库里**活着的**记录目录，这四种位置都算：
+/// ① 根下文件夹里的记录；② 主题容器 → 文件夹 → 记录；③ 容器里直接摆的记录（未归类）；
+/// ④ 根下直接摆的记录（没有文件夹、也没有主题）。
 pub fn list_entry_dirs(vault: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
+
     for dir in root_dirs(vault) {
         if folder_json_path(&dir).is_file() {
-            out.extend(child_entry_dirs(&dir));
-        } else {
-            // 未归类容器（或用户把记录直接摆在根下）：自己也可能是记录
-            if entry_json_path(&dir).is_file() {
-                out.push(dir.clone());
+            out.extend(child_entry_dirs(&dir)); // ① 根下的文件夹
+            continue;
+        }
+
+        // 容器（主题），或"未归类"
+        if entry_json_path(&dir).is_file() {
+            out.push(dir.clone()); // ④ 直接摆在根下的一条记录
+        }
+        for child in child_dirs(&dir) {
+            if folder_json_path(&child).is_file() {
+                out.extend(child_entry_dirs(&child)); // ② 主题下的文件夹
+            } else if entry_json_path(&child).is_file() {
+                out.push(child); // ③ 容器里直接摆的记录
             }
-            out.extend(child_entry_dirs(&dir));
         }
     }
+
     out
 }
 
@@ -719,20 +823,28 @@ mod tests {
         assert!(ids.contains(&"e-root"));
     }
 
+    /// 「未归类」是**按名字**认的（写路径要一个说得准的落点）；
+    /// 而扫描是**按结构**（任何容器里的记录都算数）—— 两件事刻意分开。
     #[test]
-    fn uncategorized_container_is_recognized_by_structure_not_name() {
+    fn uncategorized_is_found_by_name_but_scanning_follows_structure() {
         let dir = temp_vault("uncat-rename");
         create_vault(&dir, "测试", "2026-01-01T00:00:00Z").unwrap();
 
-        // 用户把「未归类」改成了自己的名字
+        // 用户把「未归类」改成了自己的名字：扫描照样认里面的记录
         let renamed = dir.join("随便记记");
         fs::rename(dir.join(UNCATEGORIZED), &renamed).unwrap();
-        assert_eq!(uncategorized_dir(&dir).as_deref(), Some(renamed.as_path()));
+        let mut loose = Entry::new("e-1", "随记", "2026-09-01T08:00:00+08:00");
+        loose.day = "2026-09-01".into();
+        create_entry(&dir, &mut loose).unwrap();
+        fs::create_dir_all(&renamed).unwrap();
+        fs::rename(dir.join(UNCATEGORIZED).join("2026-09-01 随记"), renamed.join("2026-09-01 随记"))
+            .unwrap();
+        assert_eq!(list_entries(&dir).unwrap().len(), 1, "容器改了名也认得出里面的记录");
 
-        // 无场景记录照样有地方去
-        let mut entry = Entry::new("e-1", "随记", "2026-09-01T08:00:00+08:00");
-        create_entry(&dir, &mut entry).unwrap();
-        assert!(renamed.join("2026-09-01 随记").is_dir());
+        // 写路径仍然回到「未归类」（没有就补建一个）—— 落点必须确定
+        let slot = ensure_uncategorized(&dir).unwrap();
+        assert_eq!(slot, dir.join(UNCATEGORIZED));
+        assert!(slot.is_dir());
     }
 
     #[test]

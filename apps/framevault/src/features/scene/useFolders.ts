@@ -2,25 +2,43 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   bindFolderScene,
   createFolder as createFolderCmd,
+  createTopic as createTopicCmd,
   deleteFolder as deleteFolderCmd,
+  deleteTopic as deleteTopicCmd,
   listFolderTree,
   listScenes,
+  listTopics,
   onVaultChanged,
   renameFolder as renameFolderCmd,
+  renameTopic as renameTopicCmd,
   setFolderPinned,
   type FolderNode,
   type SceneInfo,
 } from "../../lib/api";
 
-/** 「场景树 + 写操作」的完整形状（两套骨架共用的那份数据） */
+/** 按主题分的一组：`topic` 为 null = 没有主题（直接摆在仓库根下的那些） */
+export type TopicGroup = {
+  topic: string | null;
+  folders: FolderNode[];
+};
+
+/** 「文件夹树 + 主题 + 写操作」的完整形状（两套骨架共用的那份数据） */
 export type FoldersApi = {
   folders: FolderNode[];
   scenes: SceneInfo[];
+  /** 主题清单（只给名字，空主题也在里面） */
+  topics: string[];
+  /** 按场景（记录方式）分组 —— 导航"按场景"那种排法 */
   groups: SceneGroup[];
+  /** 按主题分组 —— 导航"按主题"那种排法（磁盘的样子） */
+  topicGroups: TopicGroup[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
-  create: (name: string, scene: string | null) => Promise<boolean>;
+  create: (name: string, scene: string | null, topic: string | null) => Promise<boolean>;
+  createTopic: (name: string) => Promise<boolean>;
+  renameTopic: (name: string, newName: string) => Promise<boolean>;
+  deleteTopic: (name: string) => Promise<boolean>;
   rename: (id: string, name: string) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
   togglePinned: (id: string, pinned: boolean) => Promise<boolean>;
@@ -93,14 +111,20 @@ export type SceneGroup = {
 export function useFolders(): FoldersApi {
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [scenes, setScenes] = useState<SceneInfo[]>([]);
+  const [topics, setTopics] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const [tree, sceneList] = await Promise.all([listFolderTree(), listScenes()]);
+      const [tree, sceneList, topicList] = await Promise.all([
+        listFolderTree(),
+        listScenes(),
+        listTopics(),
+      ]);
       setFolders(tree);
       setScenes(sceneList);
+      setTopics(topicList);
       setError(null);
     } catch (err) {
       setError(String(err));
@@ -130,9 +154,38 @@ export function useFolders(): FoldersApi {
   }, []);
 
   const create = useCallback(
-    (name: string, scene: string | null) => apply(() => createFolderCmd(name, scene)),
+    (name: string, scene: string | null, topic: string | null) =>
+      apply(() => createFolderCmd(name, scene, topic)),
     [apply],
   );
+
+  // 主题没有元数据，"改"只改目录名 —— 但那样会让里面的文件夹换主题，
+  // 所以这三个动作做完都要**连文件夹树一起重取**（apply 只换了 folders，topics 要另取）
+  const applyTopics = useCallback(
+    async (run: () => Promise<string[]>) => {
+      try {
+        setTopics(await run());
+        setFolders(await listFolderTree());
+        setError(null);
+        return true;
+      } catch (err) {
+        setError(String(err));
+        return false;
+      }
+    },
+    [],
+  );
+
+  const createTopic = useCallback((name: string) => applyTopics(() => createTopicCmd(name)), [
+    applyTopics,
+  ]);
+  const renameTopic = useCallback(
+    (name: string, newName: string) => applyTopics(() => renameTopicCmd(name, newName)),
+    [applyTopics],
+  );
+  const deleteTopic = useCallback((name: string) => applyTopics(() => deleteTopicCmd(name)), [
+    applyTopics,
+  ]);
 
   const rename = useCallback(
     (id: string, name: string) => apply(() => renameFolderCmd(id, name)),
@@ -184,14 +237,45 @@ export function useFolders(): FoldersApi {
     return out;
   }, [folders, scenes]);
 
+  /**
+   * 分组之二：**按主题**（= 磁盘的样子）。
+   * 主题按后端的目录顺序排，空主题也占一格；"没有主题"那一组永远排在最后。
+   */
+  const topicGroups = useMemo<TopicGroup[]>(() => {
+    const byTopic = new Map<string | null, FolderNode[]>();
+    for (const folder of folders) {
+      const list = byTopic.get(folder.topic) ?? [];
+      list.push(folder);
+      byTopic.set(folder.topic, list);
+    }
+
+    const out: TopicGroup[] = topics.map((topic) => ({
+      topic,
+      folders: byTopic.get(topic) ?? [],
+    }));
+    // 认不出的目录名（理论上不该有）与"没有主题"，一起放最后
+    const loose = [...byTopic.keys()].filter((key) => key !== null && !topics.includes(key));
+    for (const key of [...loose, null]) {
+      const list = byTopic.get(key);
+      if (list) out.push({ topic: key, folders: list });
+    }
+
+    return out;
+  }, [folders, topics]);
+
   return {
     folders,
     scenes,
+    topics,
     groups,
+    topicGroups,
     loading,
     error,
     reload,
     create,
+    createTopic,
+    renameTopic,
+    deleteTopic,
     rename,
     remove,
     togglePinned,

@@ -41,17 +41,25 @@ export type Entry = {
   deletedAt: string | null;
 };
 
-/** 一个场景 = 一个文件夹 + 绑定的主题。仓库层面是平的，没有父子关系。 */
+/**
+ * 一个**文件夹** = 一堆记录 + 绑定的**场景**（记录方式）。
+ *
+ * 它住在**主题**目录下（`topic`），或者直接摆在仓库根下（`topic: null`）。
+ * 主题**不存字段**：`topic` 是 Rust 从目录位置算出来的（磁盘为准），
+ * 所以"在资源管理器里把它拖到别的主题下"就是换主题。
+ */
 export type FolderNode = {
   id: string;
   name: string;
   order: number;
   pinned: boolean;
-  /** 用户自己绑的主题；null = 没绑，用内置普通记录 */
+  /** 用户自己绑的场景（记录方式）；null = 没绑，用内置「随心记」 */
   scene: string | null;
-  /** 实际生效的主题 id（Rust 已经算好，前端不重复推导） */
+  /** 实际生效的场景 id（Rust 已经算好，前端不重复推导） */
   effectiveScene: string;
   sceneConfig: Record<string, unknown>;
+  /** 所属**主题**（外层目录名）；null = 没有主题（直接摆在仓库根下） */
+  topic: string | null;
 };
 
 export type SceneInfo = {
@@ -149,8 +157,26 @@ export function onVaultChanged(handler: () => void): () => void {
 /** 全部场景，已排序（置顶 → order → 名称）。**分组是前端的事**。 */
 export const listFolderTree = () => invoke<FolderNode[]>("list_folder_tree");
 
-export const createFolder = (name: string, scene: string | null = null) =>
-  invoke<FolderNode[]>("create_folder", { name, scene });
+/**
+ * 新建文件夹：`topic` 给主题名 = 建在那个主题目录里，给 null = 直接建在仓库根下（没有主题）。
+ * 主题不存在会报错（前端应当先 `createTopic`）—— 不会悄悄替用户建目录。
+ */
+export const createFolder = (
+  name: string,
+  scene: string | null = null,
+  topic: string | null = null,
+) => invoke<FolderNode[]>("create_folder", { name, scene, topic });
+
+/**
+ * **主题**：根下不带 `folder.json` 的一级目录（用户自己分的组）。
+ * 它没有任何元数据 —— 位置就是它自己，所以只有"建 / 改名 / 删"三个动作。
+ * 空主题（里面还没放文件夹）也会列出来，否则用户建完看不见它。
+ */
+export const listTopics = () => invoke<string[]>("list_topics");
+export const createTopic = (name: string) => invoke<string[]>("create_topic", { name });
+export const renameTopic = (name: string, newName: string) =>
+  invoke<string[]>("rename_topic", { name, newName });
+export const deleteTopic = (name: string) => invoke<string[]>("delete_topic", { name });
 
 export const renameFolder = (id: string, name: string) =>
   invoke<FolderNode[]>("rename_folder", { id, name });

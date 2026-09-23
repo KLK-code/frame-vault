@@ -4,10 +4,10 @@
 //! 这个文件只做一件事：**把整个生命周期连起来跑，并断言磁盘上真的长成那样**。
 
 use framevault_lib::vault::{
-    create_entry, create_folder, create_vault, entry_json_path, import_into_entry, list_entries,
-    list_folders, media_file_stem, move_entry_to_slot, read_entry, read_folder, restore_entry,
-    save_folder, trash_entry, write_entry, write_json_atomic, Entry, FolderMeta, NameVars,
-    SCHEMA_VERSION, UNCATEGORIZED,
+    create_entry, create_folder_in, create_topic, create_vault, delete_topic, entry_json_path,
+    import_into_entry, list_entries, list_folders, media_file_stem, move_entry_to_slot, read_entry,
+    read_folder, rename_topic, restore_entry, save_folder, trash_entry, write_entry,
+    write_json_atomic, Entry, FolderMeta, NameVars, SCHEMA_VERSION, UNCATEGORIZED,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -51,7 +51,7 @@ fn full_lifecycle_produces_the_readable_layout() {
 
     // ── 2. 新建场景：一个目录 + folder.json ──
     let folder = FolderMeta::new("f-run", "晨跑/打卡", 0, Some("builtin.challenge".into()));
-    let scene_dir = create_folder(&vault, &folder).unwrap();
+    let scene_dir = create_folder_in(&folder, &vault).unwrap();
     assert_eq!(
         scene_dir.file_name().unwrap().to_string_lossy(),
         "晨跑_打卡",
@@ -142,9 +142,11 @@ fn full_lifecycle_produces_the_readable_layout() {
     assert_eq!(kept, manual, "手动改过名的记录永久保留那个名字");
 
     // ── 7. 换场景 = 真的搬家 ──
-    let travel = create_folder(
-        &vault,
-        &FolderMeta::new("f-travel", "旅行", 1, Some("builtin.travel".into())),
+    let travel_parent = vault.join("旅行");
+    fs::create_dir_all(&travel_parent).unwrap();
+    let travel = create_folder_in(
+        &FolderMeta::new("f-travel", "旅行", 1, None),
+        &travel_parent,
     )
     .unwrap();
     let landing = move_entry_to_slot(&vault, &kept, Some("f-travel")).unwrap();
@@ -198,13 +200,78 @@ fn full_lifecycle_produces_the_readable_layout() {
     assert_eq!(read_folder(&vault, "f-run").unwrap().name, "晨跑_打卡");
 }
 
+/// 主题层：外层一个目录（不带 folder.json），里面才是文件夹 —— 磁盘只多这一层，
+/// `folder.json` 一个字段都不加（主题由位置派生）。
+#[test]
+fn topic_layer_is_just_a_directory() {
+    let vault = temp_vault("topics");
+    create_vault(&vault, "测试", "2026-09-23T10:00:00+08:00").unwrap();
+
+    // 建两个主题、一个根下的文件夹（没有主题）
+    let lab = create_topic(&vault, "科研").unwrap();
+    create_topic(&vault, "打卡").unwrap();
+    let at_root = create_folder_in(&FolderMeta::new("f-root", "随手记", 0, None), &vault).unwrap();
+    let under = create_folder_in(
+        &FolderMeta::new("f-lab", "论文笔记", 1, None),
+        &lab,
+    )
+    .unwrap();
+
+    assert!(!lab.join("folder.json").exists(), "主题不写标记文件");
+    assert!(under.join("folder.json").is_file());
+
+    // 记录照旧住在文件夹里
+    let mut entry = Entry::new("e-1", "第一篇", "2026-09-23T21:00:00+08:00");
+    entry.day = "2026-09-23".into();
+    entry.folder_id = Some("f-lab".into());
+    entry.set_note("# 第一次消融实验");
+    create_entry(&vault, &mut entry).unwrap();
+    assert!(under.join("2026-09-23 第一篇").join("note.md").is_file());
+
+    // 列表：谁在哪个主题下，一眼看得出来
+    let folders = list_folders(&vault).unwrap();
+    let topic_of = |id: &str| folders.iter().find(|f| f.id == id).unwrap().topic.clone();
+    assert_eq!(topic_of("f-lab"), Some("科研".to_string()));
+    assert_eq!(topic_of("f-root"), None, "根下的文件夹没有主题");
+
+    // 主题改名 = 改目录名；里面的文件夹跟着换主题（位置变了）
+    rename_topic(&vault, "科研", "实验室").unwrap();
+    assert!(!vault.join("科研").exists());
+    assert!(vault.join("实验室").join("论文笔记").join("folder.json").is_file());
+    assert_eq!(
+        list_folders(&vault).unwrap().iter().find(|f| f.id == "f-lab").unwrap().topic,
+        Some("实验室".to_string())
+    );
+
+    // 空主题能删；有内容的主题删不掉
+    delete_topic(&vault, "打卡").unwrap();
+    let err = delete_topic(&vault, "实验室").unwrap_err().to_string();
+    assert!(err.contains("还有 1 项内容"), "{err}");
+
+    // 在资源管理器里把文件夹拖到根下 = 它没有主题了（磁盘为准）
+    fs::rename(
+        vault.join("实验室").join("论文笔记"),
+        vault.join("论文笔记"),
+    )
+    .unwrap();
+    assert_eq!(
+        list_folders(&vault).unwrap().iter().find(|f| f.id == "f-lab").unwrap().topic,
+        None
+    );
+
+    println!("--- {}", vault.display());
+    for dir in [&vault, &vault.join("实验室"), &at_root] {
+        println!("{} → {:?}", dir.display(), names(dir));
+    }
+}
+
 #[test]
 fn scene_rename_follows_the_user() {
     let vault = temp_vault("scene-rename");
     create_vault(&vault, "测试", "2026-09-22T10:00:00+08:00").unwrap();
 
     let folder = FolderMeta::new("f-1", "晨跑打卡", 0, None);
-    let dir = create_folder(&vault, &folder).unwrap();
+    let dir = create_folder_in(&folder, &vault).unwrap();
 
     // 应用内改名 → 目录跟着走
     let mut renamed = read_folder(&vault, "f-1").unwrap();

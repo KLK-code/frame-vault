@@ -40,7 +40,22 @@ function readWidth(): number {
  * 中间那条可拖动的分隔条只影响显示（宽度记在 localStorage），不是数据。
  */
 function DesktopShell({ tree, selected, scene }: SceneShellProps) {
-  const { scenes, groups, error, create, rename, remove, togglePinned, bindScene } = tree;
+  const {
+    folders,
+    scenes,
+    topics,
+    groups,
+    topicGroups,
+    error,
+    create,
+    rename,
+    remove,
+    togglePinned,
+    bindScene,
+    createTopic,
+    renameTopic,
+    deleteTopic,
+  } = tree;
   const { activeId, setActiveId, active } = selected;
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
   const dragging = useRef(false);
@@ -83,8 +98,8 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
 
   async function handleDelete(folder: { id: string; name: string }) {
     const ok = await confirm(
-      `删除场景「${folder.name}」？\n里面的记录不会被删除，但会失去归属。`,
-      "删除场景",
+      `删除文件夹「${folder.name}」？\n里面的记录不会被删除，但会失去归属。`,
+      "删除文件夹",
     );
     if (!ok) return false;
     return remove(folder.id);
@@ -97,7 +112,10 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
       <main className="app">
         <aside className="sidebar" style={{ width: sidebarWidth }}>
           <SceneTree
+            folders={folders}
             groups={groups}
+            topicGroups={topicGroups}
+            topics={topics}
             scenes={scenes}
             activeId={activeId}
             onSelect={setActiveId}
@@ -106,6 +124,9 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
             onDelete={handleDelete}
             onTogglePinned={(folder) => togglePinned(folder.id, !folder.pinned)}
             onBindScene={bindScene}
+            onCreateTopic={(name) => createTopic(name)}
+            onRenameTopic={(topic, next) => renameTopic(topic, next)}
+            onDeleteTopic={(topic) => deleteTopic(topic)}
           />
 
           {error && <p className="sidebar__error">{error}</p>}

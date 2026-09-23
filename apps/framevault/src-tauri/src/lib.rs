@@ -57,6 +57,10 @@ pub fn run() {
             commands::folder::set_folder_pinned,
             commands::folder::bind_folder_scene,
             commands::folder::list_scenes,
+            commands::folder::list_topics,
+            commands::folder::create_topic,
+            commands::folder::rename_topic,
+            commands::folder::delete_topic,
             // 记录
             commands::entry::new_id,
             commands::entry::save_entry,

@@ -53,15 +53,30 @@ function VaultEntry({ onClick }: { onClick: () => void }) {
  * 2. 拇指可达 → 主要切换放在底部，场景切换放在顶部（点开才是整屏列表）。
  */
 export default function MobileShell({ tree, selected, scene }: SceneShellProps) {
-  const { scenes, groups, error, create, rename, remove, togglePinned, bindScene } = tree;
+  const {
+    folders,
+    scenes,
+    topics,
+    groups,
+    topicGroups,
+    error,
+    create,
+    rename,
+    remove,
+    togglePinned,
+    bindScene,
+    createTopic,
+    renameTopic,
+    deleteTopic,
+  } = tree;
   const { activeId, setActiveId, active } = selected;
   const [tab, setTab] = useState<Tab>("record");
   const [sheet, setSheet] = useState<Sheet>(null);
 
   async function handleDelete(folder: { id: string; name: string }) {
     const ok = await confirm(
-      "删除场景「" + folder.name + "」？\n里面的记录不会被删除，但会失去归属。",
-      "删除场景",
+      "删除文件夹「" + folder.name + "」？\n里面的记录不会被删除，但会失去归属。",
+      "删除文件夹",
     );
     if (!ok) return false;
     return remove(folder.id);
@@ -79,7 +94,7 @@ export default function MobileShell({ tree, selected, scene }: SceneShellProps) 
       <div className="mobile">
         <header className="mobile__bar">
         <button className="mobile__scene" onClick={() => setSheet("scenes")}>
-          <span className="mobile__scene-name">{active?.name ?? "选择场景"}</span>
+          <span className="mobile__scene-name">{active?.name ?? "选择文件夹"}</span>
           {scene && <span className="mobile__scene-theme">{scene.name}</span>}
           <span className="mobile__caret">▾</span>
         </button>
@@ -122,7 +137,7 @@ export default function MobileShell({ tree, selected, scene }: SceneShellProps) 
       {sheet === "scenes" && (
         <div className="mobile__sheet" role="dialog" aria-modal="true">
           <div className="mobile__sheet-head">
-            <span className="mobile__sheet-title">场景</span>
+            <span className="mobile__sheet-title">文件夹</span>
             <button className="mobile__sheet-done" onClick={() => setSheet(null)}>
               完成
             </button>
@@ -132,7 +147,10 @@ export default function MobileShell({ tree, selected, scene }: SceneShellProps) 
 
           <div className="mobile__sheet-body">
             <SceneTree
+              folders={folders}
               groups={groups}
+              topicGroups={topicGroups}
+              topics={topics}
               scenes={scenes}
               activeId={activeId}
               onSelect={(id) => {
@@ -144,6 +162,9 @@ export default function MobileShell({ tree, selected, scene }: SceneShellProps) 
               onDelete={handleDelete}
               onTogglePinned={(folder) => togglePinned(folder.id, !folder.pinned)}
               onBindScene={bindScene}
+              onCreateTopic={(name) => createTopic(name)}
+              onRenameTopic={(topic, next) => renameTopic(topic, next)}
+              onDeleteTopic={(topic) => deleteTopic(topic)}
             />
           </div>
         </div>

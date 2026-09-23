@@ -73,7 +73,7 @@ pub fn add_vault(
     vault_list(app)
 }
 
-/// 在指定目录里创建一个新 Vault（可以"收养"已经有 entries/ 的目录）
+/// 在指定目录里创建一个新 Vault（会预建「未归类」容器与回收站目录）
 #[tauri::command]
 pub fn create_vault(
     app_handle: tauri::AppHandle,

@@ -1,22 +1,25 @@
 //! 媒体（照片 / 视频）领域。
 //!
-//! 布局（和记录一样**扁平**）：
+//! 布局（v2「人可读层级」）：**媒体物理上住在记录目录里**，和那条记录的
+//! `entry.json` / `note.md` 摆在一起：
 //!
 //! ```text
-//! <vault>/media/<media-id>/
-//! ├── orig.jpg     原始文件本体，导入后**不可变**（PRD FV-SYN-003）
-//! └── meta.json    元数据：原始文件名、尺寸、哈希、挂在哪条记录上
+//! <场景目录>/<记录目录>/
+//! ├── entry.json                       元数据（含 media[]，这张照片的事实就在里面）
+//! ├── note.md                          正文
+//! └── 2026-09-23_晨跑打卡_01.jpg        媒体本体：导入时按场景的模板命名
 //! ```
 //!
 //! 三条刻意的设计：
-//! 1. **磁盘名用 `orig.<ext>`，不用用户的原文件名**——导入路径与存储分离（PRD §6.1），
-//!    避开中文 / 空格 / 重名 / 大小写各种麻烦；原名只留在 meta 里做展示。
-//! 2. **换归属 = 改 meta 里的 `entry_id`**，不移动几 GB 的文件，同步工具也只看一个文件变。
-//! 3. **缩略图不进 Vault**——它是可重建缓存（PRD §9），放本机数据目录；这里只提供生成函数，
-//!    存哪由命令层决定（领域层不认识应用数据目录）。
+//! 1. **文件名在导入那一刻定一次**，之后永不自动改 —— 用户手动改名天然被尊重（"系统不覆盖"）；
+//!    真实文件名记在 `MediaMeta.file` 里，改名不影响任何索引（缩略图按媒体 id 存）。
+//! 2. **归属 = 物理位置**：媒体住哪条记录的目录里就是哪条记录的，不再有 `entry_id` 字段，
+//!    也不再有全局 `media/` 目录。
+//! 3. **缩略图不进 Vault** —— 它是可重建缓存，放本机数据目录；这里只提供生成函数。
 
+use super::id::new_id;
 use super::model::SCHEMA_VERSION;
-use super::storage::{read_json, write_json_atomic};
+use super::naming::{self, NameVars};
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -24,40 +27,24 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-pub fn media_dir(vault: &Path) -> PathBuf {
-    vault.join("media")
-}
+/// 认作"媒体"的扩展名（对账时用它区分"用户顺手放进来的照片"和"别的文件"）
+const MEDIA_EXTS: &[&str] = &[
+    "jpg", "jpeg", "jpe", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif", "avif", "mp4",
+    "mov", "m4v", "webm", "avi", "mkv",
+];
 
-pub fn media_item_dir(vault: &Path, id: &str) -> PathBuf {
-    media_dir(vault).join(id)
-}
-
-pub fn media_meta_path(vault: &Path, id: &str) -> PathBuf {
-    media_item_dir(vault, id).join("meta.json")
-}
-
-/// 原始文件在磁盘上的名字（与导入路径无关）
-pub fn original_file_name(ext: &str) -> String {
-    if ext.is_empty() {
-        "orig".to_string()
-    } else {
-        format!("orig.{ext}")
-    }
-}
-
-pub fn original_path(vault: &Path, id: &str, ext: &str) -> PathBuf {
-    media_item_dir(vault, id).join(original_file_name(ext))
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaMeta {
     pub schema_version: u32,
     pub id: String,
-    /// 用户原本的文件名，只用于展示
+    /// 磁盘上的实际文件名（住在记录目录里）。**改名后这里跟着变，别处不用管**
+    #[serde(default)]
+    pub file: String,
+    /// 用户导入时的原始文件名，只用于展示（磁盘上已经不是这个名字了）
     #[serde(default)]
     pub name: String,
-    /// 小写扩展名（jpg / png / mp4 …），磁盘上的 `orig.<ext>` 就是它
+    /// 小写扩展名（jpg / png / mp4 …）
     #[serde(default)]
     pub ext: String,
     #[serde(default)]
@@ -73,12 +60,10 @@ pub struct MediaMeta {
     /// 读不到就是 None —— 打卡墙、日历都该退回 added_at，绝不能瞎猜。
     #[serde(default)]
     pub taken_at: Option<String>,
-    /// sha256：将来去重与同步校验用（PRD FV-MED-005）
+    /// sha256：将来去重与同步校验用（PRD FV-MED-005）。
+    /// 用户直接拷进来的文件（对账时收养的）算不出这个值，留空。
     #[serde(default)]
     pub hash: String,
-    /// 挂在哪条记录上；None = 导入了但还没整理
-    #[serde(default)]
-    pub entry_id: Option<String>,
     /// 导入时间（由调用方给，Rust 不引时钟依赖）
     #[serde(default)]
     pub added_at: String,
@@ -87,6 +72,11 @@ pub struct MediaMeta {
 impl MediaMeta {
     pub fn is_image(&self) -> bool {
         self.mime.starts_with("image/")
+    }
+
+    /// 媒体本体在记录目录里的完整路径
+    pub fn path_in(&self, entry_dir: &Path) -> PathBuf {
+        entry_dir.join(&self.file)
     }
 }
 
@@ -109,6 +99,11 @@ pub fn guess_mime(ext: &str) -> &'static str {
         "mkv" => "video/x-matroska",
         _ => "application/octet-stream",
     }
+}
+
+/// 这个扩展名算不算媒体？（对账时用）
+pub fn is_media_ext(ext: &str) -> bool {
+    MEDIA_EXTS.contains(&ext)
 }
 
 /// image 这个库能解出来的格式（heic / avif 不在其中 → 尺寸留空、不生成缩略图）
@@ -188,35 +183,32 @@ pub fn normalize_exif_datetime(raw: &str) -> Option<String> {
     ))
 }
 
-pub fn read_media(vault: &Path, id: &str) -> AppResult<MediaMeta> {
-    read_json(&media_meta_path(vault, id))
-}
-
-pub fn write_media(vault: &Path, media: &MediaMeta) -> AppResult<PathBuf> {
-    let path = media_meta_path(vault, &media.id);
-    write_json_atomic(&path, media)?;
-    Ok(path)
-}
-
-/// 导入一个文件：**复制**进 Vault（原文件不动），记下大小 / 哈希 / 尺寸。
+/// 导入一个文件：**复制**进记录目录（原文件不动），按模板命名，记下大小 / 哈希 / 尺寸。
 ///
-/// 失败时清理掉半成品目录，不留"有目录没文件"的垃圾。
-pub fn import_media(
-    vault: &Path,
-    id: &str,
+/// 失败时清掉已经拷进去的那半个文件，不留"有条目没文件"的垃圾。
+pub fn import_into_entry(
+    entry_dir: &Path,
     source: &Path,
+    template: Option<&str>,
+    vars: &NameVars,
     added_at: &str,
 ) -> AppResult<MediaMeta> {
     if !source.is_file() {
         return Err(AppError::Invalid(format!("不是文件：{}", source.display())));
     }
+    if !entry_dir.is_dir() {
+        return Err(AppError::NotFound(format!(
+            "记录目录不存在：{}",
+            entry_dir.display()
+        )));
+    }
 
     let ext = normalize_ext(source);
-    let dir = media_item_dir(vault, id);
-    fs::create_dir_all(&dir)?;
+    let stem = naming::media_file_stem(template, vars);
+    let file = naming::unique_child_name(entry_dir, &stem, Some(&ext));
+    let dest = entry_dir.join(&file);
 
     let result = (|| -> AppResult<MediaMeta> {
-        let dest = original_path(vault, id, &ext);
         fs::copy(source, &dest)?;
 
         let bytes = fs::metadata(&dest)?.len();
@@ -233,9 +225,10 @@ pub fn import_media(
             None
         };
 
-        let meta = MediaMeta {
+        Ok(MediaMeta {
             schema_version: SCHEMA_VERSION,
-            id: id.to_string(),
+            id: new_id(),
+            file,
             name: source
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
@@ -247,18 +240,77 @@ pub fn import_media(
             height: size.map(|(_, h)| h),
             taken_at,
             hash,
-            entry_id: None,
             added_at: added_at.to_string(),
-        };
-
-        write_media(vault, &meta)?;
-        Ok(meta)
+        })
     })();
 
     if result.is_err() {
-        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::remove_file(&dest);
     }
     result
+}
+
+/// 对账（§5）：记录目录里**多出来的**媒体文件 → 收养进 `media[]`。
+///
+/// 只记我们真知道的事实（文件名 / 大小 / 扩展名 / MIME）—— **不算哈希、不解码尺寸**：
+/// 用户在资源管理器里丢进来的照片，扫描时不该让我们去读一遍几百兆的视频。
+/// 返回新收养的文件名（给调用方判断要不要写盘）。
+pub fn adopt_loose_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Vec<String> {
+    let known: Vec<String> = media.iter().map(|m| m.file.clone()).collect();
+    let mut adopted = Vec::new();
+
+    let Ok(items) = fs::read_dir(entry_dir) else {
+        return adopted;
+    };
+
+    for item in items.flatten() {
+        let path = item.path();
+        if !path.is_file() {
+            continue;
+        }
+        let file = match path.file_name() {
+            Some(name) => name.to_string_lossy().to_string(),
+            None => continue,
+        };
+        // 标记文件与正文不算媒体；已经收过的跳过
+        if file == naming::ENTRY_FILE
+            || file == naming::NOTE_FILE
+            || file.ends_with(".tmp")
+            || known.contains(&file)
+        {
+            continue;
+        }
+
+        let ext = normalize_ext(&path);
+        if !is_media_ext(&ext) {
+            continue; // 别的文件一律不动（宽容条款）
+        }
+
+        media.push(MediaMeta {
+            schema_version: SCHEMA_VERSION,
+            id: new_id(),
+            file: file.clone(),
+            name: file.clone(),
+            ext: ext.clone(),
+            mime: guess_mime(&ext).to_string(),
+            bytes: fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+            width: None,
+            height: None,
+            taken_at: None,
+            hash: String::new(),
+            added_at: String::new(),
+        });
+        adopted.push(file);
+    }
+
+    adopted
+}
+
+/// 对账的另一半：`media[]` 里有、磁盘上却没有的 → 剔除（返回被剔除的个数）
+pub fn drop_missing_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> usize {
+    let before = media.len();
+    media.retain(|m| !m.file.is_empty() && entry_dir.join(&m.file).is_file());
+    before - media.len()
 }
 
 /// 生成缩略图到指定路径（**目标目录由调用方给**，领域层不认识应用数据目录）。
@@ -277,109 +329,184 @@ pub fn write_thumbnail(source: &Path, dest: &Path, max: u32) -> AppResult<()> {
     Ok(())
 }
 
-/// 列出媒体（新的在前）。给了 `entry_id` 就只看那条记录的。
-pub fn list_media(vault: &Path, entry_id: Option<&str>) -> AppResult<Vec<MediaMeta>> {
-    let dir = media_dir(vault);
-    if !dir.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    let mut out = Vec::new();
-    for item in fs::read_dir(&dir)? {
-        let path = item?.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let file = path.join("meta.json");
-        if !file.is_file() {
-            continue;
-        }
-        match read_json::<MediaMeta>(&file) {
-            Ok(media) => {
-                if entry_id.is_none() || media.entry_id.as_deref() == entry_id {
-                    out.push(media);
-                }
-            }
-            Err(err) => eprintln!("[vault] 跳过损坏的 media {}：{err}", file.display()),
-        }
-    }
-
-    out.sort_by(|a, b| b.added_at.cmp(&a.added_at).then(a.id.cmp(&b.id)));
-    Ok(out)
+/// 整体排序：新的在前（没有导入时间的排最后 —— 那是收养进来的、我们不知道时间）
+pub fn sort_media(list: &mut [MediaMeta]) {
+    list.sort_by(|a, b| {
+        b.added_at
+            .cmp(&a.added_at)
+            .then_with(|| a.file.cmp(&b.file))
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn temp_vault(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("framevault-media-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
     }
 
+    fn vars() -> NameVars {
+        NameVars {
+            date: "2026-04-01".into(),
+            scene: "晨跑打卡".into(),
+            title: "早跑 3km".into(),
+            n: 1,
+            ..Default::default()
+        }
+    }
+
     #[test]
-    fn import_copies_probes_and_hashes() {
-        let vault = temp_vault("import");
-        let source = vault.join("我的照片 01.png");
+    fn import_copies_probes_hashes_and_names_from_template() {
+        let entry_dir = temp_dir("import");
+        let source = entry_dir.join("我的照片 01.png");
         image::RgbImage::new(4, 3).save(&source).unwrap();
         let source_bytes = fs::metadata(&source).unwrap().len();
 
-        let meta = import_media(&vault, "m-1", &source, "2026-04-01T10:00:00Z").unwrap();
+        let meta =
+            import_into_entry(&entry_dir, &source, None, &vars(), "2026-04-01T10:00:00Z").unwrap();
 
-        assert_eq!(meta.name, "我的照片 01.png");
+        assert_eq!(meta.name, "我的照片 01.png", "原名留着展示");
+        assert_eq!(meta.file, "2026-04-01_晨跑打卡_01.png", "磁盘名按模板生成");
         assert_eq!(meta.ext, "png");
         assert_eq!(meta.mime, "image/png");
         assert_eq!(meta.bytes, source_bytes);
         assert_eq!((meta.width, meta.height), (Some(4), Some(3)));
         assert_eq!(meta.hash.len(), 64, "sha256 的十六进制是 64 个字符");
-        assert!(meta.entry_id.is_none());
         assert!(meta.is_image());
+        assert_eq!(meta.id.len(), 36, "媒体 id 由 Rust 发");
 
-        // 磁盘名与导入路径分离，原文件还在
-        assert!(original_path(&vault, "m-1", "png").is_file());
+        // 媒体就住在记录目录里，原文件还在
+        assert!(meta.path_in(&entry_dir).is_file());
         assert!(source.is_file(), "导入是复制，不动原文件");
-        assert_eq!(read_media(&vault, "m-1").unwrap().hash, meta.hash);
     }
 
     #[test]
-    fn same_content_has_same_hash_and_list_sorts_newest_first() {
-        let vault = temp_vault("hash");
-        let source = vault.join("a.png");
+    fn second_import_gets_seq_02_and_never_overwrites() {
+        let entry_dir = temp_dir("seq");
+        let source = entry_dir.join("a.png");
         image::RgbImage::new(2, 2).save(&source).unwrap();
 
-        let first = import_media(&vault, "m-1", &source, "2026-04-01T10:00:00Z").unwrap();
-        let second = import_media(&vault, "m-2", &source, "2026-04-02T10:00:00Z").unwrap();
+        let mut v = vars();
+        let first = import_into_entry(&entry_dir, &source, None, &v, "now").unwrap();
+        v.n = 2;
+        let second = import_into_entry(&entry_dir, &source, None, &v, "now").unwrap();
+
+        assert_eq!(first.file, "2026-04-01_晨跑打卡_01.png");
+        assert_eq!(second.file, "2026-04-01_晨跑打卡_02.png");
+        assert_eq!(first.hash, second.hash, "同样内容必须同样哈希，将来靠它去重");
+    }
+
+    #[test]
+    fn same_template_twice_appends_dedupe_suffix() {
+        let entry_dir = temp_dir("dedupe");
+        let source = entry_dir.join("a.png");
+        image::RgbImage::new(2, 2).save(&source).unwrap();
+
+        // 同一个序号导入两次（用户手快点了两下）：第二个加 (2)，绝不覆盖
+        let first = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
+        let second = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
+
+        assert_eq!(first.file, "2026-04-01_晨跑打卡_01.png");
+        assert_eq!(second.file, "2026-04-01_晨跑打卡_01 (2).png");
+        assert_eq!(fs::read_dir(&entry_dir).unwrap().count(), 3, "两个媒体 + 原图");
+    }
+
+    #[test]
+    fn template_from_the_scene_is_used() {
+        let entry_dir = temp_dir("template");
+        let source = entry_dir.join("a.png");
+        image::RgbImage::new(2, 2).save(&source).unwrap();
+
+        let mut v = vars();
+        v.fields = serde_json::json!({ "builtin.challenge": { "distance": 5 } });
+        let meta = import_into_entry(
+            &entry_dir,
+            &source,
+            Some("{date}_{title}_{field:distance}_{n}"),
+            &v,
+            "now",
+        )
+        .unwrap();
+
+        assert_eq!(meta.file, "2026-04-01_早跑 3km_5_01.png");
+    }
+
+    #[test]
+    fn adopt_picks_up_loose_media_but_leaves_other_files() {
+        let entry_dir = temp_dir("adopt");
+        fs::write(entry_dir.join("entry.json"), "{}").unwrap();
+        fs::write(entry_dir.join("note.md"), "正文").unwrap();
+        fs::write(entry_dir.join("随手丢进来的照片.JPG"), b"x").unwrap();
+        fs::write(entry_dir.join("读书笔记.txt"), "别人的笔记").unwrap();
+
+        let mut media = Vec::new();
+        let adopted = adopt_loose_files(&entry_dir, &mut media);
+
+        assert_eq!(adopted, vec!["随手丢进来的照片.JPG".to_string()]);
+        assert_eq!(media.len(), 1);
+        assert_eq!(media[0].file, "随手丢进来的照片.JPG");
+        assert_eq!(media[0].mime, "image/jpeg", "扩展名大小写不影响判 MIME");
+        assert!(media[0].hash.is_empty(), "收养不假装算过哈希");
+
+        // 再扫一次不该重复收养
+        let again = adopt_loose_files(&entry_dir, &mut media);
+        assert!(again.is_empty());
+        assert_eq!(media.len(), 1);
+    }
+
+    #[test]
+    fn drop_missing_removes_deleted_files() {
+        let entry_dir = temp_dir("missing");
+        fs::write(entry_dir.join("gone.jpg"), b"x").unwrap();
+
+        let mut media = vec![MediaMeta {
+            schema_version: SCHEMA_VERSION,
+            id: "m1".into(),
+            file: "gone.jpg".into(),
+            ext: "jpg".into(),
+            mime: "image/jpeg".into(),
+            ..Default::default()
+        }];
+        assert_eq!(drop_missing_files(&entry_dir, &mut media), 0);
+
+        fs::remove_file(entry_dir.join("gone.jpg")).unwrap();
+        assert_eq!(drop_missing_files(&entry_dir, &mut media), 1);
+        assert!(media.is_empty());
+    }
+
+    #[test]
+    fn sort_puts_newest_first_and_dateless_last() {
+        let mut list = vec![
+            MediaMeta {
+                added_at: "2026-04-01T10:00:00Z".into(),
+                file: "a.jpg".into(),
+                ..Default::default()
+            },
+            MediaMeta {
+                added_at: String::new(),
+                file: "b.jpg".into(),
+                ..Default::default()
+            },
+            MediaMeta {
+                added_at: "2026-04-02T10:00:00Z".into(),
+                file: "c.jpg".into(),
+                ..Default::default()
+            },
+        ];
+        sort_media(&mut list);
         assert_eq!(
-            first.hash, second.hash,
-            "同样内容必须同样哈希，将来靠它去重"
+            list.iter().map(|m| m.file.as_str()).collect::<Vec<_>>(),
+            vec!["c.jpg", "a.jpg", "b.jpg"]
         );
-
-        let list = list_media(&vault, None).unwrap();
-        assert_eq!(list.len(), 2);
-        assert_eq!(list[0].id, "m-2", "新的在前");
-    }
-
-    #[test]
-    fn list_filters_by_entry() {
-        let vault = temp_vault("filter");
-        let source = vault.join("a.png");
-        image::RgbImage::new(2, 2).save(&source).unwrap();
-
-        import_media(&vault, "m-1", &source, "2026-04-01T10:00:00Z").unwrap();
-        let mut attached = import_media(&vault, "m-2", &source, "2026-04-01T11:00:00Z").unwrap();
-        attached.entry_id = Some("e-1".into());
-        write_media(&vault, &attached).unwrap();
-
-        assert_eq!(list_media(&vault, Some("e-1")).unwrap().len(), 1);
-        assert_eq!(list_media(&vault, Some("e-9")).unwrap().len(), 0);
-        assert_eq!(list_media(&vault, None).unwrap().len(), 2);
     }
 
     #[test]
     fn thumbnail_is_written_and_never_larger_than_max() {
-        let vault = temp_vault("thumb");
+        let vault = temp_dir("thumb");
         let source = vault.join("big.png");
         image::RgbImage::new(800, 400).save(&source).unwrap();
 
@@ -420,16 +547,15 @@ mod tests {
         assert!(normalize_exif_datetime("").is_none());
         assert!(normalize_exif_datetime("2026:09:22").is_none());
         assert!(normalize_exif_datetime("not a date").is_none());
-        assert!(normalize_exif_datetime("2026:09:22").is_none(), "只有日期没有时间");
     }
 
     #[test]
     fn png_without_exif_has_no_taken_at() {
-        let vault = temp_vault("noexif");
-        let source = vault.join("a.png");
+        let entry_dir = temp_dir("noexif");
+        let source = entry_dir.join("a.png");
         image::RgbImage::new(2, 2).save(&source).unwrap();
 
-        let meta = import_media(&vault, "m-1", &source, "2026-04-01T10:00:00Z").unwrap();
+        let meta = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
         assert!(
             meta.taken_at.is_none(),
             "没有 EXIF 就必须留空，让上层退回 added_at"
@@ -438,22 +564,37 @@ mod tests {
 
     #[test]
     fn video_is_stored_without_probing_size() {
-        let vault = temp_vault("video");
-        let source = vault.join("clip.MP4");
+        let entry_dir = temp_dir("video");
+        let source = entry_dir.join("clip.MP4");
         fs::write(&source, vec![0u8; 1024]).unwrap();
 
-        let meta = import_media(&vault, "m-1", &source, "2026-04-01T10:00:00Z").unwrap();
+        let meta = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
         assert_eq!(meta.ext, "mp4", "扩展名统一小写");
         assert_eq!(meta.mime, "video/mp4");
+        assert_eq!(meta.file, "2026-04-01_晨跑打卡_01.mp4");
         assert_eq!((meta.width, meta.height), (None, None));
         assert!(!meta.is_image());
     }
 
     #[test]
-    fn failed_import_leaves_no_half_built_dir() {
-        let vault = temp_vault("missing");
-        let result = import_media(&vault, "m-x", &vault.join("nope.png"), "now");
+    fn failed_import_leaves_nothing_behind() {
+        let entry_dir = temp_dir("failed");
+        let before = fs::read_dir(&entry_dir).unwrap().count();
+
+        let result = import_into_entry(
+            &entry_dir,
+            &entry_dir.join("nope.png"),
+            None,
+            &vars(),
+            "now",
+        );
         assert!(result.is_err());
-        assert!(!media_item_dir(&vault, "m-x").exists());
+        assert_eq!(fs::read_dir(&entry_dir).unwrap().count(), before, "不留半成品");
+
+        // 记录目录不存在时也要明确报错，而不是建出一个孤儿目录
+        let ghost = entry_dir.join("没有这个记录");
+        assert!(import_into_entry(&ghost, &entry_dir.join("nope.png"), None, &vars(), "now")
+            .is_err());
+        assert!(!ghost.exists());
     }
 }

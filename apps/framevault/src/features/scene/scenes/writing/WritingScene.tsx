@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
 import { useCompact } from "../../../../lib/useCompact";
-import { fieldText, readField, writeFields, type FieldDecl, type SceneViewProps } from "../../manifest";
+import { fieldText, fieldValue, noteFieldOf, writeValues, type FieldDecl, type SceneViewProps } from "../../manifest";
 import { displayableSrc, formatDay } from "../../mediaFormat";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
@@ -18,8 +18,12 @@ const NL = String.fromCharCode(10);
 
 type Draft = { text: string; meta: Record<string, unknown> };
 
+/**
+ * 写作台的"正文"就是主题声明的那个 `note` 字段 —— 它落磁盘上的 `note.md`，
+ * 所以用户写完真的能看到一个 `.md` 文件（这是写作台存在的意义之一）。
+ */
 function textFieldOf(fields: FieldDecl[]): FieldDecl | undefined {
-  return fields.find((field) => field.type === "textarea");
+  return noteFieldOf(fields) ?? fields.find((field) => field.type === "textarea");
 }
 
 function draftFrom(entry: Entry | null, sceneId: string, fields: FieldDecl[]): Draft {
@@ -27,16 +31,16 @@ function draftFrom(entry: Entry | null, sceneId: string, fields: FieldDecl[]): D
   const textField = textFieldOf(fields);
   const meta: Record<string, unknown> = {};
   for (const field of fields) {
-    if (field.type !== "textarea") meta[field.key] = readField(entry, sceneId, field.key);
+    if (!field.note && field.type !== "textarea") meta[field.key] = fieldValue(entry, sceneId, field);
   }
-  return { text: textField ? fieldText(readField(entry, sceneId, textField.key)) : "", meta };
+  return { text: textField ? fieldText(fieldValue(entry, sceneId, textField)) : "", meta };
 }
 
 /** 列表里的一行：优先标题，其次正文第一行（去掉开头的 # 号） */
 function summaryOf(entry: Entry, sceneId: string, textField: FieldDecl | undefined): string {
   if (entry.title.trim()) return entry.title.trim();
   if (!textField) return "空白的这一篇";
-  const text = fieldText(readField(entry, sceneId, textField.key)).trim();
+  const text = fieldText(fieldValue(entry, sceneId, textField)).trim();
   const first = text.split(NL).find((line) => line.trim().length > 0) ?? "";
   return first.replace(/^#+ */, "").slice(0, 24) || "空白的这一篇";
 }
@@ -72,15 +76,14 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
 
   async function save() {
     if (!current) return;
-    const space = current.fields[scene.id];
-    const namespace = {
-      ...(typeof space === "object" && space !== null ? (space as Record<string, unknown>) : {}),
+    // 正文与元字段一起交给核心路由：正文 → note.md，其余 → 本主题的字段命名空间
+    const values = {
       ...draft.meta,
       ...(textField ? { [textField.key]: draft.text } : {}),
     };
     const ok = await data.edit(current, {
       title: current.title,
-      fields: writeFields(current, scene.id, namespace),
+      ...writeValues(current, scene.id, fields, values),
     });
     if (ok) setDirty(false);
   }

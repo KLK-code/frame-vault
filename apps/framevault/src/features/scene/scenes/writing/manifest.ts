@@ -19,9 +19,12 @@ const manifest: SceneManifest = {
       key: "text",
       label: "正文",
       type: "textarea",
+      // note: true = 这一篇的正文就是记录目录里的 note.md（磁盘上真有一个 .md 文件）
+      note: true,
       placeholder: "开始写…（支持 Markdown：# 标题、**加粗**、- 列表、> 引用、表格）",
     },
   ],
+  mediaNameTemplate: "{date}_{title}_{n}",
 };
 
 export default manifest;

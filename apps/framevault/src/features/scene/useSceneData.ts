@@ -4,6 +4,7 @@ import {
   importMedia,
   listEntries,
   listMedia,
+  localDay,
   newId,
   pickMediaFiles,
   restoreEntry,
@@ -13,6 +14,7 @@ import {
   type FolderNode,
   type MediaItem,
 } from "../../lib/api";
+import { SCENES } from "./registry";
 
 /**
  * 场景的**底层能力**：所有主题共享同一套数据读写，主题只决定"显示哪些、怎么显示"。
@@ -39,7 +41,7 @@ export type SceneData = {
   /** 编辑一条记录：只改给到的部分，归属与创建时间由 Rust 保证不动 */
   edit: (
     entry: Entry,
-    patch: { title?: string; fields?: Record<string, unknown> },
+    patch: { title?: string; fields?: Record<string, unknown>; note?: string },
   ) => Promise<boolean>;
   /** 只弹选择器，把用户选的文件路径给主题（主题要自己编排时用，比如挑战的一张照片一条记录） */
   pickPhotos: () => Promise<string[]>;
@@ -109,25 +111,33 @@ export function useSceneData(folder: FolderNode): SceneData {
     [mediaOf],
   );
 
+  /**
+   * 媒体命名模板来自**当前场景的 manifest**（纯数据），由这里取出来传给 Rust ——
+   * 第三方场景的模板写在它自己的插件包里，Rust 不该去读插件目录。没声明就走核心默认。
+   */
+  const nameTemplate = SCENES[folder.effectiveScene]?.manifest.mediaNameTemplate ?? null;
+
   /** 把一批已经选好的文件导入到某条记录（已经是记录就不再建） */
   const importInto = useCallback(
     async (entryId: string, files: string[]) => {
       for (const file of files) {
-        await importMedia(file, entryId);
+        await importMedia(file, entryId, nameTemplate);
       }
     },
-    [],
+    [nameTemplate],
   );
 
   const create = useCallback(
-    async (title: string, text?: string) => {
+    async (title: string, note?: string) => {
       setBusy("new");
       try {
         const id = await newId();
-        const entry = await saveEntry(id, title, { folderId: folder.id });
-        if (text) {
-          await updateEntry(id, { fields: { ...entry.fields, text } });
-        }
+        // 正文直接随 save_entry 落进 note.md（记录目录名也用得上 day，一起给）
+        const entry = await saveEntry(id, title, {
+          folderId: folder.id,
+          day: localDay(),
+          note,
+        });
         await reload();
         return entry;
       } catch (err) {
@@ -141,7 +151,10 @@ export function useSceneData(folder: FolderNode): SceneData {
   );
 
   const edit = useCallback(
-    async (entry: Entry, patch: { title?: string; fields?: Record<string, unknown> }) => {
+    async (
+      entry: Entry,
+      patch: { title?: string; fields?: Record<string, unknown>; note?: string },
+    ) => {
       setBusy(entry.id);
       try {
         await updateEntry(entry.id, patch);
@@ -193,17 +206,18 @@ export function useSceneData(folder: FolderNode): SceneData {
   );
 
   const createWithPhotos = useCallback(
-    async (title: string, text?: string) => {
+    async (title: string, note?: string) => {
       const files = await pickPhotos();
       if (files.length === 0) return null;
 
       setBusy("new");
       try {
         const id = await newId();
-        const entry = await saveEntry(id, title, { folderId: folder.id });
-        if (text) {
-          await updateEntry(id, { fields: { ...entry.fields, text } });
-        }
+        const entry = await saveEntry(id, title, {
+          folderId: folder.id,
+          day: localDay(),
+          note,
+        });
         await importInto(id, files);
         await reload();
         return entry;

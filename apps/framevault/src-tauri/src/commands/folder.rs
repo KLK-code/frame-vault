@@ -8,8 +8,8 @@ use super::active_vault;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::{
-    self, delete_folder as delete_folder_meta, is_known_scene, list_folders, new_id, next_order,
-    read_folder, write_folder, FolderMeta, SceneInfo,
+    self, delete_folder as delete_folder_meta, find_folder_dir, is_known_scene, list_folders,
+    new_id, next_order, read_folder, save_folder, FolderMeta, SceneInfo,
 };
 use serde::Serialize;
 use tauri::State;
@@ -77,7 +77,7 @@ pub fn create_folder(
     let all = list_folders(&vault_dir)?;
     let order = next_order(&all);
     let folder = FolderMeta::new(&new_id(), &name, order, scene);
-    write_folder(&vault_dir, &folder)?;
+    vault::create_folder(&vault_dir, &folder)?;
     to_nodes(&vault_dir)
 }
 
@@ -93,9 +93,11 @@ pub fn rename_folder(
         return Err(AppError::Invalid("场景名称不能为空".into()));
     }
 
+    let dir = find_folder_dir(&vault_dir, &id)?;
     let mut folder = read_folder(&vault_dir, &id)?;
-    folder.name = name;
-    write_folder(&vault_dir, &folder)?;
+    let previous_name = folder.name.clone();
+    folder.set_name(&name);
+    save_folder(&folder, &dir, &previous_name)?;
     to_nodes(&vault_dir)
 }
 
@@ -114,12 +116,14 @@ pub fn bind_folder_scene(
         }
     }
 
+    let dir = find_folder_dir(&vault_dir, &id)?;
     let mut folder = read_folder(&vault_dir, &id)?;
     folder.scene = scene.filter(|s| !s.trim().is_empty());
     if let Some(config) = scene_config {
         folder.scene_config = config;
     }
-    write_folder(&vault_dir, &folder)?;
+    // 名字没变：给同一个名字，就不会触发改名
+    save_folder(&folder, &dir, &folder.name)?;
     to_nodes(&vault_dir)
 }
 
@@ -130,9 +134,10 @@ pub fn set_folder_pinned(
     pinned: bool,
 ) -> AppResult<Vec<FolderNode>> {
     let vault_dir = active_vault(&state)?;
+    let dir = find_folder_dir(&vault_dir, &id)?;
     let mut folder = read_folder(&vault_dir, &id)?;
     folder.pinned = pinned;
-    write_folder(&vault_dir, &folder)?;
+    save_folder(&folder, &dir, &folder.name)?;
     to_nodes(&vault_dir)
 }
 
@@ -148,9 +153,10 @@ pub fn reorder_folders(
 
     for (index, id) in ordered_ids.iter().enumerate() {
         if let Some(folder) = all.iter().find(|f| &f.id == id) {
+            let dir = find_folder_dir(&vault_dir, id)?;
             let mut updated = folder.clone();
             updated.order = index as i64;
-            write_folder(&vault_dir, &updated)?;
+            save_folder(&updated, &dir, &updated.name)?;
         }
     }
     to_nodes(&vault_dir)

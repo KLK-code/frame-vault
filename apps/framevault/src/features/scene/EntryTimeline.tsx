@@ -3,7 +3,7 @@ import { assetUrl, type Entry, type MediaItem } from "../../lib/api";
 import MediaLightbox from "./MediaLightbox";
 import SceneFields from "./SceneFields";
 import MarkdownView from "./markdown/MarkdownView";
-import { fieldText, readField, writeFields } from "./manifest";
+import { fieldText, fieldValue, writeValues } from "./manifest";
 import { displayableSrc, formatBytes, formatTime, formatDay } from "./mediaFormat";
 import type { FieldDecl } from "./manifest";
 import SceneIcon from "./SceneIcon";
@@ -27,19 +27,15 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
     setDraftTitle(entry.title);
     // 按声明逐个取值——主题不写"哪几个字段"，因为字段是声明出来的
     setDraftFields(
-      Object.fromEntries(fields.map((field) => [field.key, readField(entry, sceneId, field.key)])),
+      Object.fromEntries(fields.map((field) => [field.key, fieldValue(entry, sceneId, field)])),
     );
   }
 
   async function saveEdit(entry: Entry) {
-    // fields 是整体替换，所以只替换本主题的命名空间，别的主题的字段原样带走
+    // 写回：正文进 note.md，其余字段进本主题的命名空间（别的主题的字段原样带走）
     const ok = await data.edit(entry, {
       title: draftTitle.trim(),
-      fields: writeFields(entry, sceneId, {
-        ...(typeof entry.fields[sceneId] === "object" && entry.fields[sceneId] !== null
-          ? entry.fields[sceneId] as Record<string, unknown> : {}),
-        ...draftFields,
-      }),
+      ...writeValues(entry, sceneId, fields, draftFields),
     });
     if (ok) setEditingId(null);
   }
@@ -63,7 +59,7 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
 
             const declared = fields.map((field) => ({
               field,
-              text: fieldText(readField(entry, sceneId, field.key)).trim(),
+              text: fieldText(fieldValue(entry, sceneId, field)).trim(),
             }));
             const body = declared
               .filter((item) => item.field.type === "textarea" && item.text)

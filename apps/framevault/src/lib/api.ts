@@ -15,17 +15,29 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 export type Entry = {
   schemaVersion: number;
   id: string;
+  /** 记录名。**净化后的名字就是名字本身**：它等于磁盘上的目录名（去掉日期前缀） */
   title: string;
+  /** 创建日的本地日期（YYYY-MM-DD）。磁盘上的记录目录名由它 + 标题组成 */
+  day: string;
   tags: string[];
   createdAt: string;
   updatedAt: string;
-  /** 属于哪个场景（文件夹）；null = 未归类 */
+  /** 属于哪个场景（文件夹）；null = 未归类（住在根下的「未归类」容器里） */
   folderId: string | null;
   /** 写入时生效的主题 id（快照） */
   scene: string | null;
-  /** 主题自定义字段的开放区 */
+  /** 主题自定义字段的开放区。**正文不在这里** —— 正文是 `note` */
   fields: Record<string, unknown>;
-  /** 墓碑：删除时间。有值 = 已删除（文件还在，能恢复） */
+  /** 这条记录的媒体（磁盘事实）。界面用的形状是 `MediaItem`（多了绝对路径） */
+  media: MediaMeta[];
+  /** 写这条记录时生效的场景版本。现在恒为 0：给"场景版本管理"占位 */
+  sceneVersion: number;
+  /**
+   * 正文。磁盘上它是记录目录里的 **`note.md`**（唯一真相），不在 `entry.json` 里。
+   * 传 `note` 进 `saveEntry` / `updateEntry` 就会写进那个文件。
+   */
+  note: string;
+  /** 墓碑：删除时间。有值 = 已删除（整个记录目录挪进了回收站，能恢复） */
   deletedAt: string | null;
 };
 
@@ -50,13 +62,15 @@ export type SceneInfo = {
 };
 
 /**
- * 一个媒体文件。前六个字段是磁盘上的事实（Rust 的 `media/<id>/meta.json`），
- * 两个 `*Path` 是命令层算好的绝对路径——前端不拼路径，改布局时只改 Rust。
+ * 一个媒体的**磁盘事实**。它住在所属记录的 `entry.json` 里（`Entry.media`），
+ * 本体文件就在那条记录的目录里。
  */
-export type MediaItem = {
+export type MediaMeta = {
   schemaVersion: number;
   id: string;
-  /** 用户原本的文件名（磁盘上其实叫 orig.<ext>） */
+  /** 磁盘上的实际文件名（导入时按场景模板生成；用户手动改名后跟着变） */
+  file: string;
+  /** 导入时的原始文件名，只用于展示 */
   name: string;
   ext: string;
   mime: string;
@@ -68,11 +82,18 @@ export type MediaItem = {
    * 读不到就是 null —— 卡片日期、打卡日都要退回 addedAt，不能瞎猜。
    */
   takenAt: string | null;
-  /** sha256，将来去重与同步校验用 */
+  /** sha256，将来去重与同步校验用；用户直接拷进来的文件是空串 */
   hash: string;
-  /** 挂在哪条记录上；null = 导入了还没整理 */
-  entryId: string | null;
   addedAt: string;
+};
+
+/**
+ * 交给界面的媒体：磁盘事实 + 命令层算好的两个绝对路径。
+ * 前端不拼路径，改布局时只改 Rust。
+ */
+export type MediaItem = MediaMeta & {
+  /** 属于哪条记录。媒体住在记录里，所以一定有值 */
+  entryId: string;
   originalPath: string;
   /** 缩略图；视频或解不开的格式是 null（那就退回显示原文件） */
   thumbPath: string | null;
@@ -157,10 +178,29 @@ export const listScenes = () => invoke<SceneInfo[]>("list_scenes");
 /** 新建记录前先要一个 id：时间有序的 UUID v7，由 Rust 发放 */
 export const newId = () => invoke<string>("new_id");
 
+/**
+ * 本地日期（`YYYY-MM-DD`）。
+ *
+ * 记录的目录名要用"创建日"，而"今天"是用户本地时区的今天 —— 这个判断只有前端做得对，
+ * 所以 `day` 由前端算好传给 Rust（Rust 层不引时钟依赖，也不做时区换算）。
+ */
+export function localDay(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export const saveEntry = (
   id: string,
   title: string,
-  options: { folderId?: string | null; createdAt?: string; updatedAt?: string } = {},
+  options: {
+    folderId?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+    /** 创建日（YYYY-MM-DD）。不给就用今天 —— 磁盘上的目录名靠它 */
+    day?: string;
+    /** 正文：写进记录目录里的 `note.md` */
+    note?: string;
+  } = {},
 ) => {
   const now = new Date().toISOString();
   return invoke<Entry>("save_entry", {
@@ -169,6 +209,8 @@ export const saveEntry = (
     createdAt: options.createdAt ?? now,
     updatedAt: options.updatedAt ?? now,
     folderId: options.folderId ?? null,
+    day: options.day ?? localDay(),
+    note: options.note ?? null,
   });
 };
 
@@ -178,13 +220,14 @@ export const saveEntry = (
  */
 export const updateEntry = (
   id: string,
-  patch: { title?: string; fields?: Record<string, unknown> },
+  patch: { title?: string; fields?: Record<string, unknown>; note?: string },
   updatedAt = new Date().toISOString(),
 ) =>
   invoke<Entry>("update_entry", {
     id,
     title: patch.title ?? null,
     fields: patch.fields ?? null,
+    note: patch.note ?? null,
     updatedAt,
   });
 
@@ -207,14 +250,18 @@ export const restoreEntry = (id: string, now = new Date().toISOString()) =>
 
 // ── 媒体 ──
 /**
- * 导入一个文件（复制进 Vault，原文件不动）。
+ * 导入一个文件（复制进**这条记录的目录**，原文件不动）。
+ *
+ * `nameTemplate` 是场景在 manifest 里声明的命名模板（纯数据），由前端解析后传进来 ——
+ * 第三方场景的模板在它自己的插件包里，Rust 不该去读插件目录。不给就走核心默认模板。
  * 长任务：Rust 侧是 `#[tauri::command(async)]`，不会占住主线程。
  */
 export const importMedia = (
   sourcePath: string,
-  entryId: string | null = null,
+  entryId: string,
+  nameTemplate: string | null = null,
   addedAt = new Date().toISOString(),
-) => invoke<MediaItem>("import_media", { sourcePath, entryId, addedAt });
+) => invoke<MediaItem>("import_media", { sourcePath, entryId, nameTemplate, addedAt });
 
 /** 列出媒体（新的在前）；给了 entryId 就只看那条记录的 */
 export const listMedia = (entryId: string | null = null) =>

@@ -26,6 +26,13 @@ export type FieldDecl = {
   placeholder?: string;
   /** type 为 select 时的可选项 */
   options?: FieldOption[];
+  /**
+   * 这个字段是记录的**正文**：内容落磁盘上的 `note.md`，不进 `entry.json`。
+   *
+   * 一个主题最多一个。**没标就不落文件**（字段照旧存在 `entry.json` 里）——
+   * 所以老主题、第三方主题不写这一行也不会丢数据，只是正文不是一个能直接打开的 `.md`。
+   */
+  note?: boolean;
 };
 
 export type SceneManifest = {
@@ -41,6 +48,14 @@ export type SceneManifest = {
   entryFields?: FieldDecl[];
   /** 这个场景的设置表单形状（存在 folder.sceneConfig 里） */
   configSchema?: FieldDecl[];
+  /**
+   * 媒体导入时的**命名模板**（纯数据，像 `"{date}_{scene}_{n}"`）。
+   *
+   * 可用变量：`{date}`（拍摄日，缺则导入日）、`{scene}`（场景名）、`{title}`（记录标题）、
+   * `{field:<key>}`（本主题声明的字段）、`{n}`（同目录内序号，两位）。
+   * 取不到的变量自己消失；**不声明就走核心默认模板**，所以这行是可选的。
+   */
+  mediaNameTemplate?: string;
 };
 
 /** 主题视图拿到的原料：场景本身 + 主题信息 + 写回自己配置的通道 */
@@ -70,13 +85,50 @@ export function readField(entry: Entry, sceneId: string, key: string): unknown {
   return entry.fields?.[key];
 }
 
-/** 写回：**只替换本主题的命名空间**，别的主题的字段原样保留（update_entry 的 fields 是整体替换） */
-export function writeFields(
+/**
+ * 取一个声明字段的值。
+ *
+ * 正文（`note: true` 的那个）住在 `entry.note` 里（磁盘上是 `note.md`），
+ * 其余字段在**本主题的命名空间**里 —— 调用方不用自己判断，两边都从这里走。
+ */
+export function fieldValue(entry: Entry, sceneId: string, field: FieldDecl): unknown {
+  return field.note ? entry.note : readField(entry, sceneId, field.key);
+}
+
+/** 这个主题的正文声明（最多一个） */
+export function noteFieldOf(fields: FieldDecl[] | undefined): FieldDecl | undefined {
+  return (fields ?? []).find((field) => field.note === true);
+}
+
+/**
+ * 写回一批字段：**只替换本主题的命名空间**，别的主题的字段原样保留
+ * （`update_entry` 的 fields 是整体替换，所以这里要自己带上旧的）。
+ *
+ * 正文单独返回（它要落 `note.md`）；没出现在 `values` 里的字段**一律不动** ——
+ * 表单只显示一部分字段时，不该把其余字段悄悄抹掉。
+ */
+export function writeValues(
   entry: Entry,
   sceneId: string,
+  fields: FieldDecl[],
   values: Record<string, unknown>,
-): Record<string, unknown> {
-  return { ...entry.fields, [sceneId]: values };
+): { fields: Record<string, unknown>; note: string | undefined } {
+  const scoped = entry.fields?.[sceneId];
+  const namespace: Record<string, unknown> = {
+    ...(typeof scoped === "object" && scoped !== null ? (scoped as Record<string, unknown>) : {}),
+  };
+
+  let note: string | undefined;
+  for (const field of fields) {
+    if (!(field.key in values)) continue;
+    if (field.note) {
+      note = fieldText(values[field.key]);
+      continue;
+    }
+    namespace[field.key] = values[field.key];
+  }
+
+  return { fields: { ...entry.fields, [sceneId]: namespace }, note };
 }
 
 /** 字段值 → 输入框用的字符串（null / undefined / 数字都收敛成字符串） */

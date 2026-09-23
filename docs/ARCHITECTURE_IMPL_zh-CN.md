@@ -449,13 +449,14 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | 网格列 | `repeat(auto-fill, minmax(最小, 上限))`，上限给**具体像素** | `1fr` 是「余量全给我」：每掉一列所有格子一起膨胀一次，拖窗口就像在抖（详见附录 B） |
 | 纵向滚动容器 | `scrollbar-gutter: stable;` + `overflow-x: hidden;` + `overflow-y: auto;`（**长写**） | 滚动条出现/消失会改容器宽度；`auto` 简写会把另一个轴重置回去 |
 
-现在只有三处网格，数值如下 —— **改任何一处，同步这一节与 AGENTS §9**：
+现在只有四处网格，数值如下 —— **改任何一处，同步这一节与 AGENTS §9**：
 
 | 网格 | 在哪 | 现在 |
 |---|---|---|
 | 记录里的缩略图 | `scenes/plain/PlainScene.css` 的 `.entry__media` | `minmax(112px, 176px)` |
 | 打卡墙 | `scenes/challenge/ChallengeScene.css` 的 `.wall` | `minmax(148px, 220px)` |
 | 手机照片墙 | `SceneMedia.css` 的 `.photo-grid` | `minmax(104px, 168px)` |
+| 写作台照片区 | `scenes/writing/WritingScene.css` 的 `.writing__photos-body` | `minmax(96px, 132px)` |
 
 代价要讲清楚：给了上限，**窗口很宽时最右边会留一点白**（格子不再无限撑大）。
 
@@ -981,3 +982,4 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 触摸屏上的"右键删除" | 没有右键 = 功能不存在 | 长按兜底（500ms，鼠标不参与）；菜单做成公共件 `EntryMenu` |
 | 两套骨架各自 `useState` 存"当前选中的场景" | 跨过断点换骨架时组件重挂载，选择重置成第一个场景 | 共用状态挂在公共父节点（`App`）上，经 `SceneShellProps` 传下去；骨架里只留视图开关 |
 | 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 只热替换组件代码，而**编辑器实例只在挂载时创建一次**（`useEffect(…, [])` 里 `new EditorView`），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲一遍**。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |
+| 想让场景内的面板（列表 / 照片 / 编辑器）各自独立滚动 | 给内层 `flex:1; min-height:0` 之后**整页还在滚** —— 断点在祖先：`.scene-host` 用 `min-height: 100%` 只是"最小高度"，内容一高容器跟着长，整条收缩链从它这里作废（2026-09 写作台实测：编辑器把 `.writing` 撑到 2000+px）；另外 grid 的 `1fr` 行默认是 `minmax(auto, 1fr)`，auto 下限会被列表的自然高度撑爆 | 锚点层用**确定的 `height: 100%`**（`.scene-host`）；中间每一环都显式写：grid 行 `minmax(0, 1fr)`、flex 子项 `min-height: 0`，一层都不能省；滚动容器照 §4.6 长写。怀疑哪层断了就给各层加临时彩色 `outline` 看谁的框跟着内容长 |

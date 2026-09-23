@@ -163,15 +163,20 @@
     --fv-color-surface-active: #d5dded;
     --fv-color-text: #1f2937;
     --fv-color-text-strong: #0f1724;
-    /* 次要字与主色都比"手感"再压深一档：这两对是文字，对比度得站住（算过：4.8 / 4.5） */
+    /* 次要字压深一档，为的是它当文字用时站得住（算过：次要字/面 4.8） */
     --fv-color-muted: #5d6a80;
     --fv-color-border: #e2e7ef;
     --fv-color-border-strong: #c6cfdd;
-    --fv-color-accent: #2a63e0;
+    /* 主色就是用户给的那个蓝：rgb(76,140,230) */
+    --fv-color-accent: #4c8ce6;
     --fv-color-accent-soft: #e4ecfe;
     --fv-color-accent-hover: #eff4ff;
     --fv-color-on-accent: #ffffff;
     --fv-scene-banner: linear-gradient(115deg, #e2eafe, #f7f9fc 78%);
+    /* 这个蓝是中调：当**文字**压在淡底上只有 2.9，所以选中行改成实心反白（跟青碧、炭火一致）。
+       实心配白字是 3.4 —— 比淡底那种强，也和按钮同一档。 */
+    --fv-nav-active-bg: var(--fv-color-accent);
+    --fv-nav-active-fg: var(--fv-color-on-accent);
   }
   :root[data-appearance="preset.azure"][data-theme="dark"] {
     color-scheme: dark;

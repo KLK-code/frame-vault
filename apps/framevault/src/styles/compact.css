@@ -20,7 +20,8 @@
 
     .settings .settings__nav {
       align-items: center;
-      padding: var(--fv-space-4) var(--fv-space-1) var(--fv-space-3);
+      /* 左右不留内边距：让 34px 的方形按钮在 46px 的栏里真正居中 */
+      padding: var(--fv-space-4) 0 var(--fv-space-3);
     }
 
     /* 图标栏里塞不下搜索框；要搜的时候用宽窗口 */
@@ -31,12 +32,16 @@
     .settings .settings__list {
       align-items: center;
       gap: var(--fv-space-1);
+      width: 100%;
       padding-right: 0;
     }
 
+    /* 方形按钮：图标在栏里居中，选中态那一块也是正的 */
     .settings .settings__nav-item {
       justify-content: center;
-      padding: 8px;
+      width: 34px;
+      height: 34px;
+      padding: 0;
       border-radius: var(--fv-radius-md);
     }
 

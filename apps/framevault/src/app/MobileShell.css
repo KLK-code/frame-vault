@@ -83,6 +83,16 @@
 .mobile__settings {
   flex: 1;
   min-height: 0;
+  /* 设置面板要**自己撑满**这一屏：它内部是"左栏 + 右栏各自滚动"的网格，
+     高度不定死的话左栏那道竖线只会画到内容底部，下面留一截小黑线（很难看）。
+     百分比高度在这条 flex 链上不保险，所以用 flex 传下去。 */
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile__settings > .settings {
+  flex: 1;
+  min-height: 0;
 }
 
 .mobile__hint,

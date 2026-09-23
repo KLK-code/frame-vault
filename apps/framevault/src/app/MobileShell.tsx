@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import SceneHost from "../features/scene/SceneHost";
 import SceneMedia from "../features/scene/SceneMedia";
 import SceneTree from "../features/scene/SceneTree";
-import { suggestedAppearanceOf } from "../features/scene/registry";
-import { useActiveFolder, useFolders } from "../features/scene/useFolders";
-import { useAppearance } from "../features/theme/useAppearance";
+import type { SceneShellProps } from "../features/scene/useFolders";
 import SettingsPanel from "../features/settings/SettingsPanel";
 import VaultManagerPanel from "../features/vault/VaultManagerPanel";
 import { confirm, listVaults } from "../lib/api";
@@ -46,21 +44,19 @@ function VaultEntry({ onClick }: { onClick: () => void }) {
 /**
  * 手机骨架：顶部场景切换 + 主题渲染区 + 底部标签栏。
  *
- * 和桌面骨架**共用同一份能力与数据**（useFolders / useSceneData / SceneHost …），
- * 区别只有编排。两件移动端特有的事在这里解决：
+ * 和桌面骨架**共用同一份能力与数据**（`SceneShellProps` 由 App 传进来，
+ * 里面就是 useFolders / useActiveFolder 的那份状态），区别只有编排。
+ * 这里只留"用完就扔"的视图状态：当前标签、弹层开关。
+ *
+ * 两件移动端特有的事在这里解决：
  * 1. 独立窗口开不出来 → 「仓库管理」「设置」都做成内嵌页面；
  * 2. 拇指可达 → 主要切换放在底部，场景切换放在顶部（点开才是整屏列表）。
  */
-export default function MobileShell() {
-  const { folders, scenes, groups, error, create, rename, remove, togglePinned, bindScene } =
-    useFolders();
-  const { activeId, setActiveId, active } = useActiveFolder(folders);
+export default function MobileShell({ tree, selected, scene }: SceneShellProps) {
+  const { scenes, groups, error, create, rename, remove, togglePinned, bindScene } = tree;
+  const { activeId, setActiveId, active } = selected;
   const [tab, setTab] = useState<Tab>("record");
   const [sheet, setSheet] = useState<Sheet>(null);
-
-  const activeScene = active ? (scenes.find((s) => s.id === active.effectiveScene) ?? null) : null;
-  // 外观 = 用户选过 / 当前主题推荐 / 默认（和桌面骨架同一套规则）
-  useAppearance(suggestedAppearanceOf(active?.effectiveScene));
 
   async function handleDelete(folder: { id: string; name: string }) {
     const ok = await confirm(
@@ -84,7 +80,7 @@ export default function MobileShell() {
         <header className="mobile__bar">
         <button className="mobile__scene" onClick={() => setSheet("scenes")}>
           <span className="mobile__scene-name">{active?.name ?? "选择场景"}</span>
-          {activeScene && <span className="mobile__scene-theme">{activeScene.name}</span>}
+          {scene && <span className="mobile__scene-theme">{scene.name}</span>}
           <span className="mobile__caret">▾</span>
         </button>
       </header>
@@ -97,7 +93,7 @@ export default function MobileShell() {
         ) : tab === "record" ? (
           <SceneHost
             folder={active}
-            scene={activeScene}
+            scene={scene}
             onSceneConfigChange={(config) => bindScene(active.id, active.scene, config)}
           />
         ) : tab === "photos" ? (

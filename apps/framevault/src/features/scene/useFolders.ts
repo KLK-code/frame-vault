@@ -12,11 +12,52 @@ import {
   type SceneInfo,
 } from "../../lib/api";
 
+/** 「场景树 + 写操作」的完整形状（两套骨架共用的那份数据） */
+export type FoldersApi = {
+  folders: FolderNode[];
+  scenes: SceneInfo[];
+  groups: SceneGroup[];
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+  create: (name: string, scene: string | null) => Promise<boolean>;
+  rename: (id: string, name: string) => Promise<boolean>;
+  remove: (id: string) => Promise<boolean>;
+  togglePinned: (id: string, pinned: boolean) => Promise<boolean>;
+  bindScene: (
+    id: string,
+    scene: string | null,
+    config?: Record<string, unknown>,
+  ) => Promise<boolean>;
+  clearError: () => void;
+};
+
+/** 「当前选中的场景」的形状 */
+export type ActiveFolderApi = {
+  activeId: string | null;
+  setActiveId: (id: string) => void;
+  active: FolderNode | null;
+};
+
+/**
+ * 两套骨架共用的原料 —— **由 `App` 统一提供**（不在这两个骨架组件里各自 useState）。
+ *
+ * 为什么必须挂在外层：视口跨过断点时 `App` 会换成另一套骨架，
+ * 骨架自己的 state 跟着组件一起销毁重建 —— 于是"当前选中的场景"被重置成第一个。
+ * 数据与选择是两套骨架**共有**的东西（AGENTS §2），只有编排才归骨架自己。
+ */
+export type SceneShellProps = {
+  tree: FoldersApi;
+  selected: ActiveFolderApi;
+  /** 当前场景生效的主题信息；null = 还没选中 / 这个主题没装 */
+  scene: SceneInfo | null;
+};
+
 /**
  * "当前选中的场景"。两套骨架（桌面 / 手机）共用这一份规则：
  * 场景没了或还没选 → 自动落到第一个。
  */
-export function useActiveFolder(folders: FolderNode[]) {
+export function useActiveFolder(folders: FolderNode[]): ActiveFolderApi {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,7 +90,7 @@ export type SceneGroup = {
  * 归属关系只存在于展示层——这里按 `effectiveScene`（生效主题）把它们分组。
  * 想换归类方式，只需要改 `groups` 这一段，磁盘上的数据一动不动。
  */
-export function useFolders() {
+export function useFolders(): FoldersApi {
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [scenes, setScenes] = useState<SceneInfo[]>([]);
   const [loading, setLoading] = useState(true);

@@ -3,7 +3,7 @@ import TitleBar from "./app/TitleBar";
 import SceneHost from "./features/scene/SceneHost";
 import SceneTree from "./features/scene/SceneTree";
 import { suggestedAppearanceOf } from "./features/scene/registry";
-import { useActiveFolder, useFolders } from "./features/scene/useFolders";
+import { useActiveFolder, useFolders, type SceneShellProps } from "./features/scene/useFolders";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
 import { confirm, openSettings } from "./lib/api";
 import { isMobileOS } from "./lib/platform";
@@ -35,19 +35,16 @@ function readWidth(): number {
 /**
  * 桌面骨架：左（场景树）+ 右（场景舞台）。
  *
+ * 数据与"当前选中的场景"是**外面传进来的**（见 `SceneShellProps`）——
+ * 骨架自己只管编排，以及那些用完就扔的视图状态。
  * 中间那条可拖动的分隔条只影响显示（宽度记在 localStorage），不是数据。
  */
-function DesktopShell() {
-  const { folders, scenes, groups, error, create, rename, remove, togglePinned, bindScene } =
-    useFolders();
-  // 选中规则两套骨架共用一份（见 useFolders 的 useActiveFolder）
-  const { activeId, setActiveId, active } = useActiveFolder(folders);
+function DesktopShell({ tree, selected, scene }: SceneShellProps) {
+  const { scenes, groups, error, create, rename, remove, togglePinned, bindScene } = tree;
+  const { activeId, setActiveId, active } = selected;
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
   const dragging = useRef(false);
   const widthRef = useRef(sidebarWidth);
-  const activeScene = active ? (scenes.find((s) => s.id === active.effectiveScene) ?? null) : null;
-  // 外观 = 用户选过 / 当前主题推荐 / 默认；在这里算出来并广播，所有窗口一致
-  useAppearance(suggestedAppearanceOf(active?.effectiveScene));
 
   function applyWidth(next: number, persist = false) {
     const clamped = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)));
@@ -147,7 +144,7 @@ function DesktopShell() {
         <section className="content">
           <SceneHost
             folder={active}
-            scene={activeScene}
+            scene={scene}
             onSceneConfigChange={(config) =>
               active ? bindScene(active.id, active.scene, config) : Promise.resolve(false)
             }
@@ -165,8 +162,23 @@ function DesktopShell() {
  *
  * 判断依据是"能不能开第二个窗口"和"够不够宽"，都不是"长什么样"——
  * 平台相关的判断只在 lib/platform.ts 里（AGENTS §2）。
+ *
+ * **共用状态挂在 App 上，不挂在骨架里**：换个骨架只是换编排，
+ * 场景树与"当前选中的场景"必须原样接着用 —— 挂在骨架里的话，
+ * 跨过断点那一刻组件重挂载，选择被重置成第一个场景（老 bug 的成因）。
  */
 export default function App() {
   const compact = useCompact();
-  return isMobileOS || compact ? <MobileShell /> : <DesktopShell />;
+
+  const tree = useFolders();
+  const selected = useActiveFolder(tree.folders);
+  const scene = selected.active
+    ? (tree.scenes.find((item) => item.id === selected.active?.effectiveScene) ?? null)
+    : null;
+
+  // 外观 = 用户选过 / 当前主题推荐 / 默认。生效值只有一个 owner（主骨架），就在这里算并广播
+  useAppearance(suggestedAppearanceOf(selected.active?.effectiveScene));
+
+  const shell: SceneShellProps = { tree, selected, scene };
+  return isMobileOS || compact ? <MobileShell {...shell} /> : <DesktopShell {...shell} />;
 }

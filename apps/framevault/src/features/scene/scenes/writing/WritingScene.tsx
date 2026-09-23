@@ -213,9 +213,9 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                     const video = item.mime.startsWith("video/");
                     return (
                       <li key={item.id}>
-                        <button type="button" onClick={() => setPreview(item)} title={item.name}>
+                        <button type="button" onClick={() => setPreview(item)} title={item.file}>
                           {src ? (
-                            <img loading="lazy" src={assetUrl(src)} alt={item.name} />
+                            <img loading="lazy" src={assetUrl(src)} alt={item.file} />
                           ) : (
                             <span className="writing__photo-fallback">
                               {video ? "▶" : "?"} {item.ext.toUpperCase()}

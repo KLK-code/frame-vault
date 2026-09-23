@@ -38,12 +38,15 @@ const MEDIA_EXTS: &[&str] = &[
 pub struct MediaMeta {
     pub schema_version: u32,
     pub id: String,
-    /// 磁盘上的实际文件名（住在记录目录里）。**改名后这里跟着变，别处不用管**
+    /// **这个文件现在叫什么**：磁盘上的实际文件名（住在记录目录里，导入时按模板生成，
+    /// 之后跟着改名走）。界面显示、路径拼接、排序都用它。
     #[serde(default)]
     pub file: String,
-    /// 用户导入时的原始文件名，只用于展示（磁盘上已经不是这个名字了）
-    #[serde(default)]
-    pub name: String,
+    /// 导入那一刻的原始文件名 —— **只作来历**（"这张原本叫什么"），
+    /// 它不是文件现在的名字（导入时已经按模板改名了）。
+    /// alias 是为了读得懂早期写成 `name` 的老文件。
+    #[serde(default, alias = "name")]
+    pub original_name: String,
     /// 小写扩展名（jpg / png / mp4 …）
     #[serde(default)]
     pub ext: String,
@@ -183,7 +186,10 @@ pub fn normalize_exif_datetime(raw: &str) -> Option<String> {
     ))
 }
 
-/// 导入一个文件：**复制**进记录目录（原文件不动），按模板命名，记下大小 / 哈希 / 尺寸。
+/// 导入一个文件：**复制**进记录目录（原文件不动），**按模板改名**，记下大小 / 哈希 / 尺寸。
+///
+/// 名字这件事只有一套规矩：**`file` 是它现在的名字**（磁盘上那个），
+/// 导入前的原名进 `original_name` 存个来历 —— 界面显示的、写进 JSON 的都是 `file`。
 ///
 /// 失败时清掉已经拷进去的那半个文件，不留"有条目没文件"的垃圾。
 pub fn import_into_entry(
@@ -228,8 +234,9 @@ pub fn import_into_entry(
         Ok(MediaMeta {
             schema_version: SCHEMA_VERSION,
             id: new_id(),
+            // 磁盘上的真名（模板生成 + 撞名去重）—— 它才是"这个文件叫什么"
             file,
-            name: source
+            original_name: source
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default(),
@@ -290,7 +297,8 @@ pub fn adopt_loose_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Vec<St
             schema_version: SCHEMA_VERSION,
             id: new_id(),
             file: file.clone(),
-            name: file.clone(),
+            // 用户直接拷进来的：我们只知道它现在叫什么，原名就当同一个
+            original_name: file.clone(),
             ext: ext.clone(),
             mime: guess_mime(&ext).to_string(),
             bytes: fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
@@ -369,7 +377,7 @@ mod tests {
         let meta =
             import_into_entry(&entry_dir, &source, None, &vars(), "2026-04-01T10:00:00Z").unwrap();
 
-        assert_eq!(meta.name, "我的照片 01.png", "原名留着展示");
+        assert_eq!(meta.original_name, "我的照片 01.png", "原名只作来历");
         assert_eq!(meta.file, "2026-04-01_晨跑打卡_01.png", "磁盘名按模板生成");
         assert_eq!(meta.ext, "png");
         assert_eq!(meta.mime, "image/png");
@@ -435,6 +443,27 @@ mod tests {
         assert_eq!(meta.file, "2026-04-01_早跑 3km_5_01.png");
     }
 
+    /// 早期文件里那个 `name` 字段要还读得出来（现在叫 originalName）——
+    /// 按既有政策不做跨大版本兼容，但**同一版内的字段改名**必须能读老文件
+    #[test]
+    fn old_media_json_with_name_still_loads() {
+        let old = r#"{
+            "schemaVersion": 2,
+            "id": "m1",
+            "file": "2026-09-22_晨跑_01.jpg",
+            "name": "IMG_0001.JPG",
+            "ext": "jpg",
+            "mime": "image/jpeg",
+            "bytes": 1024,
+            "hash": "abc",
+            "addedAt": "2026-09-22T07:35:00+08:00"
+        }"#;
+
+        let meta: MediaMeta = serde_json::from_str(old).unwrap();
+        assert_eq!(meta.file, "2026-09-22_晨跑_01.jpg", "磁盘名照旧");
+        assert_eq!(meta.original_name, "IMG_0001.JPG", "老的 name 读进 originalName");
+    }
+
     #[test]
     fn adopt_picks_up_loose_media_but_leaves_other_files() {
         let entry_dir = temp_dir("adopt");
@@ -451,6 +480,7 @@ mod tests {
         assert_eq!(media[0].file, "随手丢进来的照片.JPG");
         assert_eq!(media[0].mime, "image/jpeg", "扩展名大小写不影响判 MIME");
         assert!(media[0].hash.is_empty(), "收养不假装算过哈希");
+        assert_eq!(media[0].original_name, media[0].file);
 
         // 再扫一次不该重复收养
         let again = adopt_loose_files(&entry_dir, &mut media);

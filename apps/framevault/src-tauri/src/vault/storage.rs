@@ -938,7 +938,7 @@ mod tests {
             schema_version: SCHEMA_VERSION,
             id: "m-1".into(),
             file: "2026-09-22_晨跑打卡_01.jpg".into(),
-            name: "IMG_0001.JPG".into(),
+            original_name: "IMG_0001.JPG".into(),
             ext: "jpg".into(),
             mime: "image/jpeg".into(),
             bytes: 3,

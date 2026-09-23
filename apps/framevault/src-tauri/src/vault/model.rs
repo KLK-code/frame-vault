@@ -296,7 +296,7 @@ mod tests {
             schema_version: SCHEMA_VERSION,
             id: "m1".into(),
             file: "2026-01-01_日记_01.jpg".into(),
-            name: "IMG_0001.JPG".into(),
+            original_name: "IMG_0001.JPG".into(),
             ext: "jpg".into(),
             mime: "image/jpeg".into(),
             bytes: 1024,
@@ -311,7 +311,7 @@ mod tests {
         let back: Entry = serde_json::from_str(&json).unwrap();
         assert_eq!(back.media.len(), 1);
         assert_eq!(back.media[0].file, "2026-01-01_日记_01.jpg");
-        assert_eq!(back.media[0].name, "IMG_0001.JPG");
+        assert_eq!(back.media[0].original_name, "IMG_0001.JPG");
     }
 
     /// 老文件里没有的字段（day / media / sceneVersion / note）必须都有默认值

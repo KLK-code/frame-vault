@@ -207,11 +207,11 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
               <li key={item.id} className="wall__cell">
                 <button
                   className="wall__btn"
-                  title={`${item.name} · ${formatBytes(item.bytes)}`}
+                  title={`${item.file} · ${formatBytes(item.bytes)}`}
                   onClick={() => openItem(item)}
                 >
                   {src ? (
-                    <img loading="lazy" src={assetUrl(src)} alt={item.name} />
+                    <img loading="lazy" src={assetUrl(src)} alt={item.file} />
                   ) : (
                     <span className="wall__fallback">{item.ext.toUpperCase()}</span>
                   )}

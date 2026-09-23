@@ -43,11 +43,11 @@ export default function SceneMedia({ folder }: { folder: FolderNode }) {
             <li key={item.id}>
               <button
                 className="photo-grid__cell"
-                title={item.name + " · " + formatBytes(item.bytes)}
+                title={item.file + " · " + formatBytes(item.bytes)}
                 onClick={() => setPreview(item)}
               >
                 {src ? (
-                  <img loading="lazy" src={assetUrl(src)} alt={item.name} />
+                  <img loading="lazy" src={assetUrl(src)} alt={item.file} />
                 ) : (
                   <span className="photo-grid__fallback">{item.ext.toUpperCase()}</span>
                 )}

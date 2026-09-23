@@ -99,7 +99,8 @@ fn full_lifecycle_produces_the_readable_layout() {
 
     assert_eq!(media.file, "2026-09-22_晨跑_打卡_01.jpg");
     assert!(entry_dir.join(&media.file).is_file());
-    assert_eq!(media.name, "IMG_0001.JPG", "原始文件名只留在元数据里");
+    assert_eq!(media.file, "2026-09-22_晨跑_打卡_01.jpg", "JSON 记的是导入后的名字");
+    assert_eq!(media.original_name, "IMG_0001.JPG", "原始文件名只作来历");
 
     // 媒体元数据跟着记录走（命令层就是这么做的：push 完写回 entry.json）
     let mut stored = Entry::new("e-1", "早跑 3km", "2026-09-22T07:30:00+08:00");

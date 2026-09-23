@@ -76,10 +76,13 @@ export type SceneInfo = {
 export type MediaMeta = {
   schemaVersion: number;
   id: string;
-  /** 磁盘上的实际文件名（导入时按场景模板生成；用户手动改名后跟着变） */
+  /**
+   * **这个文件现在叫什么**：磁盘上的实际文件名（导入时按模板生成，之后跟着改名走）。
+   * 界面显示、排序、路径拼接都用它。
+   */
   file: string;
-  /** 导入时的原始文件名，只用于展示 */
-  name: string;
+  /** 导入那一刻的原始文件名 —— 只作来历（"这张原本叫什么"），不是它现在的名字 */
+  originalName: string;
   ext: string;
   mime: string;
   bytes: number;

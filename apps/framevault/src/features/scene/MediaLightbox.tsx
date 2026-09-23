@@ -31,7 +31,7 @@ export default function MediaLightbox({ item, onClose, footer }: Props) {
         {item.mime.startsWith("video/") ? (
           <video className="lightbox__media" src={assetUrl(item.originalPath)} controls autoPlay />
         ) : WEBVIEW_IMAGE_EXTS.has(item.ext) ? (
-          <img className="lightbox__media" src={assetUrl(item.originalPath)} alt={item.name} />
+          <img className="lightbox__media" src={assetUrl(item.originalPath)} alt={item.file} />
         ) : (
           <div className="lightbox__unsupported">
             <p>WebView 解不开 .{item.ext}（常见于 iPhone 直出的 HEIC）。</p>
@@ -45,9 +45,13 @@ export default function MediaLightbox({ item, onClose, footer }: Props) {
 
         <div className="lightbox__bar">
           <span className="lightbox__caption">
-            {item.name} · {formatBytes(item.bytes)}
+            {/* 显示的是**磁盘上的名字**（导入时按模板生成的那个）；原名只在这里提一句来历 */}
+            {item.file} · {formatBytes(item.bytes)}
             {item.width ? ` · ${item.width}×${item.height}` : ""}
             {item.takenAt ? ` · 拍摄于 ${item.takenAt.replace("T", " ")}` : ""}
+            {item.originalName && item.originalName !== item.file
+              ? ` · 导入时原名 ${item.originalName}`
+              : ""}
           </span>
           <button onClick={onClose}>关闭</button>
         </div>

@@ -128,11 +128,11 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
                             <li key={item.id}>
                               <button
                                 className="thumb"
-                                title={`${item.name} · ${formatBytes(item.bytes)}`}
+                                title={`${item.file} · ${formatBytes(item.bytes)}`}
                                 onClick={() => setPreview(item)}
                               >
                                 {src ? (
-                                  <img loading="lazy" src={assetUrl(src)} alt={item.name} />
+                                  <img loading="lazy" src={assetUrl(src)} alt={item.file} />
                                 ) : (
                                   <span className="thumb__fallback">
                                     {item.mime.startsWith("video/") ? "▶" : "?"} {item.ext.toUpperCase()}

@@ -192,7 +192,7 @@ lib.rs（组装）
 | 文件 | 命令 | 阶段 |
 |---|---|---|
 | `vault.rs` | `list_vaults` / `add_vault` / `create_vault` / `switch_vault` / `forget_vault` / `vault_exists` | ✅ 全部 |
-| `folder.rs` | `list_folder_tree` / `create_folder` / `rename_folder` / `delete_folder` / `bind_folder_scene` / `set_folder_pinned` / `reorder_folders` / `list_scenes` | ✅ 全部 |
+| `folder.rs` | `list_folder_tree` / `create_folder` / `rename_folder` / `delete_folder` / `bind_folder_scene` / `set_folder_pinned` / `reorder_folders` / `list_scenes` / **主题**：`list_topics` / `create_topic` / `rename_topic` / `delete_topic` | ✅ 全部 |
 | `entry.rs` | `new_id` / `save_entry` / `update_entry` / `delete_entry` / `restore_entry` / `load_entry` / `list_entries` / `read_vault_meta` | ✅ 全部 |
 | `media.rs` | `import_media`（`async`，含复制 / sha256 / 探尺寸 / 生成缩略图） / `list_media` | ✅ 本轮 |
 | `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
@@ -549,7 +549,11 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 | `import_media` | `sourcePath` / `entryId` / `nameTemplate?` / `addedAt` | `MediaItem` | 把一个文件**复制进记录目录**，按模板命名（算 sha256 / 探尺寸 / 生成缩略图）；`entryId` **必填**，`async` 命令，不占主线程 | ✅ |
 | `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前）：**从各条记录的 `media[]` 汇总**（不再扫 `media/`），返回原文件与缩略图的**绝对路径** | ✅ |
 | `list_folder_tree` | — | `FolderNode[]` | 全部场景（已排序；含 `scene` / `effectiveScene` / `order` / `pinned`） | ✅ |
-| `create_folder` | `name` / `scene?` | `FolderNode[]` | 新建场景：起名 + 选主题，一步完成 | ✅ |
+| `create_folder` | `name` / `scene?` / `topic?` | `FolderNode[]` | 新建**文件夹**：起名 + 选场景（怎么记）+ 选放哪个**主题**下（`topic: null` = 直接摆根下，没有主题；主题不存在会报错，不偷偷建目录） | ✅ |
+| `list_topics` | — | `string[]` | **主题**清单（根下不带 `folder.json` 的一级目录）；空主题也要列出来 | ✅ |
+| `create_topic` | `name` | `string[]` | 新建主题 = 建一个目录（**不写任何文件**：主题没有字段） | ✅ |
+| `rename_topic` | `name` / `newName` | `string[]` | 主题改名 = 改目录名（里面的文件夹跟着换主题） | ✅ |
+| `delete_topic` | `name` | `string[]` | 删除主题；**里面还有东西就拒绝** | ✅ |
 | `rename_folder` | `id` / `name` | `FolderNode[]` | 给场景改名 | ✅ |
 | `delete_folder` | `id` | `FolderNode[]` | 删场景；**里面还有记录时拒绝**（不让记录变孤儿） | ✅ |
 | `bind_folder_scene` | `id` / `scene?` / `sceneConfig?` | `FolderNode[]` | 换主题（`null` = 退回内置普通记录） | ✅ |
@@ -755,14 +759,28 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 ```text
 <用户选的目录>/
 ├── vault.json                      身份文件（有它才算 Vault；layout: 2）
-├── .framevault/trash/<原目录名>/    删掉的记录挪这儿（撤销 = 挪回原场景）
-├── 未归类/                          不属于任何场景的记录（根下没有 folder.json 的容器）
-└── 晨跑打卡/                        一级目录 + folder.json = 一个场景
-    └── 2026-09-22 早跑 3km/          二级目录 = 一条记录（创建日 + 标题）
-        ├── entry.json                id / day / 时间戳 / 标题 / fields / media[]
-        ├── note.md                   正文（唯一真相，不进 entry.json）
-        └── 2026-09-23_晨跑打卡_01.jpg  媒体本体（导入时按模板命名）
+├── .framevault/trash/<原目录名>/    删掉的记录挪这儿（撤销 = 挪回原文件夹）
+├── 科研/                           **主题**：一级目录 + **没有 folder.json**（不存任何字段）
+│   └── 论文笔记/                    文件夹：folder.json 绑一个**场景**（怎么记）
+│       └── 2026-09-23 周报/         记录
+│           ├── entry.json          id / day / 时间戳 / 标题 / fields / media[]
+│           ├── note.md             正文（唯一真相，不进 entry.json）
+│           └── 2026-09-23_论文笔记_01.jpg
+├── 晨跑打卡/                       文件夹也可以直接摆根下 = **没有主题**
+└── 未归类/                         没有文件夹的记录（默认容器，按名字认）
 ```
+
+**三层各管一件事**（2026-09 拍板，见 `docs/PROPOSAL_topics_scenes_zh-CN.md`）：
+
+| 层 | 是什么 | 形态 |
+|---|---|---|
+| **主题** | 记录讲的**内容**（科研 / 旅游 / 挑战…） | **数据**：一层目录，**不存字段**（位置派生） |
+| **文件夹** | 一堆记录 + 绑的**场景** | 数据：`folder.json`（`scene` + 配置） |
+| **记录** | 一条内容 | 数据：`entry.json` + `note.md` + 媒体 |
+| **场景** | 记录**怎么记**（随心记 / 认真写作 / 拍照打卡） | **代码**：`features/scene/scenes/<id>/` + `builtin_scenes()` |
+
+认目录**只有一条规则**：一级目录带 `folder.json` = 文件夹；不带 = 容器（主题）；
+容器里既可以放文件夹，也可以直接放记录（「未归类」按名字认 —— 写路径要一个确定落点）。
 
 **三条"名字"规矩**（唯一出口是 `vault/naming.rs`）：
 
@@ -952,5 +970,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 扫描时拿目录名去改写记录的 `title` | 用户在应用里改的标题，下一次列出被目录名覆盖回去 | 标题的真相在 `entry.json`；目录名是名字，不反向覆盖标题。场景那边相反：`FolderMeta.name` 就是磁盘目录名 |
 | 回收站目录用 `<entryId>` 命名 | 撤销时只能按 `day + title` 重算名字，用户手动改过的目录名丢掉 | 回收站保留原目录名，撤销原样挪回去 |
 | 在扫描（读命令）里做媒体对账并写盘 | 对账按"文件不在 `media[]` 里"判重，会让"导入后立刻读一次"重复收养同一张照片 | 收养前按**文件名**排重；只在真的变了时写盘，且只写 `entry.json` |
+| 让"主题"也带字段（`folder.json.topic`） | 会出现"字段写着科研、目录却在旅游下"的矛盾；与"磁盘为准"并存会打架 | 主题**不存字段**：位置就是它（`FolderNode.topic` 是扫描时算出来的派生字段） |
+| 用同一条规则同时管"扫描"和"落点" | 「科研」也是"没有 folder.json 的一级目录"，于是"没有文件夹的记录放哪"就没有确定答案了 | 扫描按**结构**，写路径按**名字**（`ensure_uncategorized` 只认「未归类」） |
 | 两套骨架各自 `useState` 存"当前选中的场景" | 跨过断点换骨架时组件重挂载，选择重置成第一个场景 | 共用状态挂在公共父节点（`App`）上，经 `SceneShellProps` 传下去；骨架里只留视图开关 |
 | 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 只热替换组件代码，而**编辑器实例只在挂载时创建一次**（`useEffect(…, [])` 里 `new EditorView`），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲一遍**。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |

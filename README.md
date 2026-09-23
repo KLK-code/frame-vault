@@ -17,7 +17,7 @@
 | [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md) | **存储规范 v2（已实施）**：Obsidian 式人可读层级 —— 场景/记录按文件夹组织、正文落 `note.md`、媒体导入时按模板命名；六条语义（含**不做旧布局兼容**）已落地，偏差见文末 |
 | [docs/PROPOSAL_wysiwyg_live_source_zh-CN.md](./docs/PROPOSAL_wysiwyg_live_source_zh-CN.md) | **编辑器 Live Source（已废止）**：写作台里"光标所在块翻成源码盒子"的块级方案，实测撞到「盒子 + 选区被困」的体验上限，已被下条取代、代码已删除；留档备查 |
 | [docs/PROPOSAL_editor_codemirror6_zh-CN.md](./docs/PROPOSAL_editor_codemirror6_zh-CN.md) | **编辑器内核迁移（已实施）**：ProseMirror/Milkdown → CodeMirror 6，真·Obsidian 式即时渲染（源码即真值、无盒子、选区全篇自由），取代上条的块级方案 |
-| [docs/PROPOSAL_topics_scenes_zh-CN.md](./docs/PROPOSAL_topics_scenes_zh-CN.md) | **主题 / 场景 / 文件夹（讨论稿）**：主题 = 用户自己的分组（叫"科研"或叫"打卡"都行，App 不预设语义，磁盘上就是一层目录），场景 = 记录方式（随心记/认真写作/拍照打卡，UI 与录入据它特化），文件夹 = 绑一个场景 + 声明这批记录的字段；**磁盘听用户的（想怎么分就怎么分），导航是我们的**（按主题 / 按场景 / 平铺三种分组可切换，纯 UI）；四条旧认识（场景=文件夹、主题=功能主题、主题=外观、目录嵌套不做）作废 |
+| [docs/PROPOSAL_topics_scenes_zh-CN.md](./docs/PROPOSAL_topics_scenes_zh-CN.md) | **主题 / 场景 / 文件夹**：主题 = 记录讲的**内容**（科研/旅游/挑战，磁盘上一层目录，不存字段），场景 = 记录**怎么记**（随心记/认真写作/拍照打卡，代码实现、界面与录入据它特化），文件夹 = 一堆记录 + 绑一个场景。**阶段①已实施**（主题层 + 导航三种分组）；四条旧认识（场景=文件夹、主题=功能主题、主题=外观、目录嵌套不做）作废 |
 | [docs/ALIGNMENT_vision_vs_plans_zh-CN.md](./docs/ALIGNMENT_vision_vs_plans_zh-CN.md) | **对齐记录**：愿景 × 两份计划（存储 v2 / 编辑器换 CM6）的结构冲突与扩展位 —— 哪些必须现在改、哪些是固有代价、哪些只是措辞不一致 |
 | [docs/REFERENCES.md](./docs/REFERENCES.md) | 参考项目清单（学习用，含许可证红线） |
 
@@ -40,11 +40,16 @@
   但**构建环境（JDK / Android SDK / NDK / Rust 交叉目标）与真机验证还没做** —— 机床装好之前跑不出 APK，所以这还不是“支持 Android”。
 
 **已定案（2026-04）**：仓库层面不做目录嵌套——一个文件夹 = 一个场景 = 一个文件夹 + 它绑定的主题，所有场景平铺存放；"按主题归类"是前端显示层的事（同属"挑战"的跑步与健身房会聚成一组显示），记录归属靠 `folderId` 字段、媒体归属靠 `entryId` 字段，移动 = 改一个字段。媒体原始文件按不可变对象保存，缩略图与索引属可重建缓存、放应用数据目录、不进同步。图库聚合范围、排序与跨文件夹移动的交互等尚未定案，统一记录在 [PRD 待决事项](./FrameVault_PRD_zh-CN.md#12-仍需后续决策的问题)。
-**磁盘布局（2026-09-23 已落地）**：Vault 是"人可读层级" —— 一级目录 = 场景（带 `folder.json`），
-二级目录 = 记录（`2026-09-22 早跑 3km/`，里面是 `entry.json` + `note.md` + 媒体本体），
-不属于任何场景的记录住根下的「未归类」容器。三条语义：**跟随改名**（改标题会重命名目录）、
-**磁盘为准**（手动改过的名字永久保留）、**不做旧布局兼容**（v1 的扁平仓库直接拒绝）。
-细节见 [存储规范 v2](./docs/PROPOSAL_storage_v2_zh-CN.md) 与 [实现架构 §13.2](./docs/ARCHITECTURE_IMPL_zh-CN.md)。
+**磁盘布局（2026-09-23 已落地）**：Vault 是"人可读层级" ——
+**主题**（一级目录，没有 `folder.json`，用户自己分的组）> **文件夹**（带 `folder.json`，绑一个场景）
+> **记录**（`2026-09-22 早跑 3km/`，里面是 `entry.json` + `note.md` + 媒体本体）；
+文件夹也可以直接摆根下（= 没有主题），没有文件夹的记录住「未归类」。
+**主题不存字段**：它在磁盘上就是一层目录，所以"在资源管理器里把文件夹拖到别的主题下"就是换主题。
+三条语义：**跟随改名**（改标题会重命名目录）、**磁盘为准**（手动改过的名字永久保留）、
+**不做旧布局兼容**（v1 的扁平仓库直接拒绝）。
+导航栏可以按**主题 / 场景 / 平铺**三种方式分组（纯 UI，不影响文件怎么存）。
+细节见 [主题与场景](./docs/PROPOSAL_topics_scenes_zh-CN.md)、[存储规范 v2](./docs/PROPOSAL_storage_v2_zh-CN.md)
+与 [实现架构 §13.2](./docs/ARCHITECTURE_IMPL_zh-CN.md)。
 
 ## 技术栈基线
 

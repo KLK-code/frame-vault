@@ -1,8 +1,9 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
 import { useCompact } from "../../../../lib/useCompact";
 import { fieldText, fieldValue, noteFieldOf, writeValues, type FieldDecl, type SceneViewProps } from "../../manifest";
 import { displayableSrc, formatDay } from "../../mediaFormat";
+import EntryMenu, { type EntryMenuState } from "../../EntryMenu";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
 import SceneIcon from "../../SceneIcon";
@@ -15,6 +16,10 @@ import "./WritingScene.css";
 const MarkdownWysiwyg = lazy(() => import("../../markdown/MarkdownWysiwyg"));
 
 const NL = String.fromCharCode(10);
+/** 停手多久算"写完了"。太短会写得太勤（对同步盘不友好），太长会觉得没存上 */
+const AUTOSAVE_DELAY = 600;
+/** 长按多久算"右键"（触摸屏没有右键） */
+const LONG_PRESS_MS = 500;
 
 type Draft = { text: string; meta: Record<string, unknown> };
 
@@ -60,8 +65,11 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>({ text: "", meta: {} });
-  const [dirty, setDirty] = useState(false);
+  /** 保存状态：改了就排队、停手就写、写完显示"已保存"（没有保存按钮） */
+  const [saveState, setSaveState] = useState<"clean" | "pending" | "saving" | "error">("clean");
   const [preview, setPreview] = useState<MediaItem | null>(null);
+  /** 右键 / 长按一篇弹的菜单（桌面右键、触摸长按都走它） */
+  const [menu, setMenu] = useState<EntryMenuState>(null);
   /** 照片卡片收起 / 展开 —— 视图开关，按 README 的状态分区记在 localStorage */
   const [photosOpen, setPhotosOpen] = useState(
     () => localStorage.getItem("fv.writingPhotosOpen") !== "0",
@@ -71,25 +79,131 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
   const current = ordered.find((entry) => entry.id === selectedId) ?? ordered[0] ?? null;
   const photos = current ? data.mediaOf(current.id) : [];
 
-  // 换了一篇（或它被别处改了）就把草稿重新装载
+  /**
+   * 待写的这一份：**连同"是哪一篇"一起记**，所以切篇 / 卸载时补写也写得对。
+   * `snapshot` 是序列化后的内容，用来判断"到底变没变"（没变就不写盘）。
+   */
+  const pending = useRef<{ id: string; entry: Entry; snapshot: string } | null>(null);
+  const saveTimer = useRef<number | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  function snapshotOf(entry: Entry, values: Draft): string {
+    return JSON.stringify({
+      text: values.text,
+      meta: values.meta,
+      // 标题固定不动（写作台的标题是空的，目录名只按创建日），但带上它省得以后忘
+      title: entry.title,
+    });
+  }
+
+  /** 立刻把待写的那一份落盘（停手后、切篇前、失焦时、卸载时都调它） */
+  async function flush() {
+    const job = pending.current;
+    if (!job) return;
+    if (saveTimer.current != null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    setSaveState("saving");
+    const values = draftRef.current;
+    const ok = await data.edit(job.entry, {
+      title: job.entry.title,
+      ...writeValues(job.entry, scene.id, fields, {
+        ...values.meta,
+        ...(textField ? { [textField.key]: values.text } : {}),
+      }),
+    });
+    if (!ok) {
+      setSaveState("error");
+      return; // 留着 pending：下一次改动或补写还会再试
+    }
+    if (pending.current?.snapshot === job.snapshot) pending.current = null;
+    setSaveState("clean");
+  }
+
+  // 换了一篇就把草稿重新装载。
+  // **依赖只认"哪一篇"**：自动保存会让 updatedAt 每次变化，跟着它重载就成了
+  // "存一次 → 重载一次 → 把刚敲的字盖回去"，打字快的时候会丢字（见 AGENTS §9）。
   useEffect(() => {
     setDraft(draftFrom(current, scene.id, fields));
-    setDirty(false);
-    // 依赖只认"哪一篇 + 它最后改动时间"；字段声明是常量
-  }, [current ? current.id : null, current ? current.updatedAt : null]);
+    setSaveState("clean");
+    pending.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current ? current.id : null]);
 
-  async function save() {
+  // 草稿一变就排队：停手 AUTOSAVE_DELAY 之后写一次
+  useEffect(() => {
     if (!current) return;
-    // 正文与元字段一起交给核心路由：正文 → note.md，其余 → 本主题的字段命名空间
-    const values = {
-      ...draft.meta,
-      ...(textField ? { [textField.key]: draft.text } : {}),
+    const values = { text: draft.text, meta: draft.meta };
+    const snapshot = snapshotOf(current, values);
+    pending.current = { id: current.id, entry: current, snapshot };
+    setSaveState("pending");
+    if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      void flush();
+    }, AUTOSAVE_DELAY);
+    return () => {
+      if (saveTimer.current != null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
     };
-    const ok = await data.edit(current, {
-      title: current.title,
-      ...writeValues(current, scene.id, fields, values),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  // 窗口失焦 / 组件卸载：把还没写的补上（Obsidian 也是这么干的）
+  useEffect(() => {
+    const onBlur = () => void flush();
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      void flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** 在指针位置弹出那一篇的菜单（桌面右键 / 触摸长按共用） */
+  function openMenuAt(x: number, y: number, entry: Entry) {
+    setMenu({
+      x,
+      y,
+      items: [
+        {
+          label: "删除这一篇",
+          danger: true,
+          onSelect: () => {
+            setMenu(null);
+            void data.remove(entry);
+          },
+        },
+      ],
     });
-    if (ok) setDirty(false);
+  }
+
+  function openMenu(event: React.MouseEvent, entry: Entry) {
+    event.preventDefault();
+    openMenuAt(event.clientX, event.clientY, entry);
+  }
+
+  const pressTimer = useRef<number | null>(null);
+
+  function startPress(event: React.PointerEvent, entry: Entry) {
+    if (event.pointerType === "mouse") return; // 鼠标走右键，免得误触
+    const { clientX, clientY } = event;
+    endPress();
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      openMenuAt(clientX, clientY, entry);
+    }, LONG_PRESS_MS);
+  }
+
+  function endPress() {
+    if (pressTimer.current != null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
   }
 
   function togglePhotos() {
@@ -146,7 +260,16 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 <button
                   type="button"
                   className={current && entry.id === current.id ? "writing__item is-active" : "writing__item"}
-                  onClick={() => setSelectedId(entry.id)}
+                  title="右键（或长按）可以删除这一篇"
+                  onClick={() => {
+                    void flush(); // 切篇前先把这一篇写完（卸下待写任务，防丢字）
+                    setSelectedId(entry.id);
+                  }}
+                  onContextMenu={(e) => openMenu(e, entry)}
+                  onPointerDown={(e) => startPress(e, entry)}
+                  onPointerUp={endPress}
+                  onPointerLeave={endPress}
+                  onPointerMove={endPress}
                 >
                   <span className="writing__item-day">{formatDay(data.dateOf(entry))}</span>
                   <span className="writing__item-summary">{summaryOf(entry, scene.id, textField)}</span>
@@ -162,7 +285,15 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 <span className="writing__time">
                   {new Date(current.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                 </span>
-                {dirty && <span className="writing__dirty">未保存</span>}
+                <span className="writing__save-state">
+                  {saveState === "saving"
+                    ? "保存中…"
+                    : saveState === "error"
+                      ? "没存上，改一下再试"
+                      : saveState === "pending"
+                        ? ""
+                        : "✓ 已保存"}
+                </span>
               </header>
 
               {/* 照片在上、正文在下：写作时先看见"这一篇配了什么图"，右上角的按钮能把它收起来 */}
@@ -229,10 +360,10 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                     fields={metaFields}
                     values={draft.meta}
                     idPrefix="writing-meta"
-                    onChange={(key, value) => {
-                      setDraft((prev) => ({ ...prev, meta: { ...prev.meta, [key]: value } }));
-                      setDirty(true);
-                    }}
+                    onChange={(key, value) =>
+                      // 只管改草稿：排队写盘交给下面那个监听 draft 的 effect（自动保存）
+                      setDraft((prev) => ({ ...prev, meta: { ...prev.meta, [key]: value } }))
+                    }
                   />
                 </div>
               )}
@@ -242,37 +373,19 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                   value={draft.text}
                   onChange={(next) => {
                     // 编辑器挂载时会把内容回灌一次（自己的 value 又报回来），那不算用户改动 ——
-                    // 不挡住的话，刚打开一篇就亮着"未保存"（验证时看到的）
+                    // 不挡住的话，刚打开一篇就排队写一次盘
                     if (next === draft.text) return;
                     setDraft((prev) => ({ ...prev, text: next }));
-                    setDirty(true);
                   }}
                 />
               </Suspense>
 
-              <div className="writing__actions">
-                <button
-                  type="button"
-                  className="writing__btn is-primary"
-                  onClick={() => void save()}
-                  disabled={data.busy !== null || !dirty}
-                >
-                  保存
-                </button>
-                <button
-                  type="button"
-                  className="writing__btn is-danger"
-                  onClick={() => void data.remove(current)}
-                  disabled={data.busy !== null}
-                >
-                  删除
-                </button>
-                <span className="writing__hint">所见即所得：标题、列表、引用直接就是排好的样子，粘一整篇 Markdown 进来也会自动排版。改完记得保存</span>
-              </div>
             </article>
           )}
         </div>
       )}
+
+      <EntryMenu menu={menu} onClose={() => setMenu(null)} />
 
       {preview && <MediaLightbox item={preview} onClose={() => setPreview(null)} />}
     </div>

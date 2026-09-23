@@ -42,13 +42,28 @@
   }
   .writing__empty p { margin: 0; font-size: var(--fv-text-sm); }
 
-  /* 宽屏：左列表 + 右写作台；窄屏：上下堆叠。body 吃满 .writing 剩下的高度。
+  /* 宽屏：左列表 + 拖动分隔条 + 右写作台（列表宽度可拖，列宽由组件内联给）；
+  列间隙收窄是因为中间有分隔条自己占位；窄屏：上下堆叠（分隔条隐藏）。
   行必须 minmax(0,1fr)：auto 行会被列表的自然高度撑爆，整页跟着滚、列表就没有自己的滚动条了 */
-  .writing__body { display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: var(--fv-space-4); min-width: 0; flex: 1; min-height: 0; }
+  .writing__body {
+    display: grid;
+    grid-template-columns: 200px 8px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--fv-space-4) var(--fv-space-1);
+    min-width: 0;
+    flex: 1;
+    min-height: 0;
+  }
   .writing__body.is-compact { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .writing__body.is-compact .writing__divider { display: none; }
+
+  /* 拖动分隔条：平时隐形，悬停给一点提示（跟文件夹侧栏的分隔条同一套手感） */
+  .writing__divider { width: 8px; border-radius: var(--fv-radius-sm); cursor: col-resize; }
+  .writing__divider:hover { background: var(--fv-color-surface-hover); }
 
   /* 列表列自己的头：篇数 + 新建小图标（Obsidian 式）。列表在剩余高度里自己滚 */
   .writing__side { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--fv-space-2); min-width: 0; min-height: 0; }
+  .writing__body.is-compact .writing__side { grid-template-rows: auto auto; }
   .writing__body.is-compact .writing__side { grid-template-rows: auto auto; }
   .writing__list-head { display: flex; align-items: center; justify-content: space-between; gap: var(--fv-space-2); }
   .writing__new {

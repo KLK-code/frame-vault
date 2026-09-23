@@ -21,6 +21,19 @@ const AUTOSAVE_DELAY = 600;
 /** 长按多久算"右键"（触摸屏没有右键） */
 const LONG_PRESS_MS = 500;
 
+/** 左侧"篇"列表的宽度：可拖分隔条调整（跟文件夹侧栏同一套手感），双击复位 */
+const LIST_WIDTH_KEY = "fv.writingListWidth";
+const LIST_WIDTH_MIN = 150;
+const LIST_WIDTH_MAX = 420;
+const LIST_WIDTH_DEFAULT = 200;
+
+function readListWidth(): number {
+  const saved = Number(localStorage.getItem(LIST_WIDTH_KEY));
+  return Number.isFinite(saved) && saved >= LIST_WIDTH_MIN && saved <= LIST_WIDTH_MAX
+    ? saved
+    : LIST_WIDTH_DEFAULT;
+}
+
 type Draft = { text: string; meta: Record<string, unknown> };
 
 /**
@@ -74,6 +87,46 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
   const [photosOpen, setPhotosOpen] = useState(
     () => localStorage.getItem("fv.writingPhotosOpen") !== "0",
   );
+  /** 左列表宽度（可拖分隔条）—— 视图与面板开关，记 localStorage */
+  const [listWidth, setListWidth] = useState(readListWidth);
+  const listDragging = useRef(false);
+  const listWidthRef = useRef(listWidth);
+  const listStartLeft = useRef(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  function applyListWidth(next: number) {
+    const clamped = Math.round(Math.min(LIST_WIDTH_MAX, Math.max(LIST_WIDTH_MIN, next)));
+    listWidthRef.current = clamped;
+    setListWidth(clamped);
+  }
+
+  function startListDrag(e: React.PointerEvent) {
+    e.preventDefault();
+    listStartLeft.current = bodyRef.current?.getBoundingClientRect().left ?? 0;
+    listDragging.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
+
+  // 拖动改列表宽度：Pointer 事件（鼠标和触摸都能用）；松手才写 localStorage
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      if (listDragging.current) applyListWidth(e.clientX - listStartLeft.current);
+    }
+    function onUp() {
+      if (!listDragging.current) return;
+      listDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      localStorage.setItem(LIST_WIDTH_KEY, String(listWidthRef.current));
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, []);
 
   const ordered = [...data.entries].sort((a, b) => data.dateOf(b).localeCompare(data.dateOf(a)));
   const current = ordered.find((entry) => entry.id === selectedId) ?? ordered[0] ?? null;
@@ -239,7 +292,11 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
           </button>
         </div>
       ) : (
-        <div className={compact ? "writing__body is-compact" : "writing__body"}>
+        <div
+          className={compact ? "writing__body is-compact" : "writing__body"}
+          ref={bodyRef}
+          style={compact ? undefined : { gridTemplateColumns: `${listWidth}px 8px minmax(0, 1fr)` }}
+        >
           <div className="writing__side">
             {/* 列表自己的头：篇数在左，新建按钮是 Obsidian 式的小图标（自动保存之后顶栏就没有存在的必要了） */}
             <div className="writing__list-head">
@@ -279,6 +336,18 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
             ))}
             </ul>
           </div>
+
+          {/* 列表与正文之间的拖动分隔条（跟文件夹侧栏同一套手感；窄屏单列时隐藏） */}
+          {!compact && (
+            <div
+              className="writing__divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="拖动调整列表宽度，双击复位"
+              onPointerDown={startListDrag}
+              onDoubleClick={() => applyListWidth(LIST_WIDTH_DEFAULT)}
+            />
+          )}
 
           {current && (
             <article className="writing__sheet">

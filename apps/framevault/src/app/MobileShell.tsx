@@ -64,6 +64,7 @@ export default function MobileShell({ tree, selected, scene }: SceneShellProps) 
     rename,
     remove,
     togglePinned,
+    reorder,
     bindScene,
     createTopic,
     renameTopic,
@@ -161,6 +162,7 @@ export default function MobileShell({ tree, selected, scene }: SceneShellProps) 
               onRename={rename}
               onDelete={handleDelete}
               onTogglePinned={(folder) => togglePinned(folder.id, !folder.pinned)}
+              onReorder={reorder}
               onBindScene={bindScene}
               onCreateTopic={(name) => createTopic(name)}
               onRenameTopic={(topic, next) => renameTopic(topic, next)}

@@ -176,7 +176,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   - **外观主题**（一套值 = 一个预设）挂 `:root[data-appearance="preset.x"]`，**所有窗口、所有区域**都读它；用户手调的单值覆盖优先级最高（内联在 `documentElement` 上）。**外壳**（标题栏 / 侧栏 / 选中行 / 设置窗口）的风格属于外观，**不许**跟着“当前场景是哪个主题”变。
   - **功能主题的巧思**只挂它自己的**舞台容器**（`data-scene` 在舞台那一层，**不在** `.app-root`），所以主题样式在作用域上碰不到外壳；允许的只有白名单：图标、`--fv-scene-banner`，以及主题视图自己的排版。
   - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
-  - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / `--fv-nav-active-*`），字号、间距、圆角尺度、阴影这些“骨架”值三套必须一致 —— 三套外观要像**同一个产品**，不是三个 App。
+  - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / `--fv-nav-active-*`），字号、间距、圆角尺度、阴影这些“骨架”值各套必须一致 —— 几套外观要像**同一个产品**，不是几个 App。
 - **Markdown 是核心能力，不是主题私有**：解析只许走 `src/markdown/parse.ts`（别处不许 import `remark` / `unified`）；渲染走 `features/scene/markdown/`（`registry.ts` 是将来加自定义块的扩展点）；**主题不许自己写渲染器**。规矩：原始 HTML 不渲染（给可见提示）、软换行按换行显示、认不出的节点降级显示、**只读不回写**。
   **输入控件也在核心，而且有两种（主题只挑"用哪个"）**：`MarkdownField` = textarea + 语法工具栏 + 编辑/预览切换，`SceneFields` 渲染多行字段时默认就用它（表单 / 快速记录）；`MarkdownWysiwyg` = 一整块所见即所得的编辑区（**CodeMirror 6**，`MarkdownWysiwyg.tsx` + `livePreview.ts`，**按需加载**），长文用。
   **主题不许自己写工具栏 / 预览 / 富文本编辑器，也不许 import `@codemirror/*` 或 `@lezer/*`**；要文档级编辑就在视图里 `React.lazy` 引核心的 `MarkdownWysiwyg`（写作台就是这么做的），字段声明照旧写 `textarea`。两个控件的接口一模一样（`value` 进、Markdown 字符串出），所以磁盘格式和渲染器都不用知道记录是哪个编辑器敲的。

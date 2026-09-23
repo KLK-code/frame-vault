@@ -6,7 +6,7 @@
    四条规矩（见 docs/theme-contract.md §1.1）：
      1) 每套必须**浅色 + 深色都给全**，否则切深色会露馅；
      2) 预设之间**只许分颜色**——字号 / 间距 / 圆角尺度 / 阴影这些"骨架"值不许变，
-        三套外观要像同一个产品，不是三个 App；
+        每套外观都要像同一个产品，不是几个 App；
      3) 认不出的 id 什么都不匹配，于是自然回落到 tokens.css 的 :root 默认值；
      4) 用户在设置里手调的单个 token 内联在 <html> 上，优先级永远最高。
 
@@ -148,5 +148,49 @@
     --fv-scene-banner: linear-gradient(115deg, #423028, #242327 75%);
     --fv-nav-active-bg: var(--fv-color-accent);
     --fv-nav-active-fg: var(--fv-color-on-accent);
+  }
+
+  /* ── 晴空 preset.azure：Obsidian 默认 / Things 那种干净的蓝，冷静、利落 ──
+     与另外几套的分工：暖纸偏暖、青碧偏冷绿、炭火最凶，这一套是"工作台"的中性冷蓝。 */
+  :root[data-appearance="preset.azure"] {
+    color-scheme: light;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #f6f8fb;
+    --fv-color-paper: #ffffff;
+    --fv-color-surface: #edf1f7;
+    --fv-color-surface-hover: #e2e8f2;
+    --fv-color-surface-active: #d5dded;
+    --fv-color-text: #1f2937;
+    --fv-color-text-strong: #0f1724;
+    /* 次要字与主色都比"手感"再压深一档：这两对是文字，对比度得站住（算过：4.8 / 4.5） */
+    --fv-color-muted: #5d6a80;
+    --fv-color-border: #e2e7ef;
+    --fv-color-border-strong: #c6cfdd;
+    --fv-color-accent: #2a63e0;
+    --fv-color-accent-soft: #e4ecfe;
+    --fv-color-accent-hover: #eff4ff;
+    --fv-color-on-accent: #ffffff;
+    --fv-scene-banner: linear-gradient(115deg, #e2eafe, #f7f9fc 78%);
+  }
+  :root[data-appearance="preset.azure"][data-theme="dark"] {
+    color-scheme: dark;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #1b1f27;
+    --fv-color-paper: #232833;
+    --fv-color-surface: #171b22;
+    --fv-color-surface-hover: #2a313d;
+    --fv-color-surface-active: #333c4a;
+    --fv-color-text: #e4e8f0;
+    --fv-color-text-strong: #ffffff;
+    --fv-color-muted: #98a3b6;
+    --fv-color-border: #2e3542;
+    --fv-color-border-strong: #465063;
+    --fv-color-accent: #6f9dff;
+    --fv-color-accent-soft: #24324a;
+    --fv-color-accent-hover: #1f2937;
+    --fv-color-on-accent: #0e1626;
+    --fv-scene-banner: linear-gradient(115deg, #223454, #1b1f27 75%);
   }
 }

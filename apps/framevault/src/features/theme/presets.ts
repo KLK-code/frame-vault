@@ -10,4 +10,5 @@ export const PRESETS: AppearancePreset[] = [
   { id: "preset.paper", name: "暖纸" },
   { id: "preset.tide", name: "青碧" },
   { id: "preset.ember", name: "炭火" },
+  { id: "preset.azure", name: "晴空" },
 ];

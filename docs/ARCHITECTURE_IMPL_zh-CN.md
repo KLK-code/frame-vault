@@ -431,7 +431,7 @@ export default function XxxScene({ folder, scene, onSceneConfigChange }: SceneVi
 | 场景 | 放哪 | 例子 |
 |---|---|---|
 | 设计令牌**默认值** | 根目录 `tokens.css` | `--fv-color-text` |
-| **外观预设**（一整套值） | 根目录 `skins.css`（`:root[data-appearance="preset.*"]`） | `preset.paper` / `preset.tide` / `preset.ember` |
+| **外观预设**（一整套值） | 根目录 `skins.css`（`:root[data-appearance="preset.*"]`） | `preset.paper` / `preset.tide` / `preset.ember` / `preset.azure` |
 | 浏览器默认样式归零 | `styles/reset.css` | `box-sizing`、`margin: 0` |
 | 层顺序 | `styles/layers.css` | `@layer reset, base, components, theme, user;` |
 | 外壳布局 | `App.css` / `app/window.css` | `.app`、`.sidebar`、`.content` |
@@ -927,7 +927,7 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 **命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 四个主题单元 `scenes/{plain,travel,challenge,writing}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（三套外观预设，浅深两套齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 渲染 + 注册表 + 输入控件 `MarkdownField`）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 四个主题单元 `scenes/{plain,travel,challenge,writing}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（四套外观预设，每套浅深齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 渲染 + 注册表 + 输入控件 `MarkdownField`）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
 
 **验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
 

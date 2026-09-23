@@ -89,7 +89,7 @@
 | 规矩 | 细节 |
 |---|---|
 | 两套色值 | **浅色 + 深色都必须给全**（沿用第 1 节第 3 条：不给就会在切深色时露馅） |
-| 只许分颜色 | 允许变：`--fv-color-*`、`--fv-color-focus-ring` / `--fv-color-selection`、`--fv-scene-banner`、以及外壳层少数变量（侧栏选中行 `--fv-nav-active-bg` / `--fv-nav-active-fg`）；**骨架值不许变**：字号、间距、圆角尺度、阴影 —— 三套外观要像**同一个产品**，不是三个 App |
+| 只许分颜色 | 允许变：`--fv-color-*`、`--fv-color-focus-ring` / `--fv-color-selection`、`--fv-scene-banner`、以及外壳层少数变量（侧栏选中行 `--fv-nav-active-bg` / `--fv-nav-active-fg`）；**骨架值不许变**：字号、间距、圆角尺度、阴影 —— 每套外观都要像**同一个产品**，不是几个 App |
 | 对比度 | 正文 `--fv-color-text` ≥ 4.5:1，次要文字 `--fv-color-muted` ≥ 3:1（同第 1 节规则 0） |
 | id 命名空间 | 内置 `preset.*`；第三方 `vendor.*`（M3 之后再放开） |
 | 认不出来 | 回退默认预设，**不白屏、不报错打断** |
@@ -97,7 +97,7 @@
 
 功能主题可以在 `manifest.presentation.suggestedAppearance` 里**推荐**一套预设（纯数据），但**不能强制**。
 
-内置三套（id / 名字 / 代码落点三处一致）：`preset.paper` 暖纸、`preset.tide` 青碧、`preset.ember` 炭火 —— 值写在 `src/skins.css`，列表写在 `features/theme/presets.ts`。
+内置四套（id / 名字 / 代码落点三处一致）：`preset.paper` 暖纸、`preset.tide` 青碧、`preset.ember` 炭火、`preset.azure` 晴空（Obsidian 默认 / Things 那种干净的蓝）—— 值写在 `src/skins.css`，列表写在 `features/theme/presets.ts`。
 
 ## 2. 公开 selector 表（承诺稳定的类名）
 

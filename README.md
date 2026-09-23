@@ -10,11 +10,14 @@
 |---|---|
 | [AGENTS.md](./AGENTS.md) | **工程契约（权威）**：分层与依赖方向、数据模型铁律、术语表、命令/事件契约、验证与文档同步纪律、明确不做的事。**动代码前先读它。** |
 | [FrameVault_PRD_zh-CN.md](./FrameVault_PRD_zh-CN.md) | 产品需求（功能优先级 P0/P1/P2、里程碑） |
+| [docs/VISION_zh-CN.md](./docs/VISION_zh-CN.md) | **产品愿景总纲**：随心记定位、场景化引擎/插件生态/同步加密等 19 条愿景逐条对齐现状，含待裁决清单与术语定案（2026-09） |
 | [FrameVault_Technical_Architecture_zh-CN.md](./FrameVault_Technical_Architecture_zh-CN.md) | 技术栈、模块边界、Vault 规范、同步模型 |
 | [docs/ARCHITECTURE_IMPL_zh-CN.md](./docs/ARCHITECTURE_IMPL_zh-CN.md) | **实现架构**：应该有哪些文件、每个文件负责什么、对外暴露什么接口 |
 | [docs/theme-contract.md](./docs/theme-contract.md) | **外观契约**：公开 token 表 / 外观预设规格 / 公开 selector 表 / 主题包格式 / 层顺序 |
-| [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md) | **存储规范 v2 提案（未实施）**：Obsidian 式人可读层级 —— 场景/条目按文件夹组织、正文落 note.md、媒体用原始文件名；三条语义已拍板，实施待开工 |
-| [docs/PROPOSAL_wysiwyg_live_source_zh-CN.md](./docs/PROPOSAL_wysiwyg_live_source_zh-CN.md) | **编辑器 Live Source（已实施，2026-09）**：写作台所见即所得里，光标所在块临时显示 Markdown 源码、离开即恢复渲染（Obsidian Live Preview 式），不新增重依赖 |
+| [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md) | **存储规范 v2 提案（未实施）**：Obsidian 式人可读层级 —— 场景/记录按文件夹组织、正文落 note.md、媒体导入时按命名模板生成；六条语义已拍板（含**不做旧布局兼容**），实施待开工 |
+| [docs/PROPOSAL_wysiwyg_live_source_zh-CN.md](./docs/PROPOSAL_wysiwyg_live_source_zh-CN.md) | **编辑器 Live Source（已废止）**：写作台里"光标所在块翻成源码盒子"的块级方案，实测撞到「盒子 + 选区被困」的体验上限，已被下条取代、代码已删除；留档备查 |
+| [docs/PROPOSAL_editor_codemirror6_zh-CN.md](./docs/PROPOSAL_editor_codemirror6_zh-CN.md) | **编辑器内核迁移（已实施）**：ProseMirror/Milkdown → CodeMirror 6，真·Obsidian 式即时渲染（源码即真值、无盒子、选区全篇自由），取代上条的块级方案 |
+| [docs/ALIGNMENT_vision_vs_plans_zh-CN.md](./docs/ALIGNMENT_vision_vs_plans_zh-CN.md) | **对齐记录**：愿景 × 两份计划（存储 v2 / 编辑器换 CM6）的结构冲突与扩展位 —— 哪些必须现在改、哪些是固有代价、哪些只是措辞不一致 |
 | [docs/REFERENCES.md](./docs/REFERENCES.md) | 参考项目清单（学习用，含许可证红线） |
 
 ## 当前产品方向与开发范围

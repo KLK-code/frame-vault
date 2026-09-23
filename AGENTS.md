@@ -2,7 +2,7 @@
 
 > **这份文件是权威的。** 任何人（或 AI）在动这个仓库之前先读完它。
 > 与本文冲突的其它描述，**以本文为准**；本文没写的，查 `docs/ARCHITECTURE_IMPL_zh-CN.md`。
-> 最后更新：2026-09（编辑器 Live Source：§6 新增一段、§9 新增六行坑；macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件；写作台编辑器：§1 依赖例外、§6 两种输入控件、§9 新增两行坑；编辑器粘贴：§9 新增"行为改动必须重启真粘一次"的坑）
+> 最后更新：2026-09（**编辑器内核换成 CodeMirror 6**：§1 依赖例外、§6 编辑器小节、§9 新增五行坑并改写两行、§10；愿景收编 + 术语改向登记：§4 注记指向 docs/VISION_zh-CN.md；macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件；写作台编辑器：§1 依赖例外、§6 两种输入控件、§9 新增两行坑；编辑器粘贴：§9 新增"行为改动必须重启真粘一次"的坑）
 
 ## 0. 一句话
 
@@ -16,7 +16,7 @@ FrameVault 是一个**开放、本地优先、可扩展**的跨平台照片与�
 |---|---|---|
 | 壳 | Tauri 2.x | 桌面；Android 推迟 |
 | 后端 | Rust | Windows 走 MSVC toolchain，macOS 走 Apple 的 aarch64-apple-darwin。领域逻辑全在这里 |
-| 前端 | TypeScript + React 19 + Vite | 无 UI 框架、无路由库、无状态库。**唯一的框架级例外是编辑器引擎**：`@milkdown/kit` + `@milkdown/react`（底子是 ProseMirror）—— 它只准出现在 `features/scene/markdown/MarkdownWysiwyg.tsx` 一个文件里，而且必须按需加载，见 §6 / §9 |
+| 前端 | TypeScript + React 19 + Vite | 无 UI 框架、无路由库、无状态库。**唯一的框架级例外是编辑器引擎**：CodeMirror 6（`@codemirror/*` + `@lezer/markdown`，MIT）—— 它只准出现在 `features/scene/markdown/` 里（`MarkdownWysiwyg.tsx` + `livePreview.ts`），而且必须按需加载，见 §6 / §9 |
 | 包管理 | pnpm（单包：`apps/framevault`；仓库根没有 workspace 定义，将来多包再上 workspace） | Tauri CLI 用 `@tauri-apps/cli` 作为 devDependency，**永远不要 `cargo install tauri-cli`** |
 | 许可 | Apache-2.0 | 引入新依赖前先看 `docs/REFERENCES.md` 的许可证红线 |
 
@@ -74,6 +74,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 8. **媒体原始文件导入后不可变**；磁盘名固定 `orig.<ext>`，用户原名只存在 meta 里。
 
 ## 4. 术语表（**防漂移的关键，务必按这个说**）
+
+> **2026-09-23 已拍板术语改向**：「场景」= 功能（功能主题 / Workspace Type，代码 `scene` 转正）、「主题」= 外观（Theme）。
+> 迁移方案见 `docs/VISION_zh-CN.md` §6；**实施（重写本表 + 全部 UI 文案）前，本表仍按现行文案执行**。
 
 | 概念 | 文档 / PRD | UI 文案 | 代码标识 |
 |---|---|---|---|
@@ -140,10 +143,11 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
   - **优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪个预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
   - **预设规范**：每套必须**浅色 + 深色两套都给**（否则切深色会露馅）；预设之间只许分**颜色**（`--fv-color-*` / banner / `--fv-nav-active-*`），字号、间距、圆角尺度、阴影这些“骨架”值三套必须一致 —— 三套外观要像**同一个产品**，不是三个 App。
 - **Markdown 是核心能力，不是主题私有**：解析只许走 `src/markdown/parse.ts`（别处不许 import `remark` / `unified`）；渲染走 `features/scene/markdown/`（`registry.ts` 是将来加自定义块的扩展点）；**主题不许自己写渲染器**。规矩：原始 HTML 不渲染（给可见提示）、软换行按换行显示、认不出的节点降级显示、**只读不回写**。
-  **输入控件也在核心，而且有两种（主题只挑"用哪个"）**：`MarkdownField` = textarea + 语法工具栏 + 编辑/预览切换，`SceneFields` 渲染多行字段时默认就用它（表单 / 快速记录）；`MarkdownWysiwyg` = 一整块所见即所得的编辑区（Milkdown + ProseMirror，**按需加载**），长文用。
-  **主题不许自己写工具栏 / 预览 / 富文本编辑器，也不许 import `@milkdown/*` 或 `prosemirror-*`**；要文档级编辑就在视图里 `React.lazy` 引核心的 `MarkdownWysiwyg`（写作台就是这么做的），字段声明照旧写 `textarea`。两个控件的接口一模一样（`value` 进、Markdown 字符串出），所以磁盘格式和渲染器都不用知道记录是哪个编辑器敲的。
-  **粘贴也是核心能力**：所见即所得编辑器必须自己接 `EditorProps.handlePaste` —— ProseMirror 默认只认剪贴板里的 HTML，纯文本会原样变成字面文字，粘一整篇 `.md` 进来就是一屏源码。判据「这段文本像不像 Markdown」写在 `src/markdown/parse.ts` 的 `looksLikeMarkdown`，**只认块级构造**（标题 / 列表 / 代码块 / 引用 / 表格 / 分隔线），行内记号不算 —— 判据保守一点，最多少解析一次，不会把用户粘的富文本改坏。
-  **光标所在块显示源码（Live Source）也在核心**：光标落进标题 / 段落 / 引用 / 列表项 / 表格时，**这一块**临时换成源码文本域（`## `、`> `、`- `、表格管道符、`**粗**`、`[链接](url)` 都看得见、直接改），光标离开再解析回节点、恢复渲染（Obsidian Live Preview 式）。实现全在 `MarkdownWysiwyg.tsx`，**不动 DOM 结构**（给这一块挂节点装饰 `display:none`，在它位置上插 widget 装 `<textarea>`），源码态不进 PM 输入管线、离开时一次性提交一个事务 —— Ctrl+Z 一步退回，不是逐字符倒；**Esc = 放弃这次源码编辑**。主题照旧碰不到它，也照旧按需加载。
+  **输入控件也在核心，而且有两种（主题只挑"用哪个"）**：`MarkdownField` = textarea + 语法工具栏 + 编辑/预览切换，`SceneFields` 渲染多行字段时默认就用它（表单 / 快速记录）；`MarkdownWysiwyg` = 一整块所见即所得的编辑区（**CodeMirror 6**，`MarkdownWysiwyg.tsx` + `livePreview.ts`，**按需加载**），长文用。
+  **主题不许自己写工具栏 / 预览 / 富文本编辑器，也不许 import `@codemirror/*` 或 `@lezer/*`**；要文档级编辑就在视图里 `React.lazy` 引核心的 `MarkdownWysiwyg`（写作台就是这么做的），字段声明照旧写 `textarea`。两个控件的接口一模一样（`value` 进、Markdown 字符串出），所以磁盘格式和渲染器都不用知道记录是哪个编辑器敲的。
+  **粘贴不需要任何特殊处理**：编辑器的文档**就是 Markdown 文本**，粘一整篇 `.md` 进来当场就是排好版的样子（旧 ProseMirror 版必须自己接 `handlePaste` + 一个 `looksLikeMarkdown` 判据才做得到，换引擎后两者都删了）。**已知回退**：从浏览器复制的带格式内容只剩文字（不再保留粗体 / 链接），这是刻意接受的代价，不做 HTML→MD 转换、不加转换依赖。
+  **实时渲染（live preview）是核心能力，不是主题私有**：整篇按排版渲染，**语法符号只在光标碰到的地方露出来** —— 块级记号（`# ` / `> ` / `- ` / 围栏）按**行**露、行内记号（`**` / `` ` `` / `[](…)`）按**令牌**露；光标移开立刻收回去。这就是 Obsidian / Typora 的手感：源码即真值，没有"进模式"、没有盒子、选区永远贯穿全篇。
+  实现分两半（CM6 的硬规矩，见 §9）：`livePreview.ts` 里 `outer`（行级 / 块级的类名与整块 widget）走 **StateField**、`inner`（行内记号与 widget）走 **ViewPlugin** 且只算视口。装饰样式在 `MarkdownWysiwyg.css`，**结构性那几条**（滚动容器、内边距、光标）在 `MarkdownWysiwyg.tsx` 的 `EditorView.theme` 里 —— 原因见 §9。主题照旧碰不到它，也照旧按需加载。
 - 样式**全部包在 `@layer` 里**（层顺序在 `styles/layers.css`）；组件里**零裸色值**——颜色 / 间距 / 字号 / 圆角 / 阴影一律走 `--fv-*`。
   **尺寸只在"会被别处引用或需要主题覆盖"时才起 token**（`--fv-titlebar-height` 就是这种：它还要跟 `tauri.conf.json` 对齐）；
   只在一个组件里用的布局数值（网格列宽、`aspect-ratio`、`1px` 细线）写具体像素——别为了凑规则硬造 token，也别把同一组数值抄进两个文件（网格列宽照 `ARCHITECTURE_IMPL §4.6` 的写法）。
@@ -213,14 +217,13 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 跨窗口状态**整份回写** | 主骨架每次重算外观都会写一次盘，把设置窗口刚改的变量 / 刚选的选择冲回旧值 —— 表现为「改了没反应」「切了没用」 | **每个字段只有一个 owner**：overrides / scheme / appearance 只有设置窗口写，applied 只有主骨架写；写盘一律 **patch 合并**（只带自己那一项），广播出去的才是合并后的完整快照 |
 | 把所见即所得编辑器当受控组件整份回写 | 每次渲染都 `replaceAll(value)`：光标被拽回开头、中文输入法串被打断、撤销栈被清，表现为"打着打着字跳了" | 编辑器**只在"外部换了内容"时回灌一次**：用 ref 记住自己刚 `onChange` 出去的那份，`value === emitted` 就直接返回；自己的输入只向上报，不往下灌 |
 | 重编辑器静态 import | 一次都没打开的写作台，也让首屏多下载 334 KB（gzip +102 KB）—— 实测主包 417.9 KB vs 静态引入后的 ~752 KB | 带框架的重编辑器一律 `React.lazy` + `Suspense`（写作台只在自己这一屏里加载它）；判断标准是"不是每次开窗都要用的东西" |
-| 以为所见即所得编辑器会自动把粘进来的 Markdown 排版 | 粘一整篇 `.md`（从 VS Code / 记事本 / 终端复制）得到的是一屏源码：ProseMirror 只认剪贴板里的 HTML，纯文本一律当字面文字塞进段落 | 自己接 `EditorProps.handlePaste`（编辑器 props 的优先级高于任何插件）：纯文本、或来源声明自己是 Markdown 的，走 `parserCtx` 解析后 `replaceSelection`；带 HTML 的富文本，只有当**纯文本里带块级 Markdown** 时才抢。复制出去交给 `@milkdown/kit/plugin/clipboard`，剪贴板里是 Markdown 文本 |
-| 用 NodeView 给标题 / 段落 / 引用 / 列表项换 DOM | 这些块的排版规则（`li > p`、`.ProseMirror > *:first-child`…）全挂在 ProseMirror **默认生成的 DOM** 上，NodeView 必须多包一层壳，层级一变换样式就整片歪 | 结构一个字不动：`Decoration.node(...)` 挂 `display:none` 藏起这一块，`Decoration.widget(...)` 在它的位置插文本域 |
-| `doc.canReplace(from, to, ...)` 当成"位置"用 | 它的 `from` / `to` 是**第几个子节点下标**。传位置进去要么瞎返回 `true` 放行非法替换（最后在 fitter 里炸 `RangeError: Index 7 out of range`），要么把合法编辑误判成不合法 | 按位置试就用 `new ReplaceStep(from, to, slice).apply(doc).failed` —— 跟后面那次提交同一套规则 |
-| 源码态按 Esc 退出，120ms 后又自己跳回去 | 退出只清状态，光标还停在原地，进块定时器一响又把刚退出的那块打开了 —— 看起来就是"Esc 没用" | 记一笔 `muted`（这个位置暂时别进去），光标一动就清掉 |
-| 退出源码态后 Ctrl+Z / 打字全落空 | 被聚焦的 `<textarea>` 一移除，焦点掉到 `<body>`，ProseMirror 收不到键盘事件了 | 退出时 `view.focus()` 把焦点还给编辑器 |
-| 以为 `.use(history)` 就有撤销栈 | `@milkdown/plugin-history` 在这里两件事都不生效：它的 `$prose` provider 拿不到 `historyProviderConfig` 那个 slice（`prosemirror-history` 根本没进插件表，`undo()` 直接返回 `false`）；它的 `historyKeymap` 又在 keymap 管理器 build 之后才注册 | 自己装自己绑：`$prose(() => historyPlugin())` + `$prose(() => keymap({ "Mod-z": undo, … }))`（来自 `@milkdown/kit/prose/*`）。判据：`undo(state, dispatch, view)` 返回 `false` = state 插件没进去 |
-| widget 的 `toDOM` 每次传新函数 | PM 靠**函数身份**判等，不认识就把 DOM 拔掉重插 —— 文本域一移除就丢焦点和光标 | `toDOM`（连同 `stopEvent`）存进状态记录里，身份保持稳定 |
-| 在跑着的 dev 实例里验证编辑器的行为改动（粘贴 / 输入管线） | vite HMR 热替换了组件代码，但 **Milkdown 编辑器实例只在挂载时创建一次**（`useEditor` 的工厂被 `useCallback(getEditor, [])` 缓存），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的粘一次**：判据函数（`looksLikeMarkdown`）跑通 ≠ 运行时粘贴通。另外，字面粘贴过的老条目存盘时语法字符已被序列化器转义（`\>`、`\*\*`、`\[…\]\(…\)`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |
+| 以为换引擎后还得自己接过粘贴管线 | 旧 ProseMirror 版确实要自己接（`handlePaste` + `looksLikeMarkdown` 判据），因为它的文档是节点树、`**` 不在文档里 | 现在**不需要**：文档就是 Markdown 文本，纯文本原样插入、当场按渲染规则排版，那两个东西已经删掉。**已知回退**：从浏览器复制的富文本只剩文字（见 §6）|
+| 在 `ViewPlugin` 的 decorations 里给行 / 块加装饰 | CM6 直接抛 `RangeError: Block decorations may not be specified via plugins`，而且**整块不渲染** —— 画面全空、DOM 里却什么都有（`a11y` 还能读到文字），极难一眼看出 | 行级与块级装饰**必须走 `StateField`**（`Decoration.line`、`block: true` 的 replace）；行内记号与 widget 才能留在 `ViewPlugin` 里（且只算 `view.visibleRanges`） |
+| 把 CM6 的结构性样式写进 `@layer` 里的 CSS | 一个字都不生效：CM6 往 document 注入自己的基础样式，那是**未分层**的，按层叠层的规矩未分层永远压过分层 | 滚动容器 / 内边距 / 光标这几条走 `EditorView.theme({...})`（值仍是 `--fv-*`）；装饰类名照旧写 CSS 文件 |
+| 用 `Decoration.replace({ block: true })` 整行吞掉围栏行 / 表格行 | 行是没了，但**相邻行的行级装饰一起被丢掉**，表格 widget 也不落地 —— 表现出来就是"代码块没样式、表格凭空消失" | 少用块级替换：围栏改成"藏掉围栏文本 + 整块（含围栏行）铺代码背景"，表格改成行内替换（代价是表格后面留两行空行，可接受） |
+| 露出源码的粒度按记号自己判 | 围栏那类 = 上下两条 `CodeMark` 各自跟光标比，光标在正文时两条都不露，"光标进块显示源码"当场失效 | 块级记号按**宿主块**判：`rangeTouched(parent.from, parent.to)`；行内记号才按令牌自己的范围判 |
+| 以为在 App 窗口里能验证编辑器行为 | 自动化给窗口发合成键盘事件常常到不了 WebView（连普通 `<input>` 都收不到），而且 App 可能是提权进程、`UIA` 直接拒接；结果把"自动化打不进字"误判成"编辑器坏了" | **在真浏览器里验**：临时挂一个 `harness.html` + `harness.tsx` 用 vite 跑起来，用浏览器自动化（Playwright）精确点选 / 打字 / 读计算样式与 DOM —— 快且可断言；集成（挂载、主题 token、`@layer`）再回 App 里看 |
+| 在跑着的 dev 实例里验证编辑器的行为改动 | vite HMR 会热替换组件代码，但**编辑器实例只在挂载时创建一次**（现在是自己 `useEffect(…, [])` 里 `new EditorView`，工厂同样只在挂载跑一遍），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲/真的点**一遍。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 
@@ -228,7 +231,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **Android 与调用系统相机**：推迟到 Android 适配阶段。
 - **同步、插件宿主、Marketplace、多窗口标签页、日历视图、全文检索**：都还没到，别提前设计。
 - **视频抽帧（ffmpeg）**：按 PRD 属 P1/P2；现在视频交给 WebView / 平台解码。
-- **不引路由库、状态库、CSS-in-JS、UI 组件库**。编辑器引擎（Milkdown / ProseMirror）是**唯一的框架级例外** —— 它不是"UI 组件库"，而是"磁盘上那串 Markdown 的编辑引擎"，边界见 §1 / §6：一个文件、按需加载、主题碰不到。
+- **不引路由库、状态库、CSS-in-JS、UI 组件库**。编辑器引擎（**CodeMirror 6**）是**唯一的框架级例外** —— 它不是"UI 组件库"，而是"磁盘上那串 Markdown 的编辑引擎"，边界见 §1 / §6：只准出现在 `features/scene/markdown/`、按需加载、主题碰不到。
 - **不把 SQLite / localStorage / React state 当真相来源**。
 - **不许为了"以后可能要用"加抽象层**。
 
@@ -255,7 +258,7 @@ apps/framevault/
 │   │   │                       scenes/plain（普通记录）/ scenes/challenge（挑战打卡墙）
 │   │   │                       scenes/travel（旅行）/ scenes/writing（写作台：一屏一篇的长文）
 │   │   │                       SceneComposer / EntryTimeline / SceneIcon
-│   │   │                       markdown/（MarkdownView 渲染 + MarkdownField 表单输入 + MarkdownWysiwyg 所见即所得 + registry 注册表 + blocks 组件）
+│   │   │                       markdown/（MarkdownView 渲染 + MarkdownField 表单输入 + MarkdownWysiwyg 所见即所得 + livePreview 实时渲染装饰 + registry 注册表 + blocks 组件）
 │   │   ├── vault/              仓库：悬浮切换菜单 + 管理窗口面板
 │   │   ├── settings/           设置：左导航 + 右内容
 │   │   └── theme/              外观：预设选择 + token schema + 实时编辑 + 跨窗口同步

@@ -167,20 +167,7 @@ pub fn reorder_folders(
 #[tauri::command]
 pub fn delete_folder(state: State<'_, AppState>, id: String) -> AppResult<Vec<FolderNode>> {
     let vault_dir = active_vault(&state)?;
-    let folder = read_folder(&vault_dir, &id)?;
-
-    // 只数"活着"的记录：墓碑不算还有东西（它们只等恢复或清理）
-    let count = vault::list_entries(&vault_dir)?
-        .iter()
-        .filter(|e| !e.is_deleted() && e.folder_id.as_deref() == Some(id.as_str()))
-        .count();
-    if count > 0 {
-        return Err(AppError::Invalid(format!(
-            "「{}」里还有 {count} 条记录，请先删除或移走它们",
-            folder.name
-        )));
-    }
-
+    // "非空拒绝"是业务规则，在领域层；这里只转发（返回全量列表）
     delete_folder_meta(&vault_dir, &id)?;
     to_nodes(&vault_dir)
 }

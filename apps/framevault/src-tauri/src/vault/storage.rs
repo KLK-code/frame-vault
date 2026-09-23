@@ -229,6 +229,12 @@ pub fn find_folder_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
 
 // ── 记录 ──
 
+/// 某个目录下的直接子目录里，哪些是记录目录（带 `entry.json`）。
+/// 删场景前的"非空判定"靠它 —— 判据是**物理位置**，不管 `entry.json` 里的归属字段写了谁。
+pub fn entry_dirs_in(parent: &Path) -> Vec<PathBuf> {
+    child_entry_dirs(parent)
+}
+
 fn child_entry_dirs(parent: &Path) -> Vec<PathBuf> {
     let Ok(items) = fs::read_dir(parent) else {
         return Vec::new();

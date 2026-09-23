@@ -2,7 +2,7 @@ use super::model::SCHEMA_VERSION;
 use super::naming::{self, FOLDER_FILE};
 use super::scene::PLAIN_SCENE;
 use super::storage::{folder_json_path, read_json, root_dirs, write_json_atomic};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -152,9 +152,23 @@ pub fn save_folder(
     Ok(dir.to_path_buf())
 }
 
-/// 删除场景本身（**不碰记录**，调用方要先确认里面没有记录）
+/// 删除场景。**里面还有记录时拒绝** —— 宁可让用户先处理，也不要出现"场景没了、记录跟着没了"。
+///
+/// 判据是**物理位置**（这个目录下有没有记录目录），不是 `entry.json` 里的归属字段：
+/// 用户可能把记录目录手动拖进来了，那时字段还写着别的场景 —— 按字段数会漏，漏掉就是删数据。
 pub fn delete_folder(vault: &Path, id: &str) -> AppResult<()> {
     let dir = super::storage::find_folder_dir(vault, id)?;
+    let inside = super::storage::entry_dirs_in(&dir);
+    if !inside.is_empty() {
+        let name = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| id.to_string());
+        return Err(AppError::Invalid(format!(
+            "「{name}」里还有 {} 条记录，请先把它们删掉或挪走",
+            inside.len()
+        )));
+    }
     fs::remove_dir_all(dir)?;
     Ok(())
 }
@@ -286,6 +300,32 @@ mod tests {
         assert_eq!(list_folders(&vault).unwrap().len(), 1);
 
         assert!(delete_folder(&vault, "没有这个").is_err());
+    }
+
+    #[test]
+    fn deleting_a_scene_with_records_inside_is_refused() {
+        let vault = temp_vault("delete-nonempty");
+        let dir = add(&vault, FolderMeta::new("f-1", "晨跑打卡", 0, None));
+
+        // 目录里有一条记录 —— 而且它的 entry.json 里写的是**别的场景**（用户手动拖进来的那种）
+        let record = dir.join("2026-09-22 早跑");
+        fs::create_dir_all(&record).unwrap();
+        fs::write(
+            record.join("entry.json"),
+            r#"{"schemaVersion":2,"id":"e-1","title":"早跑","day":"2026-09-22","tags":[],
+                "createdAt":"2026-09-22T07:00:00+08:00","updatedAt":"2026-09-22T07:00:00+08:00",
+                "folderId":"别的场景","fields":{}}"#,
+        )
+        .unwrap();
+
+        let err = delete_folder(&vault, "f-1").unwrap_err().to_string();
+        assert!(err.contains("还有 1 条记录"), "要说人话：{err}");
+        assert!(dir.is_dir(), "拒绝之后目录必须原样还在");
+
+        // 记录挪走之后才允许删
+        fs::remove_dir_all(&record).unwrap();
+        delete_folder(&vault, "f-1").unwrap();
+        assert!(!dir.exists());
     }
 
     #[test]

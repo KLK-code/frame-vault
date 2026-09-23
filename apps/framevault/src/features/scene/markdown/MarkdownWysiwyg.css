@@ -91,4 +91,63 @@
     color: var(--fv-color-muted);
     pointer-events: none;
   }
+
+  /* ── 光标所在块的源码态 ──
+     DOM 结构一个字不动，只把这一块藏掉，源码文本域插在它原来的位置上。
+     排版跟着它渲染时的样子走（字号 / 缩进 / 外边距），切换前后高度才不会跳。 */
+  .md-wysiwyg .ProseMirror .md-wysiwyg__live-hidden { display: none; }
+
+  .md-wysiwyg__live { margin: 0 0 var(--fv-space-3); }
+  .md-wysiwyg__live--h1,
+  .md-wysiwyg__live--h2,
+  .md-wysiwyg__live--h3,
+  .md-wysiwyg__live--h4,
+  .md-wysiwyg__live--h5,
+  .md-wysiwyg__live--h6 { margin: var(--fv-space-4) 0 var(--fv-space-2); }
+  .md-wysiwyg__live--item { margin: var(--fv-space-1) 0; }
+  /* 引用保留缩进，跟渲染态的 blockquote 对齐 */
+  .md-wysiwyg__live--quote { padding-left: var(--fv-space-3); }
+
+  .md-wysiwyg__live-input {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0 var(--fv-space-2);
+    border: 1px solid var(--fv-color-accent);
+    border-radius: var(--fv-radius-sm);
+    background: var(--fv-color-surface);
+    color: var(--fv-color-text);
+    font-family: var(--fv-font-mono);
+    font-size: var(--fv-text-base);
+    line-height: var(--fv-line-height);
+    /* 高度由脚本按内容撑，不要滚动条 */
+    overflow: hidden;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+  }
+  .md-wysiwyg__live--h1 .md-wysiwyg__live-input,
+  .md-wysiwyg__live--h2 .md-wysiwyg__live-input,
+  .md-wysiwyg__live--h3 .md-wysiwyg__live-input { font-weight: 650; line-height: 1.35; }
+  .md-wysiwyg__live--h1 .md-wysiwyg__live-input { font-size: var(--fv-text-xl); }
+  .md-wysiwyg__live--h2 .md-wysiwyg__live-input { font-size: var(--fv-text-lg); }
+  .md-wysiwyg__live--h3 .md-wysiwyg__live-input { font-size: var(--fv-text-base); }
+  .md-wysiwyg__live--h4 .md-wysiwyg__live-input,
+  .md-wysiwyg__live--h5 .md-wysiwyg__live-input,
+  .md-wysiwyg__live--h6 .md-wysiwyg__live-input {
+    font-size: var(--fv-text-sm);
+    font-weight: 650;
+    line-height: 1.35;
+    color: var(--fv-color-muted);
+  }
+  .md-wysiwyg__live--quote .md-wysiwyg__live-input { color: var(--fv-color-muted); }
+  .md-wysiwyg__live--table .md-wysiwyg__live-input { font-size: var(--fv-text-sm); }
+
+  /* 解析不了：原节点没动，源码留着让用户自己修 */
+  .md-wysiwyg__live-error {
+    margin: var(--fv-space-1) 0 0;
+    color: var(--fv-color-danger);
+    font-size: var(--fv-text-sm);
+  }
 }

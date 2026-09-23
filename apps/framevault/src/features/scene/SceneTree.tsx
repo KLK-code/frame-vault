@@ -21,6 +21,8 @@ type Props = {
   onRename: (id: string, name: string) => Promise<boolean>;
   onDelete: (folder: FolderNode) => Promise<boolean>;
   onTogglePinned: (folder: FolderNode) => Promise<boolean>;
+  /** 拖动排序：把全部文件夹按新顺序的 id 整表发来（Rust 返回全量） */
+  onReorder: (orderedIds: string[]) => Promise<boolean>;
   onBindScene: (id: string, scene: string | null) => Promise<boolean>;
   onCreateTopic: (name: string) => Promise<boolean>;
   onRenameTopic: (topic: string, newName: string) => Promise<boolean>;
@@ -109,6 +111,7 @@ export default function SceneTree({
   onRename,
   onDelete,
   onTogglePinned,
+  onReorder,
   onBindScene,
   onCreateTopic,
   onRenameTopic,
@@ -126,6 +129,9 @@ export default function SceneTree({
   const [topicMenu, setTopicMenu] = useState<string | null>(null);
   const [grouping, setGrouping] = useState<Grouping>(readGrouping);
   const [groupMenu, setGroupMenu] = useState(false);
+  /** 拖动排序：正在拖的文件夹 id + 悬停落点（落在目标行的上半 / 下半） */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; before: boolean } | null>(null);
   const groupBox = useRef<HTMLDivElement>(null);
   const createInput = useRef<HTMLInputElement>(null);
 
@@ -161,6 +167,32 @@ export default function SceneTree({
     () => groups.flatMap((group) => group.folders),
     [groups],
   );
+
+  /** 当前分组方式下的全部显示顺序（拖动排序提交的就是这份的 id） */
+  function displayIds(): string[] {
+    if (grouping === "flat") return flat.map((folder) => folder.id);
+    if (grouping === "scene") return groups.flatMap((group) => group.folders.map((f) => f.id));
+    return topicGroups.flatMap((group) => group.folders.map((f) => f.id));
+  }
+
+  /** 分组归属键：拖动只允许发生在同一组内（跨组 = 换主题/搬目录，是另一件事） */
+  function groupKeyOf(folder: FolderNode): string {
+    if (grouping === "scene") return folder.effectiveScene;
+    if (grouping === "flat") return "__flat__";
+    return folder.topic ?? "__none__";
+  }
+
+  /** 落手：把拖着的行从显示顺序里拔出来，插到目标行前面/后面，整表提交 */
+  async function commitReorder(targetId: string, before: boolean) {
+    if (!dragging || dragging === targetId) return;
+    const order = displayIds();
+    const from = order.indexOf(dragging);
+    const to = order.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    order.splice(from, 1);
+    order.splice(order.indexOf(targetId) + (before ? 0 : 1), 0, dragging);
+    await onReorder(order);
+  }
 
   // 菜单开着时点别处就关掉
   useEffect(() => {
@@ -214,10 +246,11 @@ export default function SceneTree({
     await onRename(folder.id, next);
   }
 
-  /** 一行文件夹 —— 三种分组方式共用同一份渲染 */
-  function renderFolder(folder: FolderNode) {
+  /** 一行文件夹 —— 三种分组方式共用同一份渲染；`groupKey` 用来限制拖动只发生在同组内 */
+  function renderFolder(folder: FolderNode, groupKey: string) {
     const isActive = folder.id === activeId;
     const isEditing = editing?.id === folder.id;
+    const isDropTarget = dropHint?.id === folder.id && dragging !== folder.id;
 
     if (isEditing && editing.mode === "rename") {
       return (
@@ -259,7 +292,44 @@ export default function SceneTree({
     }
 
     return (
-      <div key={folder.id} className="scene-row-wrap">
+      <div
+        key={folder.id}
+        className={[
+          "scene-row-wrap",
+          dragging === folder.id ? "is-dragging" : "",
+          isDropTarget ? (dropHint!.before ? "is-drop-before" : "is-drop-after") : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        draggable={!isEditing}
+        onDragStart={(e) => {
+          setDragging(folder.id);
+          setDropHint(null);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", folder.id);
+        }}
+        onDragEnd={() => {
+          setDragging(null);
+          setDropHint(null);
+        }}
+        onDragOver={(e) => {
+          if (!dragging || dragging === folder.id) return;
+          const draggedFolder = folders.find((f) => f.id === dragging);
+          if (!draggedFolder || groupKeyOf(draggedFolder) !== groupKey) return;
+          e.preventDefault();
+          const rect = e.currentTarget.getBoundingClientRect();
+          const before = e.clientY < rect.top + rect.height / 2;
+          setDropHint((prev) =>
+            prev?.id === folder.id && prev.before === before ? prev : { id: folder.id, before },
+          );
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (dragging && isDropTarget) void commitReorder(folder.id, dropHint!.before);
+          setDragging(null);
+          setDropHint(null);
+        }}
+      >
         <button
           className={`scene-row${isActive ? " is-active" : ""}`}
           onClick={() => onSelect(folder.id)}
@@ -328,8 +398,8 @@ export default function SceneTree({
     );
   }
 
-  /** 一组（标题 + 里面的文件夹）；`topic` 有值时标题带主题的 ⋯ 菜单 */
-  function renderGroup(key: string, title: string, subtitle: string | undefined, list: FolderNode[], topic?: string | null) {
+  /** 一组（标题 + 里面的文件夹）；`topic` 有值时标题带主题的 ⋯ 菜单；`groupKey` 传给行做拖动分组 */
+  function renderGroup(key: string, title: string, subtitle: string | undefined, list: FolderNode[], topic?: string | null, groupKey?: string) {
     return (
       <section key={key} className="scene-group">
         <h3 className="scene-group__title" title={subtitle}>
@@ -382,7 +452,7 @@ export default function SceneTree({
           />
         )}
 
-        {list.map(renderFolder)}
+        {list.map((folder) => renderFolder(folder, groupKey ?? key))}
       </section>
     );
   }
@@ -520,16 +590,17 @@ export default function SceneTree({
               group.topic ? `${group.topic}（磁盘上的一层目录）` : "直接摆在仓库根下的文件夹",
               group.folders,
               group.topic,
+              group.topic ?? "__none__",
             ),
           )}
 
         {grouping === "scene" &&
           groups.map((group) =>
-            renderGroup(group.scene.id, group.scene.name, group.scene.description, group.folders),
+            renderGroup(group.scene.id, group.scene.name, group.scene.description, group.folders, undefined, group.scene.id),
           )}
 
         {grouping === "flat" && flat.length > 0 && (
-          <section className="scene-group">{flat.map(renderFolder)}</section>
+          <section className="scene-group">{flat.map((folder) => renderFolder(folder, "__flat__"))}</section>
         )}
       </div>
     </div>

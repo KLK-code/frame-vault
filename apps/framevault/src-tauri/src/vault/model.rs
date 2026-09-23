@@ -55,6 +55,12 @@ pub struct Entry {
     #[serde(default)]
     pub media: Vec<MediaMeta>,
 
+    /// 手动排序键：拖动排序时由 `reorder_entries` 按新顺序写成 0..n。
+    /// `None` = 没手动排过，按创建时间排在手动块后面 —— 新记录依然出现在时间线顶部。
+    /// **加字段不换版本**（`#[serde(default)]`，老 v2 文件照读）
+    #[serde(default)]
+    pub order: Option<i64>,
+
     /// 写这条记录时生效的场景**版本**。
     /// 现在只写不读——为 VISION §3.10 的"场景版本管理 / 用户自定义数据结构迁移"留位：
     /// 现在加成本近零，等真需要时只能靠 `updatedAt` 时间窗去猜。
@@ -86,6 +92,7 @@ impl Entry {
             scene: None,
             fields: empty_object(),
             media: Vec::new(),
+            order: None,
             scene_version: 0,
             note: String::new(),
             deleted_at: None,

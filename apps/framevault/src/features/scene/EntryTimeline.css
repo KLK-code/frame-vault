@@ -210,3 +210,8 @@
 }
 
 }
+
+/* 拖动排序：拖着的记录半透明，落点记录用 2px 主题色横线指在上缘 / 下缘（跟 SceneTree 一套手感） */
+.entry.is-dragging { opacity: 0.4; }
+.entry.is-drop-before { box-shadow: inset 0 2px 0 var(--fv-color-accent); }
+.entry.is-drop-after { box-shadow: inset 0 -2px 0 var(--fv-color-accent); }

@@ -69,6 +69,7 @@ pub fn run() {
             commands::entry::restore_entry,
             commands::entry::load_entry,
             commands::entry::list_entries,
+        commands::entry::reorder_entries,
             commands::entry::read_vault_meta,
             // 媒体
             commands::media::import_media,

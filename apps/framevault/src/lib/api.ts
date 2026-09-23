@@ -30,6 +30,8 @@ export type Entry = {
   fields: Record<string, unknown>;
   /** 这条记录的媒体（磁盘事实）。界面用的形状是 `MediaItem`（多了绝对路径） */
   media: MediaMeta[];
+  /** 手动排序键：拖过排序的记录是 0..n；null = 没排过（按时间排在手动块后面） */
+  order: number | null;
   /** 写这条记录时生效的场景版本。现在恒为 0：给"场景版本管理"占位 */
   sceneVersion: number;
   /**
@@ -266,6 +268,13 @@ export const loadEntry = (id: string) => invoke<Entry>("load_entry", { id });
  */
 export const listEntries = (folderId: string | null = null, includeDeleted = false) =>
   invoke<Entry[]>("list_entries", { folderId, includeDeleted });
+
+/**
+ * 手动排序：把当前场景的记录 id 按**新顺序**整表发来（Rust 返回该场景全量）。
+ * 只认活着的记录；没发到的保持原样。排序规则：手动排过的块在前，其余按时间降序。
+ */
+export const reorderEntries = (orderedIds: string[]) =>
+  invoke<Entry[]>("reorder_entries", { orderedIds });
 
 /** 逻辑删除：写墓碑。文件、媒体、字段都留着，随时能恢复 */
 export const deleteEntry = (id: string, deletedAt = new Date().toISOString()) =>

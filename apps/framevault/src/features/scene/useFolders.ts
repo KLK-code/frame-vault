@@ -9,6 +9,7 @@ import {
   listScenes,
   listTopics,
   onVaultChanged,
+  reorderFolders,
   renameFolder as renameFolderCmd,
   renameTopic as renameTopicCmd,
   setFolderPinned,
@@ -42,6 +43,8 @@ export type FoldersApi = {
   rename: (id: string, name: string) => Promise<boolean>;
   remove: (id: string) => Promise<boolean>;
   togglePinned: (id: string, pinned: boolean) => Promise<boolean>;
+  /** 拖动排序：把**全部文件夹**按新顺序的 id 整表发来（Rust 返回全量直接替换） */
+  reorder: (orderedIds: string[]) => Promise<boolean>;
   bindScene: (
     id: string,
     scene: string | null,
@@ -199,6 +202,11 @@ export function useFolders(): FoldersApi {
     [apply],
   );
 
+  const reorder = useCallback(
+    (orderedIds: string[]) => apply(() => reorderFolders(orderedIds)),
+    [apply],
+  );
+
   const bindScene = useCallback(
     (id: string, scene: string | null, config?: Record<string, unknown>) =>
       apply(() => bindFolderScene(id, scene, config)),
@@ -279,6 +287,7 @@ export function useFolders(): FoldersApi {
     rename,
     remove,
     togglePinned,
+    reorder,
     bindScene,
     /** 供 UI 显示错误后清掉 */
     clearError: () => setError(null),

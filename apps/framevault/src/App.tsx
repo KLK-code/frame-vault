@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import TitleBar from "./app/TitleBar";
 import SceneHost from "./features/scene/SceneHost";
+import SceneMedia from "./features/scene/SceneMedia";
 import SceneTree from "./features/scene/SceneTree";
 import { suggestedAppearanceOf } from "./features/scene/registry";
 import { useActiveFolder, useFolders, type SceneShellProps } from "./features/scene/useFolders";
@@ -29,6 +30,10 @@ const DEFAULT_WIDTH = 240;
 const RAIL_WIDTH = 48;
 const WIDTH_KEY = "fv.sidebarWidth";
 const COLLAPSED_KEY = "fv.sidebarCollapsed";
+/** 舞台视图：当前场景看「记录」还是看「照片墙」（桌面图库） */
+const STAGE_KEY = "fv.stageView";
+
+type StageView = "record" | "photos";
 
 function readWidth(): number {
   const saved = Number(localStorage.getItem(WIDTH_KEY));
@@ -37,6 +42,10 @@ function readWidth(): number {
 
 function readCollapsed(): boolean {
   return localStorage.getItem(COLLAPSED_KEY) === "1";
+}
+
+function readStageView(): StageView {
+  return localStorage.getItem(STAGE_KEY) === "photos" ? "photos" : "record";
 }
 
 /** 侧栏图标（一个方框 + 左边一竖 = "侧栏"），收起后点它展开 */
@@ -70,6 +79,7 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
     rename,
     remove,
     togglePinned,
+    reorder,
     bindScene,
     createTopic,
     renameTopic,
@@ -79,8 +89,15 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(readWidth);
   // 收起来 = 只剩一条图标栏；这是"视图与面板开关"，按 README 的状态分区放 localStorage
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  /** 舞台视图开关：记录 / 照片墙 —— "视图与面板开关"，按 README 的状态分区放 localStorage */
+  const [stageView, setStageView] = useState<StageView>(readStageView);
   const dragging = useRef(false);
   const widthRef = useRef(sidebarWidth);
+
+  function pickStage(next: StageView) {
+    setStageView(next);
+    localStorage.setItem(STAGE_KEY, next);
+  }
 
   function applyWidth(next: number, persist = false) {
     const clamped = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, next)));
@@ -166,6 +183,7 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
             onRename={rename}
             onDelete={handleDelete}
             onTogglePinned={(folder) => togglePinned(folder.id, !folder.pinned)}
+            onReorder={reorder}
             onBindScene={bindScene}
             onCreateTopic={(name) => createTopic(name)}
             onRenameTopic={(topic, next) => renameTopic(topic, next)}
@@ -210,13 +228,35 @@ function DesktopShell({ tree, selected, scene }: SceneShellProps) {
         )}
 
         <section className="content">
-          <SceneHost
-            folder={active}
-            scene={scene}
-            onSceneConfigChange={(config) =>
-              active ? bindScene(active.id, active.scene, config) : Promise.resolve(false)
-            }
-          />
+          {/* 桌面图库：外壳层的「记录 / 照片」视图切换（仿移动端 Tab 的机制）。
+          照片墙复用移动端那张 SceneMedia（按场景聚合），主题内部一行不改 */}
+          {stageView === "photos" ? (
+            <>
+              <div className="content__tabs">
+                <button onClick={() => pickStage("record")}>记录</button>
+                <button className="is-active" aria-current="page">
+                  照片
+                </button>
+              </div>
+              {active && <SceneMedia folder={active} />}
+            </>
+          ) : (
+            <>
+              <div className="content__tabs">
+                <button className="is-active" aria-current="page">
+                  记录
+                </button>
+                <button onClick={() => pickStage("photos")}>照片</button>
+              </div>
+              <SceneHost
+                folder={active}
+                scene={scene}
+                onSceneConfigChange={(config) =>
+                  active ? bindScene(active.id, active.scene, config) : Promise.resolve(false)
+                }
+              />
+            </>
+          )}
         </section>
       </main>
     </div>

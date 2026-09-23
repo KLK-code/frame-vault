@@ -590,6 +590,19 @@ pub fn restore_entry(vault: &Path, id: &str, now: &str) -> AppResult<PathBuf> {
     Ok(target)
 }
 
+/// 排序：**手动排过的块在前（按 order）**，没排过的按创建时间降序跟在后面 ——
+/// 新记录依然出现在时间线顶部，不会因为拖过一次就沉底。
+fn sort_entries(out: &mut [Entry]) {
+    out.sort_by(|a, b| match (a.order, b.order) {
+        (Some(x), Some(y)) => x
+            .cmp(&y)
+            .then_with(|| b.created_at.cmp(&a.created_at)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => b.created_at.cmp(&a.created_at),
+    });
+}
+
 /// 扫描 Vault 下所有记录（含回收站里的 —— 它们的 `deletedAt` 有值）。
 /// 原则：**一条坏数据不该毁掉整次扫描** —— 单独跳过并打日志。
 pub fn list_entries(vault: &Path) -> AppResult<Vec<Entry>> {
@@ -605,7 +618,42 @@ pub fn list_entries(vault: &Path) -> AppResult<Vec<Entry>> {
         }
     }
 
-    out.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // 新的在前
+    sort_entries(&mut out); // 手动块在前，其余新的在前
+    Ok(out)
+}
+
+/// 手动排序：前端把当前场景的记录 id 按**新顺序**整表发来，这里按位置写成 `order` 0..n。
+///
+/// 只认**活着的**记录；没发到的记录一个字节都不动（它们的 order 保留原值）。
+/// 只在 order 真的要变时写盘 —— 一次拖动通常只动两三条。返回全部活记录（新序）。
+pub fn reorder_entries(vault: &Path, ordered_ids: &[String]) -> AppResult<Vec<Entry>> {
+    let mut loaded: Vec<(PathBuf, Entry)> = list_entry_dirs(vault)
+        .into_iter()
+        .filter_map(|dir| load_entry_dir(&dir).map(|entry| (dir, entry)))
+        .collect();
+
+    let mut dirty: Vec<PathBuf> = Vec::new();
+    for (index, id) in ordered_ids.iter().enumerate() {
+        let Some((dir, entry)) = loaded.iter_mut().find(|(_, e)| &e.id == id) else {
+            return Err(AppError::NotFound(format!("找不到要排序的记录：{id}")));
+        };
+        let next = Some(index as i64);
+        if entry.order != next {
+            entry.order = next;
+            dirty.push(dir.clone());
+        }
+    }
+
+    // 写回。previous 传记录自己：order 的改动不该触发目录改名 ——
+    // 目录名只由 day + 标题决定，用户手动改过的目录名在这里必须原样保留
+    for dir in &dirty {
+        if let Some((_, entry)) = loaded.iter().find(|(d, _)| d == dir) {
+            write_entry(entry, dir, Some(entry))?;
+        }
+    }
+
+    let mut out: Vec<Entry> = loaded.into_iter().map(|(_, entry)| entry).collect();
+    sort_entries(&mut out);
     Ok(out)
 }
 
@@ -970,6 +1018,58 @@ mod tests {
         let list = list_entries(&vault).unwrap();
         assert_eq!(list[0].title, "新");
         assert_eq!(list[1].title, "旧");
+    }
+
+    #[test]
+    fn reorder_writes_order_and_sorts_ordered_block_first() {
+        let (vault, _, scene_dir) = vault_with_scene("reorder", "晨跑打卡");
+        entry_in(&scene_dir.join("2026-01-01 甲"), "a", "2026-01-01", "甲", "");
+        entry_in(&scene_dir.join("2026-02-01 乙"), "b", "2026-02-01", "乙", "");
+        entry_in(&scene_dir.join("2026-03-01 丙"), "c", "2026-03-01", "丙", "");
+
+        // 没排过：按创建时间降序
+        let titles = |list: &[Entry]| -> Vec<String> {
+            list.iter().map(|e| e.title.clone()).collect()
+        };
+        assert_eq!(titles(&list_entries(&vault).unwrap()), ["丙", "乙", "甲"]);
+
+        // 拖成 甲→丙→乙：手动块按 order 排
+        reorder_entries(&vault, &["a".into(), "c".into(), "b".into()]).unwrap();
+        let list = list_entries(&vault).unwrap();
+        assert_eq!(titles(&list), ["甲", "丙", "乙"]);
+        assert_eq!(list[0].order, Some(0));
+        assert_eq!(list[2].order, Some(2));
+
+        // 新记录没排过（order = None）：按时间排在手动块后面，不会沉到最底
+        entry_in(&scene_dir.join("2026-04-01 丁"), "d", "2026-04-01", "丁", "");
+        let list = list_entries(&vault).unwrap();
+        assert_eq!(titles(&list), ["甲", "丙", "乙", "丁"]);
+    }
+
+    #[test]
+    fn reorder_keeps_unlisted_and_manual_dir_names() {
+        let (vault, _, scene_dir) = vault_with_scene("reorder2", "晨跑打卡");
+        entry_in(&scene_dir.join("2026-01-01 甲"), "a", "2026-01-01", "甲", "");
+        entry_in(&scene_dir.join("2026-02-01 乙"), "b", "2026-02-01", "乙", "");
+
+        // 用户手动改过目录名（json 里的 title 没变）——排序写回**不许**把目录名改回去
+        let manual_dir = scene_dir.join("我自己的名字");
+        fs::rename(scene_dir.join("2026-02-01 乙"), &manual_dir).unwrap();
+
+        // 只发了甲：乙没被发到，order 与目录名都原样保留
+        reorder_entries(&vault, &["a".into()]).unwrap();
+        assert!(manual_dir.is_dir(), "手动改过的目录名必须保留");
+        let list = list_entries(&vault).unwrap();
+        let b = list.iter().find(|e| e.id == "b").unwrap();
+        assert_eq!(b.order, None, "没发到的记录不动 order");
+    }
+
+    #[test]
+    fn reorder_rejects_unknown_ids() {
+        let (vault, _, scene_dir) = vault_with_scene("reorder3", "晨跑打卡");
+        entry_in(&scene_dir.join("2026-01-01 甲"), "a", "2026-01-01", "甲", "");
+        let err = reorder_entries(&vault, &["a".into(), "ghost".into()]).unwrap_err();
+        assert!(matches!(err, AppError::NotFound(_)));
     }
 
     #[test]

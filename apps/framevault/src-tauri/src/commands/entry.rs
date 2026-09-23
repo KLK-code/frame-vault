@@ -205,6 +205,29 @@ pub fn list_entries(
         .collect())
 }
 
+/// 手动排序：前端把当前场景的记录 id 按**新顺序**整表发来。
+/// 只认活着的记录；没发到的保持原样。返回该场景的全量记录（对齐「关系型改动返回全量」）。
+#[tauri::command]
+pub fn reorder_entries(
+    state: State<'_, AppState>,
+    ordered_ids: Vec<String>,
+) -> AppResult<Vec<EntryView>> {
+    let vault_dir = active_vault(&state)?;
+    let entries = vault::reorder_entries(&vault_dir, &ordered_ids)?;
+
+    // 返回哪一桶：第一条给定记录所属的场景（前端本来就只对一个场景排）
+    let folder_id = ordered_ids
+        .first()
+        .and_then(|id| entries.iter().find(|e| &e.id == id))
+        .and_then(|e| e.folder_id.clone());
+
+    Ok(entries
+        .into_iter()
+        .filter(|e| !e.is_deleted() && e.folder_id == folder_id)
+        .map(EntryView::from)
+        .collect())
+}
+
 #[tauri::command]
 pub fn read_vault_meta(state: State<'_, AppState>) -> AppResult<VaultMetaInfo> {
     let vault_dir = active_vault(&state)?;

@@ -7,6 +7,7 @@ import {
   localDay,
   newId,
   pickMediaFiles,
+  reorderEntries as reorderEntriesCmd,
   restoreEntry,
   saveEntry,
   updateEntry,
@@ -55,6 +56,11 @@ export type SceneData = {
   remove: (entry: Entry) => Promise<boolean>;
   /** 撤销刚才那次删除 */
   undo: () => Promise<boolean>;
+  /**
+   * 手动排序：把本场景记录 id 按**新顺序**整表发来（Rust 返回该场景全量，直接替换）。
+   * 排序规则：手动排过的块在前，其余按时间降序 —— 新记录依然在时间线顶部。
+   */
+  reorderEntries: (orderedIds: string[]) => Promise<boolean>;
   /** 一句可撤销的提示（主题用 `SceneNotice` 显示；10 秒后自动消失） */
   notice: string | null;
   dismissNotice: () => void;
@@ -264,6 +270,17 @@ export function useSceneData(folder: FolderNode): SceneData {
     }
   }, [lastDeleted, reload]);
 
+  const reorderEntries = useCallback(async (orderedIds: string[]) => {
+    try {
+      setEntries(await reorderEntriesCmd(orderedIds));
+      setError(null);
+      return true;
+    } catch (err) {
+      setError(String(err));
+      return false;
+    }
+  }, []);
+
   return {
     entries,
     media,
@@ -280,6 +297,7 @@ export function useSceneData(folder: FolderNode): SceneData {
     createWithPhotos,
     remove,
     undo,
+    reorderEntries,
     notice,
     dismissNotice: () => {
       setNotice(null);

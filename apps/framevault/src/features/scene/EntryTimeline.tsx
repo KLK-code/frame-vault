@@ -21,6 +21,31 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftFields, setDraftFields] = useState<Record<string, unknown>>({});
+  /** 拖动排序：正在拖的记录 id + 悬停落点（目标行的上半 / 下半） */
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; before: boolean } | null>(null);
+
+  /**
+   * 显示顺序：**手动排过的块在前（按 order）**，没排过的按时间降序跟在后面 ——
+   * 与 Rust 侧 `list_entries` 的规则一致（前端这里再排一次是因为 dateOf 要靠媒体算）。
+   */
+  const visible = [...data.entries].sort((a, b) => {
+    if (a.order != null && b.order != null) return a.order - b.order;
+    if (a.order != null) return -1;
+    if (b.order != null) return 1;
+    return data.dateOf(b).localeCompare(data.dateOf(a));
+  });
+
+  /** 落手：按显示顺序拔出拖动的、插到目标行前/后，整表提交（Rust 返回全量直接替换） */
+  async function commitReorder(targetId: string, before: boolean) {
+    if (!draggingId || draggingId === targetId) return;
+    const order = visible.map((entry) => entry.id);
+    const from = order.indexOf(draggingId);
+    if (from < 0 || !order.includes(targetId)) return;
+    order.splice(from, 1);
+    order.splice(order.indexOf(targetId) + (before ? 0 : 1), 0, draggingId);
+    await data.reorderEntries(order);
+  }
 
   function startEdit(entry: Entry) {
     setEditingId(entry.id);
@@ -52,10 +77,11 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
         <div className="entry-timeline__empty plain-scene__empty"><SceneIcon name="book" size={30} /><p>{emptyText}</p></div>
       ) : (
         <ul className="entry-timeline__list plain-scene__list">
-          {[...data.entries].sort((a, b) => data.dateOf(b).localeCompare(data.dateOf(a))).map((entry) => {
+          {visible.map((entry) => {
             const items = data.mediaOf(entry.id);
             const isEditing = editingId === entry.id;
             const edited = Boolean(entry.updatedAt) && entry.updatedAt !== entry.createdAt;
+            const isDropTarget = dropHint?.id === entry.id && draggingId !== entry.id;
 
             const declared = fields.map((field) => ({
               field,
@@ -68,7 +94,42 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
             const inline = declared.filter((item) => item.field.type !== "textarea" && item.text);
 
             return (
-              <li key={entry.id} className="entry">
+              <li
+                key={entry.id}
+                className={[
+                  "entry",
+                  draggingId === entry.id ? "is-dragging" : "",
+                  isDropTarget ? (dropHint!.before ? "is-drop-before" : "is-drop-after") : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                draggable={!isEditing}
+                onDragStart={(e) => {
+                  setDraggingId(entry.id);
+                  setDropHint(null);
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", entry.id);
+                }}
+                onDragEnd={() => {
+                  setDraggingId(null);
+                  setDropHint(null);
+                }}
+                onDragOver={(e) => {
+                  if (!draggingId || draggingId === entry.id) return;
+                  e.preventDefault();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const before = e.clientY < rect.top + rect.height / 2;
+                  setDropHint((prev) =>
+                    prev?.id === entry.id && prev.before === before ? prev : { id: entry.id, before },
+                  );
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggingId && isDropTarget) void commitReorder(entry.id, dropHint!.before);
+                  setDraggingId(null);
+                  setDropHint(null);
+                }}
+              >
                 {isEditing ? (
                   <div className="entry__edit">
                     <input

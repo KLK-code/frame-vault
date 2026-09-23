@@ -252,6 +252,11 @@
   position: relative;
 }
 
+/* 拖动排序：拖着的行半透明，落点行用 2px 主题色横线指在上缘 / 下缘 */
+.scene-row-wrap.is-dragging { opacity: 0.4; }
+.scene-row-wrap.is-drop-before { box-shadow: inset 0 2px 0 var(--fv-color-accent); }
+.scene-row-wrap.is-drop-after { box-shadow: inset 0 -2px 0 var(--fv-color-accent); }
+
 .scene-row {
   display: flex;
   align-items: center;

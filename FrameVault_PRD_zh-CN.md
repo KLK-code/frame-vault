@@ -416,22 +416,25 @@ FrameVault 不以“替代系统相册”为目标，而是帮助用户把照片
 
 ## 8. Vault 数据要求（初版）
 
-以下为既有 Entry 存储单元示意，尚未包含新增的文件夹组织与功能主题元数据，不能视为最终目录规范。文件夹与磁盘目录/Entry 的映射及迁移方式需在 Vault Spec 中确定。**（2026-09-23 更新：存储规范 v2 提案已定方向 —— 场景/条目人可读文件夹 + `note.md` + 原始文件名媒体，见 [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md)；实施未开工，开工后本节按其重写。）**
+**（2026-09-23 更新：存储规范 v2 已实施，本节按实际布局重写。）** 磁盘上是"人可读层级"：
+场景 = 一级目录，记录 = 场景下的二级目录，正文是记录目录里的 `note.md`，媒体本体也住在记录目录里。
 
 ```text
 MyVault/
-├── vault.json
+├── vault.json                        身份文件（有它才算 Vault；layout: 2）
 ├── .framevault/
-│   ├── migrations/
-│   └── tombstones/
-└── entries/
-    └── <entry-id>/
-        ├── entry.json
-        ├── note.md
-        └── media/
-            ├── <media-id>.jpg
-            └── <media-id>.mp4
+│   └── trash/                        删掉的记录挪这儿（撤销 = 挪回原场景）
+├── 未归类/                            不属于任何场景的记录
+└── 晨跑打卡/                          一级目录 + folder.json = 一个场景
+    └── 2026-09-22 早跑 3km/            二级目录 = 一条记录（创建日 + 标题）
+        ├── entry.json                 id / 时间戳 / 标题 / 字段 / media[]
+        ├── note.md                    正文（唯一真相）
+        └── 2026-09-23_晨跑打卡_01.jpg   媒体本体（导入时按命名模板生成）
 ```
+
+三条语义：**跟随改名**（应用内改标题 / 改场景名会重命名磁盘目录）、**磁盘为准**（归属由物理位置派生，
+手动改过的名字永久保留）、**不做旧布局兼容**（v1 的扁平 `entries/` 仓库直接拒绝，不迁移）。
+设计存档见 [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md)。
 
 约束：
 
@@ -575,7 +578,11 @@ MyVault/
 3. Theme 是否允许有限 scoped CSS，允许到什么程度；
 4. 首批正式支持网盘的顺序；
 5. 是否加入 Linux/iOS；
-6. Entry 文本是否始终保持 `note.md`，或允许多个文本块； **方向已定（2026-09-23）**：正文落 `note.md`，随**存储规范 v2**（Obsidian 式人可读层级：场景/条目按文件夹组织、媒体用原始文件名）一并实施；三条语义已拍板（跟随改名 / 磁盘为准 / 一键升级），设计存档见 [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md)，**实施未开工**。前期两步（Markdown 渲染、输入工具栏）已完成且未动数据格式；迁移的老文件兼容要求（`#[serde(default)]` + 老文件兼容测试 + 命令四处同步）继续有效。
+6. Entry 文本是否始终保持 `note.md`，或允许多个文本块； **已定案并实施（2026-09-23）**：正文落 `note.md`
+（记录目录里一个真实存在的 `.md` 文件，是正文的唯一真相），随**存储规范 v2**（Obsidian 式人可读层级：
+场景/记录按文件夹组织、媒体导入时按模板命名）一并落地。三条语义：跟随改名 / 磁盘为准 / **不做旧布局兼容**
+（v1 仓库直接拒绝）。哪些字段算正文由主题的 manifest 声明（`note: true`，一个主题最多一个）；
+没声明的主题正文仍留在 `fields` 里。见 [docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md)。
 7. 媒体编辑采用副本、非破坏性 recipe，还是二者并存；
 8. Marketplace 是否由官方唯一运营，还是从首版就支持多 Registry；
 9. 进入功能主题后，是否保留全局文件夹导航，还是允许切换为主题专属导航并提供返回入口；

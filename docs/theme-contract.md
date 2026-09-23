@@ -122,6 +122,7 @@
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
 | 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
 | Markdown 输入控件 | `.md-field`、`.md-field__head`、`.md-field__bar`、`.md-field__btn`、`.md-field__modes`、`.md-field__mode`、`.md-field__input`、`.md-field__preview`、`.md-field__empty` |
+| 主题的 manifest 声明（`FieldDecl.note` / `SceneManifest.mediaNameTemplate`） | **承诺语义，不承诺字段名之外的形状**：`note: true` 的多行字段 = 这条记录的正文（落磁盘上的 `note.md`，不进 `entry.json`），一个主题最多一个；`mediaNameTemplate` = 媒体导入时的命名模板（纯数据，可用 `{date}` / `{scene}` / `{title}` / `{field:<key>}` / `{n}`），不声明就走核心默认 `{date}_{scene}_{n}`。两者都由核心渲染 / 执行，主题不写实现 |
 | Markdown 所见即所得编辑器 | `.md-wysiwyg`（**内部类名不算承诺**：`CodeMirror` 自己的 `.cm-editor` / `.cm-content` / `.cm-line` 等跟着它的版本走，本仓库自己挂的装饰类名 `.cm-fv-*` 也属于实现细节，会跟排版一起调） |
 | Markdown 正文 | `.md`、`.md__h` 与 `.md__h--1`…`.md__h--6`、`.md__p`、`.md__quote`、`.md__list`、`.md__list--ordered`、`.md__item`、`.md__item--task`、`.md__item-body`、`.md__check`、`.md__pre`、`.md__code`、`.md__inline-code`、`.md__strong`、`.md__em`、`.md__del`、`.md__hr`、`.md__link`、`.md__link-blocked`、`.md__table-wrap`、`.md__table`、`.md__cell`、`.md__cell--head`、`.md__cell--center`、`.md__cell--right`、`.md__notice` |
 

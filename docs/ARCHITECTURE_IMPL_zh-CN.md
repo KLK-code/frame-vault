@@ -539,15 +539,15 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 | `forget_vault` | `path` | `VaultInfo[]` | 从列表移除（**不删磁盘文件**） | ✅ |
 | `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份） | ✅ |
 | `new_id` | — | `string` | 发一个 UUIDv7 记录 id（前端不自己拼时间戳 id） | ✅ |
-| `save_entry` | `id` / `title` / `createdAt?` / `updatedAt?` / `folderId?` | `Entry` | 写一条记录（主题**由所属场景解析**后快照进 `scene`） | ✅ |
-| `update_entry` | `id` / `title?` / `fields?` / `updatedAt?` | `Entry` | 编辑已有记录：**只改给到的部分**，归属与创建时间不动（`fields` 整体替换，不深合并） | ✅ |
-| `delete_entry` | `id` / `deletedAt` | `Entry` | **逻辑删除（写墓碑）**：文件 / 媒体 / 字段都留着，随时能恢复；同步靠它传播"删除" | ✅ |
-| `restore_entry` | `id` / `now` | `Entry` | 撤销删除（清墓碑） | ✅ |
-| `load_entry` | `id` | `Entry` | 读一条记录 | ✅ |
-| `list_entries` | `folderId?` / `includeDeleted?` | `Entry[]` | 列记录（新的在前；**墓碑默认不出现**，要看回收站才传 `includeDeleted`；坏数据跳过） | ✅ |
-| `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份） | ✅ |
-| `import_media` | `sourcePath` / `entryId?` / `addedAt` | `MediaItem` | 把一个文件**复制**进 Vault（算 sha256 / 探尺寸 / 生成缩略图）；`async` 命令，不占主线程 | ✅ |
-| `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前；返回原文件与缩略图的**绝对路径**，前端不拼路径） | ✅ |
+| `save_entry` | `id` / `title` / `createdAt?` / `updatedAt?` / `folderId?` / `day?` / `note?` | `EntryView` | 写一条记录（主题**由所属场景解析**后快照进 `scene`）。**新建时算出目录名建目录**；`day` = 创建日（前端给，Rust 无时钟），`note` = 正文（写 `note.md`）；换 `folderId` 会**真的搬目录** | ✅ |
+| `update_entry` | `id` / `title?` / `fields?` / `note?` / `updatedAt?` | `EntryView` | 编辑已有记录：**只改给到的部分**，归属与创建时间不动（`fields` 整体替换，不深合并）；改了标题会**连目录一起改名**（手动改过名的除外） | ✅ |
+| `delete_entry` | `id` / `deletedAt` | `EntryView` | **把整个记录目录挪进回收站**（`.framevault/trash/`，保留原目录名）并写墓碑；撤销 = 挪回来 | ✅ |
+| `restore_entry` | `id` / `now` | `EntryView` | 撤销删除：挪回原场景（场景没了就回「未归类」），清墓碑 | ✅ |
+| `load_entry` | `id` | `EntryView` | 读一条记录（含 `note`，来自 `note.md`） | ✅ |
+| `list_entries` | `folderId?` / `includeDeleted?` | `EntryView[]` | 列记录（新的在前；**墓碑默认不出现**，要看回收站才传 `includeDeleted`）。内部是**扫盘**：场景目录下的记录 + 未归类容器 + 回收站 | ✅ |
+| `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份与布局版本；**v1 仓库在这里被拒**） | ✅ |
+| `import_media` | `sourcePath` / `entryId` / `nameTemplate?` / `addedAt` | `MediaItem` | 把一个文件**复制进记录目录**，按模板命名（算 sha256 / 探尺寸 / 生成缩略图）；`entryId` **必填**，`async` 命令，不占主线程 | ✅ |
+| `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前）：**从各条记录的 `media[]` 汇总**（不再扫 `media/`），返回原文件与缩略图的**绝对路径** | ✅ |
 | `list_folder_tree` | — | `FolderNode[]` | 全部场景（已排序；含 `scene` / `effectiveScene` / `order` / `pinned`） | ✅ |
 | `create_folder` | `name` / `scene?` | `FolderNode[]` | 新建场景：起名 + 选主题，一步完成 | ✅ |
 | `rename_folder` | `id` / `name` | `FolderNode[]` | 给场景改名 | ✅ |
@@ -747,19 +747,40 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 
 2026-09 新增的旅行字段为 `fields["builtin.travel"].location` / `.text`，挑战心得为 `fields["builtin.challenge"].text`，日记正文继续使用 `fields["builtin.plain"].text`；均走现有开放字段区与原子写盘通道，不改 `SCHEMA_VERSION`。读取仍兼容早期顶层字段。主题展示声明与默认配色不写进 Vault。
 
+**磁盘布局（v2「人可读层级」，2026-09 落地）**：
+
 ```text
 <用户选的目录>/
-├── vault.json
-├── entries/<entry-id>/…            记录本体（不变）
-├── folders/<folder-id>/folder.json  场景（文件夹）元数据
-└── media/<media-id>/                媒体本体 + meta.json（见 §13.6）
+├── vault.json                      身份文件（有它才算 Vault；layout: 2）
+├── .framevault/trash/<原目录名>/    删掉的记录挪这儿（撤销 = 挪回原场景）
+├── 未归类/                          不属于任何场景的记录（根下没有 folder.json 的容器）
+└── 晨跑打卡/                        一级目录 + folder.json = 一个场景
+    └── 2026-09-22 早跑 3km/          二级目录 = 一条记录（创建日 + 标题）
+        ├── entry.json                id / day / 时间戳 / 标题 / fields / media[]
+        ├── note.md                   正文（唯一真相，不进 entry.json）
+        └── 2026-09-23_晨跑打卡_01.jpg  媒体本体（导入时按模板命名）
 ```
+
+**三条"名字"规矩**（唯一出口是 `vault/naming.rs`）：
+
+1. **名字就是名字**：`FolderMeta.name` 等于场景目录名，`Entry.title` 等于记录目录名去掉
+   `"{创建日} "` 前缀 —— 所以不存在"界面上叫 A、磁盘上叫 B"，也不需要额外的目录名字段；
+2. **改名跟着走**：应用内改标题 / 改场景名 → 算出新目录名 → `rename`（撞名加 ` (2)`）；
+   但**当前目录名与按旧值算出来的名字不一致**时（说明用户手动改过），从此只写内容、永久不动目录名；
+3. **磁盘为准**：记录属于哪个场景，看它住在谁的目录里（父目录是场景 → 该场景；父目录是未归类容器
+   / 直接摆在根下 → `folderId = null`）。用户在资源管理器里挪动、改名，扫一次就跟着认。
+   不需要"id → 路径"缓存，一次扫描就是一次真相。
+
+**媒体**：本体住在记录目录里，文件名在导入那一刻按场景 manifest 声明的模板生成一次
+（`{date}` / `{scene}` / `{title}` / `{field:<key>}` / `{n}`，不声明就走核心默认 `{date}_{scene}_{n}`），
+之后永不自动改。元数据（文件名 / 原名 / 尺寸 / 哈希 / 拍摄时间）收在记录的 `media[]` 里 ——
+**不再有全局 `media/` 目录，也没有"无主媒体"**（见 §13.6）。
 
 `folder.json` 的字段级设计：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "0199...",                       // UUIDv7
   "name": "2026 跑步挑战",
   "order": 3,                            // 全局排序（仓库层面是平的，没有“同级”一说）
@@ -923,4 +944,9 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 用 `Decoration.replace({ block: true })` 吞掉围栏行 / 表格行 | 行没了，**相邻行的行级装饰一起丢**、表格 widget 也不落地 —— 症状是"代码块没样式、表格凭空消失" | 少用块级替换：围栏改成"藏围栏文本 + 整块铺代码底色"，表格改成行内替换（代价：表格后留两行空行） |
 | 露出源码的粒度按记号自己判 | 围栏上下两条 `CodeMark` 各自与光标比，光标在正文时都不露 —— "光标进块显示源码"当场失效 | 块级记号按**宿主块**判（`rangeTouched(parent.from, parent.to)`），行内记号才按令牌自身范围判 |
 | 以为在 App 窗口里就能验证编辑器行为 | 自动化往窗口发合成键盘事件常常到不了 WebView（连普通 `<input>` 都收不到，容易误判成"编辑器坏了"）；App 若是提权进程，UIA 直接拒接 | **在真浏览器里验编辑器**：临时用 vite 挂一个 harness 页，浏览器自动化可以精确点选 / 打字 / 读计算样式与 DOM；挂载与主题集成再回 App 看 |
+| 改标题只写 JSON 不搬目录 | 界面变了、磁盘没变，"名字就是名字"当场破功 | 写盘只走 `write_entry`（先内容 → 再改名）；能不能自动改名，看"当前目录名 == 按旧值算出来的名字"，不等就永久不再改 |
+| 改名判定写成 `if let (true, false) = (may_rename, current != wanted)` | 元组模式正向匹配，条件不成立就整段跳过 —— **改名永远不发生，且不报错** | 写 `if may_rename && current != wanted`；并且**必须有测试断言目录真的动了**（实测这条就是被测试抓住的） |
+| 扫描时拿目录名去改写记录的 `title` | 用户在应用里改的标题，下一次列出被目录名覆盖回去 | 标题的真相在 `entry.json`；目录名是名字，不反向覆盖标题。场景那边相反：`FolderMeta.name` 就是磁盘目录名 |
+| 回收站目录用 `<entryId>` 命名 | 撤销时只能按 `day + title` 重算名字，用户手动改过的目录名丢掉 | 回收站保留原目录名，撤销原样挪回去 |
+| 在扫描（读命令）里做媒体对账并写盘 | 对账按"文件不在 `media[]` 里"判重，会让"导入后立刻读一次"重复收养同一张照片 | 收养前按**文件名**排重；只在真的变了时写盘，且只写 `entry.json` |
 | 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 只热替换组件代码，而**编辑器实例只在挂载时创建一次**（`useEffect(…, [])` 里 `new EditorView`），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲一遍**。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |

@@ -2,7 +2,7 @@
 
 > **这份文件是权威的。** 任何人（或 AI）在动这个仓库之前先读完它。
 > 与本文冲突的其它描述，**以本文为准**；本文没写的，查 `docs/ARCHITECTURE_IMPL_zh-CN.md`。
-> 最后更新：2026-09（**编辑器内核换成 CodeMirror 6**：§1 依赖例外、§6 编辑器小节、§9 新增五行坑并改写两行、§10；愿景收编 + 术语改向登记：§4 注记指向 docs/VISION_zh-CN.md；macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件；写作台编辑器：§1 依赖例外、§6 两种输入控件、§9 新增两行坑；编辑器粘贴：§9 新增"行为改动必须重启真粘一次"的坑）
+> 最后更新：2026-09（**存储规范 v2 落地**：§3 铁律 1/5/8/9、§5 命令契约、§9 新增五行坑、§12 布局图；**编辑器内核换成 CodeMirror 6**：§1 依赖例外、§6 编辑器小节、§9 新增五行坑并改写两行、§10；愿景收编 + 术语改向登记：§4 注记指向 docs/VISION_zh-CN.md；macOS 适配：§1 平台范围、§9 新增 macOS 坑、§12 补两个文件；写作台编辑器：§1 依赖例外、§6 两种输入控件、§9 新增两行坑；编辑器粘贴：§9 新增"行为改动必须重启真粘一次"的坑）
 
 ## 0. 一句话
 
@@ -59,19 +59,31 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 
 ## 3. 数据模型铁律
 
-1. **仓库里一切都是扁平的**：`folders/` 没有父子关系、`entries/` 不嵌套、`media/` 一个 id 一个目录。
-   归属靠字段（`Entry.folderId`、`MediaMeta.entryId`）；**"归类/分组"永远只是展示层的事**。
-   移动 = 改一个字段，不搬文件。
+1. **仓库是"名字就是名字"的两层，磁盘为准**：
+   场景 = 根下一个带 `folder.json` 的目录（目录名 = 净化后的场景名）；
+   记录 = 场景目录下的一个目录（`"{创建日} {标题}"`），里面是 `entry.json` + `note.md` + 媒体本体；
+   不属于任何场景的记录住根下那个**没有 `folder.json`** 的容器（默认叫「未归类」）。
+   **归属 = 物理位置**（父目录是谁就是谁的），`Entry.folderId` 是这件事的字段记录，
+   所以改归属 = **真的搬目录**（`move_entry_to_slot`），不是只改一个字段。
+   用户在资源管理器里挪动 / 改名，扫一次就跟着认；**手动改过的名字永久保留**，系统永不覆盖它。
+   "归类 / 分组"仍然只是展示层的事（侧栏按 `effectiveScene` 分组显示）。
 2. **用户数据必须经 Rust 落盘**：排序、置顶、主题绑定、主题业务进度、封面……
    错：写进 React state 或 localStorage 就当作保存了（重启就没了），或塞进 SQLite（它只是缓存）。
 3. **派生数据不进 Vault**：SQLite 索引、缩略图 → 应用数据目录（Windows `%APPDATA%\com.framevault.app\`，macOS `~/Library/Application Support/com.framevault.app/`，代码里一律走 Tauri 的 `app_data_dir()`，不自己拼）。
    它们随时可重建，**永远不是真相来源**（PRD FV-SYN-002）。
 4. **写盘一律原子**：`storage::write_json_atomic`（tmp + rename），不要裸 `fs::write`。
-5. **加字段必须 `#[serde(default)]`**；删字段也不能让老文件读不出来——serde 默认忽略未知字段，
-   并且要有测试守着"老版本文件还能读"（看法 `vault/folder.rs` / `vault/model.rs` 里的 `old_*_still_loads` 测试）。
+5. **加字段必须 `#[serde(default)]`**；删字段也不能让同版本的老文件读不出来——serde 默认忽略未知字段，
+   并且要有测试守着（看法 `vault/folder.rs` / `vault/model.rs` 里的 `old_*_still_loads` 测试）。
+   **但跨大版本不做兼容**：v1（扁平 `entries/<uuid>/` + 全局 `media/<uuid>/` 那套）的仓库**直接给中文错误**，
+   不迁移、不写兼容测试（2026-09 拍板：「这软件还没有人用」）。改 `SCHEMA_VERSION` 就等于换布局。
 6. **id 一律 UUIDv7，由 Rust 发**（`new_id` 命令）。**时间戳由调用方给**，Rust 层不引时钟依赖（测试才好写）。
 7. `SCHEMA_VERSION` 在 `vault/model.rs`。改版本号之前先想清楚老数据怎么办。
-8. **媒体原始文件导入后不可变**；磁盘名固定 `orig.<ext>`，用户原名只存在 meta 里。
+8. **媒体住在记录目录里**，文件名在导入那一刻按场景的命名模板生成一次（默认 `{date}_{scene}_{n}`），
+   之后**永不自动改** —— 用户手动改过的名字永久保留。真实文件名记在 `MediaMeta.file`，
+   导入时的原始文件名只用于展示。**归属 = 它在哪个记录目录里**（没有"无主媒体"这回事）。
+9. **正文是 `note.md`，不是字段**：`Entry.note` 带 `#[serde(skip)]`，读时从文件填进来、写时写回文件，
+   所以 `entry.json` 里永远没有正文的第二个副本。哪些字段算正文由 manifest 声明（`note: true`），
+   一个主题最多一个；没声明的主题，正文照旧留在 `fields` 里（不丢数据，只是不是一个能直接打开的 `.md`）。
 
 ## 4. 术语表（**防漂移的关键，务必按这个说**）
 
@@ -105,6 +117,9 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 ## 5. 命令 / 事件契约
 
 - 命令名 `snake_case`、动词开头（`list_entries` / `save_entry` / `import_media`）。
+- **v2 之后的参数变化**：`save_entry` 多了 `day`（本地创建日，前端给 —— 目录名要用）与 `note`（正文）；
+  `update_entry` 多了 `note`（不传就不动 `note.md`）；`import_media` 的 `entryId` **变成必填**，
+  另加 `nameTemplate`（场景 manifest 里声明的命名模板，前端解析后传入；不传走核心默认）。
 - 前端 `invoke` 传 **camelCase**，Rust 形参 **snake_case**，Tauri 自动映射；进 JSON 的结构体一律 `#[serde(rename_all = "camelCase")]`。
 - **关系型改动返回全量**（排序 / 置顶 / 绑定 / 删除 → 返回整个列表）。前端直接替换，不做乐观更新。
   理由：只回一条会让前端自己猜规则，两边迟早不一致。
@@ -224,6 +239,12 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 露出源码的粒度按记号自己判 | 围栏那类 = 上下两条 `CodeMark` 各自跟光标比，光标在正文时两条都不露，"光标进块显示源码"当场失效 | 块级记号按**宿主块**判：`rangeTouched(parent.from, parent.to)`；行内记号才按令牌自己的范围判 |
 | 以为在 App 窗口里能验证编辑器行为 | 自动化给窗口发合成键盘事件常常到不了 WebView（连普通 `<input>` 都收不到），而且 App 可能是提权进程、`UIA` 直接拒接；结果把"自动化打不进字"误判成"编辑器坏了" | **在真浏览器里验**：临时挂一个 `harness.html` + `harness.tsx` 用 vite 跑起来，用浏览器自动化（Playwright）精确点选 / 打字 / 读计算样式与 DOM —— 快且可断言；集成（挂载、主题 token、`@layer`）再回 App 里看 |
 | 在跑着的 dev 实例里验证编辑器的行为改动 | vite HMR 会热替换组件代码，但**编辑器实例只在挂载时创建一次**（现在是自己 `useEffect(…, [])` 里 `new EditorView`，工厂同样只在挂载跑一遍），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲/真的点**一遍。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |
+| 改标题 / 改场景名只写 JSON，不搬目录 | 界面上名字变了、磁盘上还是旧名字 —— "名字就是名字"当场破功，用户在外面根本找不到 | 写盘一律走 `write_entry` / `save_folder`：先写内容 → 再算目标目录名 → 需要就 `rename`（撞名加 ` (2)`）。判定能不能自动改名的依据是**当前目录名 == 按旧值算出来的名字**；不等就说明用户手动改过，从此只写内容、**永久不动目录名** |
+| 改名判定写成 `if let (true, false) = (may_rename, current != wanted)` | 元组模式是正向匹配：条件不成立时不进分支，于是**改名永远不发生**，而且一声不响（只有断言抓得住） | 直接写 `if may_rename && current != wanted`；这类"永假"的写法一定要有测试断言目录真的动了 |
+| 扫描时按磁盘名改写记录的 `title` | 用户在应用里改的标题，下一次列出就被目录名覆盖回去 —— 表现是"改了没反应" | 标题的真相在 `entry.json`，目录名是**名字**不是标题；手动改过名只影响"以后不再自动改名"。场景那边反过来：`FolderMeta.name` 没有别的地方存，就是磁盘目录名 |
+| 回收站目录用 `<entryId>` 命名 | 撤销时只能按 `day + title` 重算目录名，**用户手动改过的名字就此丢掉** | 回收站里保留**原来的目录名**（撞名加后缀）；撤销就是把它原样挪回原场景，一个字符都不改 |
+| 对账写成"文件不在 `media[]` 里就收养" | ①导入完立刻读一次会**重复收养**同名的照片（两套元数据指向一个文件）；②读命令顺手写盘，容易踩"读到一半写回" | 收养前先按**文件名**排重（`file` 是磁盘上的唯一身份）；对账只在"真的变了"时写盘，并且只写 `entry.json` |
+| 净化没做全：Windows 保留名、尾部空格与点、按字节截断中文 | 目录/文件建不出来，或者建出来的名字与读回来的不一致（Windows 会悄悄删掉尾部的点与空格）；中文被字节截断成乱码 | 名字一律过 `vault/naming.rs`：非法字符换下划线、保留名加前缀、去尾部空格与点、**按字符数截断**、空名兜底。新场景 / 新记录 / 新媒体都必须走它，别处不许自己拼名字 |
 
 ## 10. 现在明确不做（YAGNI / 已拍板推迟）
 
@@ -278,15 +299,23 @@ apps/framevault/
         ├── error.rs            AppError / AppResult
         ├── state.rs            VaultRegistry + vaults.json 持久化
         ├── commands/           vault / folder / entry / media / window（薄适配器）
-        └── vault/              领域核心（不认识 tauri）：model / storage / folder / scene / media / id
+        └── vault/              领域核心（不认识 tauri）：
+                                naming（净化 / 目录名派生 / 媒体模板 / 去重 —— **磁盘名字的唯一出口**）
+                                storage（路径约定 + 扫描对账 + 原子写 + 回收站）
+                                model / folder / scene / media / id
+    └── tests/layout_v2.rs      存储 v2 的端到端验收（走一遍用户流程，每一步都看磁盘）
 ```
 
 ```text
 <用户选的目录>/          ← Vault：用户数据，可备份、可同步、可手改
-├── vault.json            身份文件（有它才算 Vault）
-├── entries/<id>/entry.json
-├── folders/<id>/folder.json
-└── media/<id>/{orig.<ext>, meta.json}
+├── vault.json                      身份文件（有它才算 Vault；layout: 2）
+├── .framevault/trash/<原目录名>/    删掉的记录挪这儿（撤销 = 挪回原场景）
+├── 未归类/                          不属于任何场景的记录（根下没有 folder.json 的容器）
+└── 晨跑打卡/                        一级目录 + folder.json = 一个场景
+    └── 2026-09-22 早跑 3km/          二级目录 = 一条记录（创建日 + 标题）
+        ├── entry.json                id / 时间戳 / 标题 / fields / media[]
+        ├── note.md                   正文（唯一真相）
+        └── 2026-09-23_晨跑打卡_01.jpg  媒体本体（导入时按模板命名）
 
 %APPDATA%/com.framevault.app/   ← 本机缓存（macOS 是 ~/Library/Application Support/…），删了能重建
 ├── vaults.json           已知仓库列表 + 当前仓库

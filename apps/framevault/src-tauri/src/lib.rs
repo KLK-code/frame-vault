@@ -22,8 +22,14 @@ pub fn run() {
             let state = AppState::new(config);
             state.load()?;
 
-            // 启动时就把当前 Vault 放行给 asset 协议（WebView 要靠它显示本地照片）
-            if let Some(dir) = state.vaults.lock().ok().and_then(|guard| guard.active.clone()) {
+            // 启动时就把当前 Vault 放行给 asset 协议（WebView 要靠它显示本地照片）。
+            // SAF 引用（安卓用户选的目录）没有可放行的文件系统目录 —— 那条链在 S4 换成自定义协议。
+            if let Some(dir) = state
+                .vaults
+                .lock()
+                .ok()
+                .and_then(|guard| guard.active.as_ref().and_then(|r| r.as_path()).map(|p| p.to_path_buf()))
+            {
                 commands::allow_vault_assets(app.handle(), &dir);
             }
 

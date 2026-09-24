@@ -8,14 +8,29 @@ pub mod vault;
 pub mod window;
 
 use crate::error::{AppError, AppResult};
-use crate::state::AppState;
+use crate::state::{AppState, VaultRef};
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 
-/// 所有命令共用的"当前仓库是哪个"
-pub(crate) fn active_vault(state: &AppState) -> AppResult<PathBuf> {
+/// 所有命令共用的"当前仓库是哪个"（路径 / SAF 引用都可能）
+pub(crate) fn active_vault_ref(state: &AppState) -> AppResult<VaultRef> {
     let guard = state.vaults.lock()?;
     guard.active.clone().ok_or(AppError::NotSelected)
+}
+
+/// 当前仓库的**桌面路径**。
+///
+/// SAF 引用（安卓上用户选的目录）暂时从这里返回人话错误 —— 存储抽象那一层还没接完
+/// （见 docs/PROPOSAL_mobile_vault_saf_zh-CN.md 的分期）。等 `VaultStore` 落地后，
+/// 命令层会改成拿"根句柄"而不是裸路径。
+pub(crate) fn active_vault(state: &AppState) -> AppResult<PathBuf> {
+    let reference = active_vault_ref(state)?;
+    match reference.as_path() {
+        Some(path) => Ok(path.to_path_buf()),
+        None => Err(AppError::Invalid(
+            "这个仓库在安卓的外部存储上，当前版本还不支持读写它".to_string(),
+        )),
+    }
 }
 
 /// 缩略图缓存目录：`<应用数据>/thumbs/<vault-id>/`

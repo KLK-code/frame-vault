@@ -13,6 +13,7 @@ mod model;
 mod naming;
 mod scene;
 mod storage;
+mod store;
 
 pub use folder::{
     create_folder_in, delete_folder, folder_dir, folder_path, list_folders, next_order, read_folder,
@@ -28,6 +29,7 @@ pub use naming::{
 };
 pub use model::{is_supported, Entry, VaultMeta, SCHEMA_VERSION};
 pub use scene::{builtin_scenes, is_known as is_known_scene, SceneInfo, PLAIN_SCENE};
+pub use store::{DirEntry, MemStore, NativeFs, Vault, VaultStore};
 pub use storage::{
     create_entry, create_vault, ensure_uncategorized, entry_dirs_in, entry_json_path, entry_slot,
     find_entry_dir, find_folder_dir, folder_dirs, folder_json_path, internal_dir, is_vault,

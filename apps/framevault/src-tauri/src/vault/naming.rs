@@ -5,6 +5,7 @@
 //! 场景目录名 = 净化后的场景名，记录目录名 = `"{创建日} {净化后的标题}"`，
 //! 所以 `FolderMeta.name` / `Entry.title` 与磁盘目录名**永远相等**，不需要额外的"目录名字段"。
 
+use std::collections::HashSet;
 use std::path::Path;
 
 /// 名字里不许出现的字符（Windows 与 POSIX 的并集）
@@ -257,6 +258,14 @@ fn tidy_separators(raw: &str) -> String {
 /// 在 `dir` 里给 `stem`(+`ext`) 找一个没被占用的名字：撞名就加 ` (2)`、` (3)`…
 ///
 /// **绝不覆盖已有文件** —— 场景、记录、媒体共用这一条规则。
+///
+/// 实现上**只列一次目录**，拿一份"已占用的名字"集合来查。原来是一个候选一次 `exists()`，
+/// 上限一万次 —— 在 SAF（安卓用户选的目录）上那就是一次次 ContentResolver 往返，慢到不可用；
+/// 列一次目录在两种后端上都更省，语义不变。
+///
+/// 判重**按大小写不敏感**（拿小写当键）：Windows / macOS 的文件系统本来就不敏感，这样两端行为
+/// 与今天一致；同时让 Linux 与 FAT/exFAT（手机 SD 卡）也跟上 —— 三端一条规则。
+/// 方向是"宁可多让一个名字"：判重严格顶多名字不漂亮，判重宽松就会**覆盖别人的文件**。
 pub fn unique_child_name(dir: &Path, stem: &str, ext: Option<&str>) -> String {
     let stem = if stem.trim().is_empty() {
         FALLBACK_ENTRY.to_string()
@@ -268,14 +277,23 @@ pub fn unique_child_name(dir: &Path, stem: &str, ext: Option<&str>) -> String {
         _ => String::new(),
     };
 
+    // 拿不到目录（不存在 / 读不了）就按空目录处理 —— 与旧实现"`exists()` 全 false"的结果一致
+    let mut taken: HashSet<String> = HashSet::new();
+    if let Ok(items) = std::fs::read_dir(dir) {
+        for item in items.flatten() {
+            // `to_string_lossy`：非 UTF-8 的名字也占位（宁可多让一个，也别撞上）
+            taken.insert(item.file_name().to_string_lossy().to_lowercase());
+        }
+    }
+
     let candidate = format!("{stem}{suffix}");
-    if !dir.join(&candidate).exists() {
+    if !taken.contains(&candidate.to_lowercase()) {
         return candidate;
     }
 
     for index in 2..10_000 {
         let candidate = format!("{stem} ({index}){suffix}");
-        if !dir.join(&candidate).exists() {
+        if !taken.contains(&candidate.to_lowercase()) {
             return candidate;
         }
     }
@@ -450,5 +468,45 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(unique_child_name(&dir, "  ", None), FALLBACK_ENTRY);
+    }
+
+    /// 判重**按大小写不敏感**：Windows / macOS 的盘本来就不敏感（`Foo` 与 `foo` 是同一个文件），
+    /// 手机上常见 SD 卡是 FAT/exFAT 也一样。严格判重顶多名字不漂亮；宽松判重会**覆盖别人的文件**。
+    #[test]
+    fn unique_child_name_is_case_insensitive() {
+        let dir = std::env::temp_dir().join("framevault-naming-case");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(dir.join("Photo.JPG"), b"x").unwrap();
+        assert_eq!(
+            unique_child_name(&dir, "photo", Some("jpg")),
+            "photo (2).jpg",
+            "大小写不同也算撞名"
+        );
+        assert_eq!(
+            unique_child_name(&dir, "PHOTO", Some("JPG")),
+            "PHOTO (2).JPG"
+        );
+
+        // 目录同理
+        std::fs::create_dir_all(dir.join("Run")).unwrap();
+        assert_eq!(unique_child_name(&dir, "run", None), "run (2)");
+    }
+
+    /// 列一次目录就够了：候选很多个时也不该逐个探盘。
+    /// 这里用一个"已经占到第 500 号"的目录来确认它仍然只挑第一个空位（而不是探 500 次才回来）。
+    #[test]
+    fn unique_child_name_scans_once_and_still_finds_the_first_free_slot() {
+        let dir = std::env::temp_dir().join("framevault-naming-many");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        std::fs::write(dir.join("图.jpg"), b"x").unwrap();
+        for index in 2..=500 {
+            std::fs::write(dir.join(format!("图 ({index}).jpg")), b"x").unwrap();
+        }
+
+        assert_eq!(unique_child_name(&dir, "图", Some("jpg")), "图 (501).jpg");
     }
 }

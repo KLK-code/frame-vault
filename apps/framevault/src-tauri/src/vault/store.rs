@@ -237,11 +237,41 @@ impl VaultStore for NativeFs {
 pub struct MemStore {
     files: Mutex<HashMap<String, Vec<u8>>>,
     dirs: Mutex<HashSet<String>>,
+    /// **故障注入**：让下一次（或接下来每一次）指定操作失败。
+    /// 用来钉住"读失败不许被当成不存在 / 不存在内容"这类语义 ——
+    /// 桌面文件系统上很难制造这些情况，而它们在安卓 SAF 上天天发生。
+    faults: Mutex<Vec<Fault>>,
+}
+
+/// 一次注入的故障：对哪类操作生效、失败几次
+#[derive(Debug, Clone)]
+pub struct Fault {
+    pub op: &'static str,
+    pub times: usize,
+    pub message: String,
 }
 
 impl MemStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// 让接下来 `times` 次 `op` 操作失败（`op` 见各方法里的 `take_fault` 参数）
+    pub fn inject_fault(&self, op: &'static str, times: usize, message: &str) {
+        self.faults.lock().unwrap().push(Fault {
+            op,
+            times,
+            message: message.to_string(),
+        });
+    }
+
+    /// 该不该让这次操作失败？是就把它记的读数减一
+    fn take_fault(&self, op: &str) -> Option<String> {
+        let mut faults = self.faults.lock().unwrap();
+        let index = faults.iter().position(|f| f.op == op && f.times > 0)?;
+        let fault = &mut faults[index];
+        fault.times -= 1;
+        Some(fault.message.clone())
     }
 
     fn key(path: &Path) -> String {
@@ -274,6 +304,9 @@ impl VaultStore for MemStore {
     }
 
     fn read_bytes(&self, path: &Path) -> AppResult<Vec<u8>> {
+        if let Some(message) = self.take_fault("read_bytes") {
+            return Err(AppError::Unavailable(message));
+        }
         let key = Self::key(path);
         self.files
             .lock()
@@ -290,6 +323,9 @@ impl VaultStore for MemStore {
     }
 
     fn read_text_opt(&self, path: &Path) -> AppResult<Option<String>> {
+        if let Some(message) = self.take_fault("read_text") {
+            return Err(AppError::Unavailable(message));
+        }
         let key = Self::key(path);
         let files = self.files.lock().unwrap();
         Ok(files
@@ -311,6 +347,9 @@ impl VaultStore for MemStore {
     }
 
     fn list_dir(&self, path: &Path) -> AppResult<Vec<DirEntry>> {
+        if let Some(message) = self.take_fault("list_dir") {
+            return Err(AppError::Unavailable(message));
+        }
         let base = format!("{}/", Self::key(path));
         let mut out: Vec<DirEntry> = Vec::new();
 

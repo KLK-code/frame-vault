@@ -23,6 +23,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.Base64
 import androidx.activity.result.ActivityResult
+import app.tauri.Logger
 import app.tauri.annotation.ActivityCallback
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -69,6 +70,9 @@ class SafSourceArgs {
   lateinit var path: String
   lateinit var uri: String
 }
+
+/** 走桥的字节上限：超过它就拒绝（别让几十兆字节在 JNI 上过一遍） */
+private const val MAX_INLINE_BYTES = 24L * 1024 * 1024
 
 @TauriPlugin
 class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
@@ -297,12 +301,20 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
           ?: throw IOException("改名失败：$fromName → $toName")
         verifyName(renamed, toName)
       } else {
-        // 换了一层：SAF 没有 move。递归复制到新位置，再删旧的。
-        // （这是"删除 → 回收站 → 撤销"和"记录换文件夹"的必经之路）
+        // 换了一层。**先试原生移动**（Android 有 `DocumentsContract.moveDocument`，
+        // provider 声明 `FLAG_SUPPORTS_MOVE` 就能用）：一次调用，不搬字节。
+        // 不支持才退回"递归复制 + 删旧"（那是几百兆的活）。
         val destParentId = docIdOf(root, toParent)
           ?: throw IOException("目标目录不存在：$toParent")
-        copyRecursive(root, fromId, destParentId, toName)
-        deleteRecursive(root, fromId)
+        val srcParentId = docIdOf(root, fromParent)
+          ?: throw IOException("找不到原目录：$fromParent")
+        if (moveNative(root, fromId, srcParentId, destParentId, toName)) {
+          Logger.info(getLogTag(), "moveDocument 成功：$fromName -> $toName（没有复制数据）")
+        } else {
+          Logger.info(getLogTag(), "provider 不支持 moveDocument，退回复制 + 删旧：$fromName")
+          copyRecursive(root, fromId, destParentId, toName)
+          deleteRecursive(root, fromId)
+        }
       }
       invoke.resolve(JSObject())
     } catch (ex: Exception) {
@@ -343,6 +355,34 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
       invoke.resolve(out)
     } catch (ex: Exception) {
       invoke.reject(ex.message ?: "读不出这个来源")
+    }
+  }
+
+  /**
+   * 把**仓库里**的一个文件读进来（base64），给 WebView 看原图用（`vaultfs://` 协议）。
+   *
+   * 只走"图片 / 不太大"这条路：**上限在本地判**，别让几十兆的字节流跑到 JNI 上。
+   * 视频的流式读取与 Range 是后面的阶段。
+   */
+  @Command
+  fun readBytes(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(SafPathArgs::class.java)
+      val uri = uriOf(Uri.parse(args.root), args.path)
+        ?: throw IOException("文件不存在：${args.path}")
+
+      val size = resolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+      if (size > MAX_INLINE_BYTES) {
+        throw IOException("这个文件太大（${size / 1024 / 1024} MB），安卓上暂时读不了")
+      }
+
+      val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IOException("打不开：${args.path}")
+      val out = JSObject()
+      out.put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+      invoke.resolve(out)
+    } catch (ex: Exception) {
+      invoke.reject(ex.message ?: "读文件失败")
     }
   }
 
@@ -494,6 +534,44 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
         val id = cursor.getString(0)
         out.add(id)
       }
+    }
+  }
+
+  /**
+   * 原生跨目录移动：`DocumentsContract.moveDocument`（API 24+）。
+   * provider 不支持时会抛（UnsupportedOperationException / IllegalArgumentException），
+   * 这里吞掉并返回 false，交给调用方走兜底。
+   *
+   * **移动后名字被 provider 改掉**（撞名加后缀）不算成功 —— 领域层是拿着"唯一名字"
+   * 调过来的，名字被改就意味着磁盘布局和它想的不一样，宁可报错也别默默接受。
+   */
+  private fun moveNative(
+    root: Uri,
+    srcId: String,
+    srcParentId: String,
+    destParentId: String,
+    destName: String,
+  ): Boolean {
+    return try {
+      // 这个 SDK 上只有 4 参重载（不带显示名）—— 所以"移动"和"改名"分两步：
+      val moved = DocumentsContract.moveDocument(
+        resolver,
+        documentUri(root, srcId),
+        documentUri(root, srcParentId),
+        documentUri(root, destParentId),
+      ) ?: return false
+
+      val actual = nameOfUri(moved)
+      if (actual != null && actual != destName) {
+        val renamed = DocumentsContract.renameDocument(resolver, moved, destName)
+          ?: throw IOException("移动过去了，但改名失败：$actual → $destName")
+        verifyName(renamed, destName)
+      }
+      true
+    } catch (ex: IOException) {
+      throw ex
+    } catch (ex: Exception) {
+      false
     }
   }
 

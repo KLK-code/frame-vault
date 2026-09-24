@@ -643,6 +643,29 @@ mod tests {
     }
 
     #[test]
+    fn reconcile_does_nothing_when_listing_faults() {
+        // 目录**在**、但列不出来（SAF 上很常见：权限被撤、存储服务抖动）
+        // —— 这时同样一个字节都不许动（执行计划 P3 的核心）
+        let dir = temp_dir("reconcile-fault");
+        std::fs::write(dir.join("还在.jpg"), b"x").unwrap();
+        let store = std::sync::Arc::new(crate::vault::store::MemStore::new());
+        let vault = Vault::new(dir.clone(), store.clone());
+        store.inject_fault("list_dir", 1, "存储暂时不可用（假装）");
+
+        let mut media = vec![MediaMeta {
+            schema_version: SCHEMA_VERSION,
+            id: "m1".into(),
+            file: "还在.jpg".into(),
+            ext: "jpg".into(),
+            mime: "image/jpeg".into(),
+            ..Default::default()
+        }];
+        let reconciled = reconcile_dir(&vault, &dir, &mut media);
+        assert!(reconciled.skipped);
+        assert_eq!(media.len(), 1, "列不出来时名册必须原样留着");
+    }
+
+    #[test]
     fn reconcile_does_nothing_when_dir_cannot_be_listed() {
         // 目录根本不存在 = "列不出来"的一种 —— 这时**不许**把名册当"文件都没了"清掉
         let vault = Vault::at(temp_dir("reconcile-skip").join("不存在的目录"));

@@ -289,11 +289,15 @@ mod android {
 
     impl<R: Runtime> VaultStore for SafStore<R> {
         fn read_bytes(&self, path: &Path) -> AppResult<Vec<u8>> {
-            // 媒体本体走 S3 的流式复制，不经过桥。这里明确报错，别给个空数组。
-            let _ = path;
-            Err(AppError::Invalid(
-                "安卓上读媒体文件还没接（S3）；文本记录不受影响".to_string(),
-            ))
+            // 给 WebView 看原图走这条（`vaultfs://` 协议）。上限在 Kotlin 侧判，
+            // 大文件会带着人话错误回来（视频的流式 + Range 是后面的阶段）。
+            let args = PathArgs {
+                root: &self.tree,
+                path: &self.rel(path),
+            };
+            let read: ReadSourceResult = self.bridge.call("readBytes", args)?;
+            super::base64_decode(&read.base64)
+                .ok_or_else(|| AppError::Corrupt("读回来的字节解不开（base64）".to_string()))
         }
 
         fn read_text(&self, path: &Path) -> AppResult<String> {

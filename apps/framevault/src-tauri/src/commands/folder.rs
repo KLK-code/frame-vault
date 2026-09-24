@@ -97,7 +97,7 @@ pub fn create_folder(
     let all = list_folders(&vault_dir)?;
     let order = next_order(&all);
     let folder = FolderMeta::new(&new_id(), &name, order, scene);
-    create_folder_in(&folder, &parent)?;
+    create_folder_in(&vault_dir, &folder, &parent)?;
     to_nodes(&vault_dir)
 }
 
@@ -117,7 +117,7 @@ pub fn rename_folder(
     let mut folder = read_folder(&vault_dir, &id)?;
     let previous_name = folder.name.clone();
     folder.set_name(&name);
-    save_folder(&folder, &dir, &previous_name)?;
+    save_folder(&vault_dir, &folder, &dir, &previous_name)?;
     to_nodes(&vault_dir)
 }
 
@@ -143,7 +143,7 @@ pub fn bind_folder_scene(
         folder.scene_config = config;
     }
     // 名字没变：给同一个名字，就不会触发改名
-    save_folder(&folder, &dir, &folder.name)?;
+    save_folder(&vault_dir, &folder, &dir, &folder.name)?;
     to_nodes(&vault_dir)
 }
 
@@ -157,7 +157,7 @@ pub fn set_folder_pinned(
     let dir = find_folder_dir(&vault_dir, &id)?;
     let mut folder = read_folder(&vault_dir, &id)?;
     folder.pinned = pinned;
-    save_folder(&folder, &dir, &folder.name)?;
+    save_folder(&vault_dir, &folder, &dir, &folder.name)?;
     to_nodes(&vault_dir)
 }
 
@@ -176,7 +176,7 @@ pub fn reorder_folders(
             let dir = find_folder_dir(&vault_dir, id)?;
             let mut updated = folder.clone();
             updated.order = index as i64;
-            save_folder(&updated, &dir, &updated.name)?;
+            save_folder(&vault_dir, &updated, &dir, &updated.name)?;
         }
     }
     to_nodes(&vault_dir)

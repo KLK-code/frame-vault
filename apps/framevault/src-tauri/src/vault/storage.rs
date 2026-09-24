@@ -127,11 +127,6 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     Ok(())
 }
 
-pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> AppResult<T> {
-    let text = fs::read_to_string(path)?;
-    Ok(serde_json::from_str(&text)?)
-}
-
 /// 读文本；文件不在就返回空串（正文可以为空，缺文件与空文件是一回事）
 pub fn read_text(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_default()

@@ -51,7 +51,7 @@ fn full_lifecycle_produces_the_readable_layout() {
 
     // ── 2. 新建场景：一个目录 + folder.json ──
     let folder = FolderMeta::new("f-run", "晨跑/打卡", 0, Some("builtin.challenge".into()));
-    let scene_dir = create_folder_in(&folder, &vault).unwrap();
+    let scene_dir = create_folder_in(&vault, &folder, &vault).unwrap();
     assert_eq!(
         scene_dir.file_name().unwrap().to_string_lossy(),
         "晨跑_打卡",
@@ -145,6 +145,7 @@ fn full_lifecycle_produces_the_readable_layout() {
     let travel_parent = vault.join("旅行");
     fs::create_dir_all(&travel_parent).unwrap();
     let travel = create_folder_in(
+        &vault,
         &FolderMeta::new("f-travel", "旅行", 1, None),
         &travel_parent,
     )
@@ -210,8 +211,9 @@ fn topic_layer_is_just_a_directory() {
     // 建两个主题、一个根下的文件夹（没有主题）
     let lab = create_topic(&vault, "科研").unwrap();
     create_topic(&vault, "打卡").unwrap();
-    let at_root = create_folder_in(&FolderMeta::new("f-root", "随手记", 0, None), &vault).unwrap();
+    let at_root = create_folder_in(&vault, &FolderMeta::new("f-root", "随手记", 0, None), &vault).unwrap();
     let under = create_folder_in(
+        &vault,
         &FolderMeta::new("f-lab", "论文笔记", 1, None),
         &lab,
     )
@@ -271,13 +273,13 @@ fn scene_rename_follows_the_user() {
     create_vault(&vault, "测试", "2026-09-22T10:00:00+08:00").unwrap();
 
     let folder = FolderMeta::new("f-1", "晨跑打卡", 0, None);
-    let dir = create_folder_in(&folder, &vault).unwrap();
+    let dir = create_folder_in(&vault, &folder, &vault).unwrap();
 
     // 应用内改名 → 目录跟着走
     let mut renamed = read_folder(&vault, "f-1").unwrap();
     let previous_name = renamed.name.clone();
     renamed.set_name("晨间跑步");
-    let moved = save_folder(&renamed, &dir, &previous_name).unwrap();
+    let moved = save_folder(&vault, &renamed, &dir, &previous_name).unwrap();
     assert_eq!(moved.file_name().unwrap().to_string_lossy(), "晨间跑步");
 
     // 资源管理器里手动改名 → 应用认磁盘上那个名字，不会改回去
@@ -288,7 +290,7 @@ fn scene_rename_follows_the_user() {
     // 只改别的字段（名字原样传）→ 目录名一个字都不动
     let mut pinned = list_folders(&vault).unwrap().remove(0);
     pinned.pinned = true;
-    assert_eq!(save_folder(&pinned, &manual, &pinned.name).unwrap(), manual);
+    assert_eq!(save_folder(&vault, &pinned, &manual, &pinned.name).unwrap(), manual);
 }
 
 #[test]

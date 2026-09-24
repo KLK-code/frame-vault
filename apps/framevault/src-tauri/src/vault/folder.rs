@@ -2,11 +2,12 @@ use super::model::SCHEMA_VERSION;
 use super::naming::{self, FOLDER_FILE};
 use super::storage;
 use super::scene::PLAIN_SCENE;
-use super::storage::{folder_dirs, folder_json_path, read_json, write_json_atomic};
+use super::storage::{
+    folder_dirs, folder_json_path, read_json_in, write_json_atomic_in,
+};
 use super::store::AsVault;
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 fn empty_object() -> serde_json::Value {
@@ -93,12 +94,13 @@ pub fn folder_path(vault: &Path, name: &str) -> PathBuf {
 ///
 /// **名字与主题都以磁盘为准** —— 用户在资源管理器里改了目录名、或者把文件夹拖到别的主题下，
 /// 扫一次就跟着认（这就是"主题不存字段、只认位置"换来的）。
-pub fn list_folders(vault: &Path) -> AppResult<Vec<FolderMeta>> {
+pub fn list_folders(vault: impl AsVault) -> AppResult<Vec<FolderMeta>> {
+    let vault = vault.as_vault();
     let mut out = Vec::new();
 
-    for (dir, topic) in folder_dirs(vault) {
+    for (dir, topic) in folder_dirs(&vault) {
         let file = folder_json_path(&dir);
-        match read_json::<FolderMeta>(&file) {
+        match read_json_in::<FolderMeta>(&vault, &file) {
             Ok(mut folder) => {
                 if let Some(name) = dir.file_name() {
                     folder.name = name.to_string_lossy().to_string();
@@ -115,9 +117,10 @@ pub fn list_folders(vault: &Path) -> AppResult<Vec<FolderMeta>> {
 }
 
 /// 按 id 读一个文件夹（**名字与主题都以磁盘位置为准**）
-pub fn read_folder(vault: &Path, id: &str) -> AppResult<FolderMeta> {
-    for (dir, topic) in folder_dirs(vault) {
-        let Ok(mut folder) = read_json::<FolderMeta>(&folder_json_path(&dir)) else {
+pub fn read_folder(vault: impl AsVault, id: &str) -> AppResult<FolderMeta> {
+    let vault = vault.as_vault();
+    for (dir, topic) in folder_dirs(&vault) {
+        let Ok(mut folder) = read_json_in::<FolderMeta>(&vault, &folder_json_path(&dir)) else {
             continue;
         };
         if folder.id != id {
@@ -136,11 +139,12 @@ pub fn read_folder(vault: &Path, id: &str) -> AppResult<FolderMeta> {
 /// 新建文件夹：算出没被占用的目录名（撞名加 ` (2)`），在 `parent` 下建目录、写 `folder.json`。
 ///
 /// `parent` 由调用方给：主题目录（`<Vault>/科研`）、或仓库根目录（= 没有主题）。
-pub fn create_folder_in(folder: &FolderMeta, parent: &Path) -> AppResult<PathBuf> {
-    let name = naming::unique_child_name(parent, &folder.dir_name(), None);
+pub fn create_folder_in(vault: impl AsVault, folder: &FolderMeta, parent: &Path) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let name = naming::unique_child_name_in(&vault, parent, &folder.dir_name(), None);
     let dir = parent.join(name);
-    fs::create_dir_all(&dir)?;
-    write_json_atomic(&folder_json_path(&dir), folder)?;
+    vault.create_dir_all(&dir)?;
+    write_json_atomic_in(&vault, &folder_json_path(&dir), folder)?;
     Ok(dir)
 }
 
@@ -149,11 +153,13 @@ pub fn create_folder_in(folder: &FolderMeta, parent: &Path) -> AppResult<PathBuf
 /// 手动改名的判定跟记录同一条规矩：只有"当前目录名 == 净化后的旧名字"才敢自动改名，
 /// 不相等说明用户自己改过 —— 那就只写内容，永久不动目录名。
 pub fn save_folder(
+    vault: impl AsVault,
     folder: &FolderMeta,
     dir: &Path,
     previous_name: &str,
 ) -> AppResult<PathBuf> {
-    write_json_atomic(&folder_json_path(dir), folder)?;
+    let vault = vault.as_vault();
+    write_json_atomic_in(&vault, &folder_json_path(dir), folder)?;
 
     let current = dir
         .file_name()
@@ -164,8 +170,8 @@ pub fn save_folder(
 
     if may_rename && current != wanted {
         if let Some(parent) = dir.parent() {
-            let target = parent.join(naming::unique_child_name(parent, &wanted, None));
-            fs::rename(dir, &target)?;
+            let target = parent.join(naming::unique_child_name_in(&vault, parent, &wanted, None));
+            vault.rename(dir, &target)?;
             return Ok(target);
         }
     }
@@ -215,6 +221,7 @@ pub fn next_order(all: &[FolderMeta]) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use crate::vault::{create_vault, entry_slot, UNCATEGORIZED};
 
     fn temp_vault(name: &str) -> PathBuf {
@@ -225,14 +232,14 @@ mod tests {
     }
 
     fn add(vault: &Path, folder: FolderMeta) -> PathBuf {
-        create_folder_in(&folder, vault).unwrap()
+        create_folder_in(vault, &folder, vault).unwrap()
     }
 
     /// 放一个文件夹到某个主题下（主题目录要先在）
     fn add_in_topic(vault: &Path, topic: &str, folder: FolderMeta) -> PathBuf {
         let parent = vault.join(topic);
         fs::create_dir_all(&parent).unwrap();
-        create_folder_in(&folder, &parent).unwrap()
+        create_folder_in(vault, &folder, &parent).unwrap()
     }
 
     #[test]
@@ -287,7 +294,7 @@ mod tests {
 
         let mut folder = list_folders(&vault).unwrap().remove(0);
         folder.set_name("新名字");
-        let moved = save_folder(&folder, &dir, "旧名字").unwrap();
+        let moved = save_folder(&vault, &folder, &dir, "旧名字").unwrap();
 
         assert_eq!(moved.file_name().unwrap().to_string_lossy(), "新名字");
         assert!(!vault.join("旧名字").exists());
@@ -309,12 +316,12 @@ mod tests {
         // 只改别的字段（名字传原样）→ 目录名一个字都不动
         let mut folder = list_folders(&vault).unwrap().remove(0);
         folder.pinned = true;
-        let moved = save_folder(&folder, &manual, &folder.name).unwrap();
+        let moved = save_folder(&vault, &folder, &manual, &folder.name).unwrap();
         assert_eq!(moved, manual);
 
         // 用户在应用里又改名字 → 这次是真改名，跟着走
         folder.set_name("应用里改的");
-        let renamed = save_folder(&folder, &manual, "我自己改的").unwrap();
+        let renamed = save_folder(&vault, &folder, &manual, "我自己改的").unwrap();
         assert_eq!(renamed.file_name().unwrap().to_string_lossy(), "应用里改的");
     }
 

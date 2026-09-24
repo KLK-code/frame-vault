@@ -167,7 +167,7 @@ pub fn is_vault(dir: impl AsVault) -> bool {
 pub fn create_vault(dir: impl AsVault, name: &str, created_at: &str) -> AppResult<VaultMeta> {
     let vault = dir.as_vault();
     let root = vault.root().to_path_buf();
-    if is_vault(&root) {
+    if is_vault(&vault) {
         return Err(AppError::Invalid(format!(
             "{} 已经是一个 Vault 了",
             root.display()
@@ -500,12 +500,11 @@ fn load_entry_dir_opts(vault: &Vault, dir: &Path, with_note: bool) -> Option<Ent
     Some(entry)
 }
 
-pub fn read_entry_from(dir: impl AsVault) -> AppResult<Entry> {
-    let vault = dir.as_vault();
-    load_entry_dir(&vault, vault.root()).ok_or_else(|| {
+pub fn read_entry_from(vault: &Vault, dir: &Path) -> AppResult<Entry> {
+    load_entry_dir(vault, dir).ok_or_else(|| {
         AppError::NotFound(format!(
             "记录目录不完整（缺 entry.json）：{}",
-            vault.root().display()
+            dir.display()
         ))
     })
 }
@@ -513,7 +512,7 @@ pub fn read_entry_from(dir: impl AsVault) -> AppResult<Entry> {
 pub fn read_entry(vault: impl AsVault, id: &str) -> AppResult<Entry> {
     let vault = vault.as_vault();
     let dir = find_entry_dir(&vault, id)?;
-    read_entry_from(dir)
+    read_entry_from(&vault, &dir)
 }
 
 /// 新建一条记录：按「创建日 + 标题」算出目录名（撞名加后缀），建目录、写正文、写元数据。
@@ -625,7 +624,7 @@ pub fn move_entry_to_slot(
 pub fn trash_entry(vault: impl AsVault, id: &str, deleted_at: &str) -> AppResult<PathBuf> {
     let vault = vault.as_vault();
     let dir = find_entry_dir(&vault, id)?;
-    let mut entry = read_entry_from(&dir)?;
+    let mut entry = read_entry_from(&vault, &dir)?;
     entry.mark_deleted(deleted_at);
     write_json_atomic_in(&vault, &entry_json_path(&dir), &entry)?;
 
@@ -650,7 +649,7 @@ pub fn trash_entry(vault: impl AsVault, id: &str, deleted_at: &str) -> AppResult
 pub fn restore_entry(vault: impl AsVault, id: &str, now: &str) -> AppResult<PathBuf> {
     let vault = vault.as_vault();
     let dir = find_entry_dir(&vault, id)?;
-    let mut entry = read_entry_from(&dir)?;
+    let mut entry = read_entry_from(&vault, &dir)?;
     entry.restore(now);
 
     if !in_trash(vault.root(), &dir) {

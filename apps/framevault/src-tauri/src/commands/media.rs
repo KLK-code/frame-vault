@@ -95,7 +95,7 @@ pub fn import_media(
     let source = MediaSource::from_input(&source);
 
     let entry_dir = vault::find_entry_dir(&vault, &entry_id)?;
-    let mut entry = vault::read_entry_from(&entry_dir)?;
+    let mut entry = vault::read_entry_from(&vault, &entry_dir)?;
 
     // 第一步：看一眼来源（名字 / 大小 / 拍摄时间；图片而且不大时把字节一起带上来）。
     // **来源只读一次** —— 命名模板要用拍摄时间，元数据要用字节。

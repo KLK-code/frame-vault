@@ -138,7 +138,7 @@ pub fn update_entry(
     let vault = active_vault(&state, &app)?;
 
     let dir = vault::find_entry_dir(&vault, &id)?;
-    let mut entry = vault::read_entry_from(&dir)?;
+    let mut entry = vault::read_entry_from(&vault, &dir)?;
     let previous = entry.clone();
 
     entry.apply_update(title.as_deref(), fields, updated_at.as_deref().unwrap_or(""));

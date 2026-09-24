@@ -484,11 +484,15 @@ impl Vault {
 ///
 /// 两种调用都合法：
 /// - 给 `&Vault`（**带 store** —— 安卓 SAF 走这条，桌面也走这条）；
-/// - 给 `&Path` / `PathBuf`（老写法，等价于 `Vault::at(那个路径)`，即桌面文件系统）。
+/// - **只在测试里**，还给 `&Path` / `PathBuf`（等价于 `Vault::at(那个路径)`，即桌面文件系统）。
 ///
-/// 为什么要有它：`storage.rs` 有 21 个单测、几百处调用点，直接换类型会让它们一起挂、
-/// 中途必然编译不过。有了它就能**一个模块一个模块地迁**，每一步都全绿。
-/// **等所有调用点都改成 `&Vault` 之后，这个 trait 删掉、参数收窄成 `&Vault`**（见 SAF 提案 S1b）。
+/// ⚠️ **`Path` / `PathBuf` 那两个 impl 加了 `#[cfg(test)]`，这是刻意的，不是偷懒**：
+/// 生产代码里"把一条路径当句柄用"曾经造成过一个真 bug —— 安卓上 SAF 的 `content://` 路径
+/// 被包装成**桌面文件系统**句柄，于是"文件明明在磁盘上却报缺 `entry.json`"，
+/// 而桌面上一切正常、单测全绿（见执行计划 P1）。
+/// 现在生产代码只能传句柄：**再犯这种错会直接编译不过**，而不是静默走错后端。
+///
+/// 测试里保留快捷写法是为了少改几百处断言；等测试也全改完，这个 trait 就可以整个删掉。
 pub trait AsVault {
     fn as_vault(&self) -> Vault;
 }
@@ -499,19 +503,23 @@ impl AsVault for Vault {
     }
 }
 
+/// **测试专用**：把路径当仓库根（生产代码禁止，原因见 trait 的文档）
+#[cfg(test)]
 impl AsVault for Path {
     fn as_vault(&self) -> Vault {
         Vault::at(self.to_path_buf())
     }
 }
 
+/// **测试专用**：同上
+#[cfg(test)]
 impl AsVault for PathBuf {
     fn as_vault(&self) -> Vault {
         Vault::at(self.clone())
     }
 }
 
-/// 引用透传：`&Vault` / `&PathBuf` 都能直接当参数用
+/// 引用透传：`&Vault` 能直接当参数用
 impl<T: AsVault + ?Sized> AsVault for &T {
     fn as_vault(&self) -> Vault {
         (**self).as_vault()

@@ -2,6 +2,7 @@ mod commands;
 mod error;
 mod saf;
 mod state;
+mod vaultfs;
 pub mod vault;
 
 use state::AppState;
@@ -33,21 +34,39 @@ pub fn run() {
     );
 
     builder
+        // `vaultfs://`：WebView 显示**仓库里**的媒体（安卓上必须走它 —— SAF 没有文件系统路径）。
+        // 读字节可能很重（视频几百兆），所以丢到后台线程，绝不占主线程。
+        .register_asynchronous_uri_scheme_protocol("vaultfs", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let path = request.uri().path().to_string();
+            std::thread::spawn(move || {
+                let (status, mime, body) = crate::vaultfs::read_or_message(&app, &path);
+                let response = tauri::http::Response::builder()
+                    .status(status)
+                    .header("Content-Type", mime)
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(body)
+                    .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()));
+                responder.respond(response);
+            });
+        })
         .setup(|app| {
             // app_data_dir 需要 AppHandle，所以 AppState 在这里注册
             let config = app.path().app_data_dir()?.join("vaults.json");
             let state = AppState::new(config);
             state.load()?;
 
-            // 启动时就把当前 Vault 放行给 asset 协议（WebView 要靠它显示本地照片）。
-            // SAF 引用（安卓用户选的目录）没有可放行的文件系统目录 —— 那条链在 S4 换成自定义协议。
-            if let Some(dir) = state
+            // 启动时就把当前 Vault 放行给 asset 协议（WebView 要靠它显示本地照片；
+            // SAF 仓库放行的是缩略图缓存，原图走 vaultfs://）。
+            let active = state
                 .vaults
                 .lock()
                 .ok()
-                .and_then(|guard| guard.active.as_ref().and_then(|r| r.as_path()).map(|p| p.to_path_buf()))
-            {
-                commands::allow_vault_assets(app.handle(), &dir);
+                .and_then(|guard| guard.active.clone());
+            if let Some(reference) = active {
+                if let Ok(vault) = commands::vault_for_ref(app.handle(), &reference) {
+                    commands::allow_vault_assets(app.handle(), &vault);
+                }
             }
 
             app.manage(state);

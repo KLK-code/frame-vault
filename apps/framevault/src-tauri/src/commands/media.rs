@@ -28,9 +28,13 @@ pub struct MediaItem {
     meta: MediaMeta,
     /// 属于哪条记录。媒体住在记录里，所以这个字段现在**一定有值**
     entry_id: String,
-    /// 原图 / 视频的**文件系统路径**（交给 `convertFileSrc` 变成 asset URL）。
-    /// SAF 仓库上它是空的 —— 那边没有路径，S4 改用 `vaultfs://` URL。
+    /// 原图 / 视频的**文件系统路径**（前端交给 `convertFileSrc` 变成 asset URL）。
+    /// SAF 仓库上它是空的 —— 那边没有路径。
     original_path: String,
+    /// 后端**直接可用**的地址（`vaultfs://…`）。只有"路径不是真路径"的后端才给
+    /// （安卓 SAF）；桌面上是 null，前端把 `originalPath` 交给 asset 协议即可。
+    /// 前端那边只认这一件事：**有 url 就用 url**，不判断平台。
+    url: Option<String>,
     /// 缩略图绝对路径；没有（视频 / 不支持解码 / 生成失败）就是 null。
     /// 缩略图落在**应用数据目录**（真文件系统），所以两端都拿得到。
     thumb_path: Option<String>,
@@ -43,10 +47,16 @@ fn to_item(
     entry_id: &str,
     meta: MediaMeta,
 ) -> MediaItem {
-    let original_path = if vault.store().native_paths() {
+    let native = vault.store().native_paths();
+    let original_path = if native {
         meta.path_in(entry_dir).display().to_string()
     } else {
         String::new()
+    };
+    let url = if native {
+        None
+    } else {
+        Some(crate::vaultfs::url_for(vault, &meta.path_in(entry_dir)))
     };
     let thumb_path = thumbs_dir(app, vault)
         .ok()
@@ -58,6 +68,7 @@ fn to_item(
         meta,
         entry_id: entry_id.to_string(),
         original_path,
+        url,
         thumb_path,
     }
 }
@@ -135,9 +146,7 @@ pub fn import_media(
     vault::sort_media(&mut entry.media);
     vault::write_entry_in(&vault, &entry, &entry_dir, Some(&previous))?;
 
-    if vault.store().native_paths() {
-        allow_vault_assets(&app, vault.root());
-    }
+    allow_vault_assets(&app, &vault);
     println!(
         "[rust] import_media: {} → {}（{}）",
         source.display(),
@@ -159,9 +168,7 @@ pub fn list_media(
     entry_id: Option<String>,
 ) -> AppResult<Vec<MediaItem>> {
     let vault = active_vault(&state, &app)?;
-    if vault.store().native_paths() {
-        allow_vault_assets(&app, vault.root());
-    }
+    allow_vault_assets(&app, &vault);
 
     let mut out = Vec::new();
     for entry in vault::list_entries(&vault)? {

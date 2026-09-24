@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { assetUrl, type Entry, type MediaItem } from "../../../../lib/api";
+import { type Entry, type MediaItem } from "../../../../lib/api";
 import { useCompact } from "../../../../lib/useCompact";
 import { fieldText, fieldValue, noteFieldOf, writeValues, type FieldDecl, type SceneViewProps } from "../../manifest";
 import { displayableSrc, formatDay } from "../../mediaFormat";
@@ -388,7 +388,7 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                 {photosOpen && (
                   <div className="writing__photos-body">
                     {photos.map((item) => {
-                      // displayableSrc 给的是磁盘路径，必须过 assetUrl 才能在 WebView 里显示
+                      // displayableSrc 直接给 WebView 能用的地址（桌面 asset / 安卓 vaultfs）
                       const src = displayableSrc(item);
                       const video = item.mime.startsWith("video/");
                       return (
@@ -400,7 +400,7 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
                           title={item.file}
                         >
                           {src ? (
-                            <img loading="lazy" src={assetUrl(src)} alt={item.file} />
+                            <img loading="lazy" src={src} alt={item.file} />
                           ) : (
                             <span className="writing__photo-fallback">
                               {video ? "▶" : "?"} {item.ext.toUpperCase()}

@@ -235,6 +235,16 @@ lib.rs（组装）
   返回"这个平台上用不了" —— 所以**命令层一处 `cfg` 都不用写**（AGENTS §2 的第三处落点）。
 - **验证**：`cargo check --target aarch64-linux-android`（桌面编译看不到这个模块）。
 
+#### `src-tauri/src/vaultfs.rs` ✅
+- **职责**：`vaultfs://` 自定义协议 —— 让 WebView 显示**仓库里**的媒体。asset 协议内部是
+  `std::fs::File::open` + scope 校验，而 SAF 上的照片没有文件系统路径，所以那条路在安卓上不通。
+- **形状**：`http://vaultfs.localhost/<仓库内相对路径>`（百分号编码）。用**相对路径**而不是
+  媒体 id：加载一张图不该顺带把整个仓库扫一遍（`vault/` 的定位一律"按扫描"）。
+  请求进来后交给**当前仓库的 store** 读字节 → 两端一条代码路径。
+- **何时给出这种地址**：由后端能力决定（`VaultStore::native_paths`）—— 桌面给 `originalPath`
+  （前端 `convertFileSrc`），SAF 给 `url`。前端只认"有 url 就用 url"，不判断平台。
+- **边界**：暂无 Range 支持（视频要拖动进度得等它）；`..` 一律拒绝（这条协议是公开入口）。
+
 #### `src-tauri/src/capture/` ⬜
 - **职责**：把「拍照 / 录像 / 选文件」抽象成跨平台能力。
 - **接口**：

@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import { assetUrl, type MediaItem } from "../../lib/api";
-import { WEBVIEW_IMAGE_EXTS, displayableSrc, formatBytes } from "./mediaFormat";
+import { type MediaItem } from "../../lib/api";
+import { WEBVIEW_IMAGE_EXTS, displayableSrc, formatBytes, originalSrc } from "./mediaFormat";
 import "./MediaLightbox.css";
 
 type Props = {
@@ -29,14 +29,14 @@ export default function MediaLightbox({ item, onClose, footer }: Props) {
     <div className="lightbox" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="lightbox__body" onClick={(e) => e.stopPropagation()}>
         {item.mime.startsWith("video/") ? (
-          <video className="lightbox__media" src={assetUrl(item.originalPath)} controls autoPlay />
+          <video className="lightbox__media" src={originalSrc(item) ?? undefined} controls autoPlay />
         ) : WEBVIEW_IMAGE_EXTS.has(item.ext) ? (
-          <img className="lightbox__media" src={assetUrl(item.originalPath)} alt={item.file} />
+          <img className="lightbox__media" src={originalSrc(item) ?? undefined} alt={item.file} />
         ) : (
           <div className="lightbox__unsupported">
             <p>WebView 解不开 .{item.ext}（常见于 iPhone 直出的 HEIC）。</p>
             <p>文件已经完整导入，原始文件在这里：</p>
-            <code>{item.originalPath}</code>
+            <code>{item.originalPath || item.file}</code>
             {thumb && <p className="lightbox__hint">列表里显示的是它的缩略图。</p>}
           </div>
         )}

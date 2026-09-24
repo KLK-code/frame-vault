@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { assetUrl, type MediaItem } from "../../../../lib/api";
+import { type MediaItem } from "../../../../lib/api";
 import MediaLightbox from "../../MediaLightbox";
 import SceneFields from "../../SceneFields";
 import SceneNotice from "../../SceneNotice";
@@ -211,7 +211,7 @@ export default function ChallengeScene({ folder, scene, onSceneConfigChange }: S
                   onClick={() => openItem(item)}
                 >
                   {src ? (
-                    <img loading="lazy" src={assetUrl(src)} alt={item.file} />
+                    <img loading="lazy" src={src} alt={item.file} />
                   ) : (
                     <span className="wall__fallback">{item.ext.toUpperCase()}</span>
                   )}

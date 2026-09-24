@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { assetUrl, type Entry, type MediaItem } from "../../lib/api";
+import { type Entry, type MediaItem } from "../../lib/api";
 import MediaLightbox from "./MediaLightbox";
 import SceneFields from "./SceneFields";
 import { fieldText, fieldValue, writeValues } from "./manifest";
@@ -376,7 +376,7 @@ export default function EntryTimeline({ data, sceneId, fields, emptyText }: {
                                 onClick={() => setPreview(item)}
                               >
                                 {src ? (
-                                  <img loading="lazy" src={assetUrl(src)} alt={item.file} />
+                                  <img loading="lazy" src={src} alt={item.file} />
                                 ) : (
                                   <span className="thumb__fallback">
                                     {item.mime.startsWith("video/") ? "▶" : "?"} {item.ext.toUpperCase()}

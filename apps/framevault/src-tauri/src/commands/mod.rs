@@ -10,7 +10,7 @@ pub mod window;
 use crate::error::{AppError, AppResult};
 use crate::state::{AppState, VaultRef};
 use crate::vault::store::Vault;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::Manager;
 
 /// 所有命令共用的"当前仓库是哪个"（路径 / SAF 引用都可能）
@@ -51,16 +51,24 @@ pub(crate) fn thumbs_dir(app: &tauri::AppHandle, vault: &Vault) -> AppResult<Pat
     Ok(app.path().app_data_dir()?.join("thumbs").join(vault_id))
 }
 
-/// 放行 asset 协议读这个 Vault —— WebView 里显示本地照片/视频的**唯一通道**。
+/// 放行这个仓库的媒体给 asset 协议。
 ///
-/// 只放行「当前 Vault」和「它自己的缩略图缓存」，**不用 `**` 把整台机器都打开**：
+/// 两件事分开看（**按后端能力分叉，不看平台**）：
+/// - **缩略图缓存**：它在应用数据目录，两端都是真文件系统 —— **永远放行**；
+/// - **仓库本体**：只有路径是真路径的后端才有这回事（桌面）。SAF 上的原图走
+///   `vaultfs://` 那条自定义协议，不经过 asset 的 scope。
+///
+/// 放行的范围刻意很窄（当前 Vault + 它的缩略图），**不用 `**` 把整台机器打开**：
 /// 前端一旦被注入，能读的范围就是这里放行的范围。
-pub(crate) fn allow_vault_assets(app: &tauri::AppHandle, vault_dir: &Path) {
+pub(crate) fn allow_vault_assets(app: &tauri::AppHandle, vault: &Vault) {
     let scope = app.asset_protocol_scope();
-    if let Err(e) = scope.allow_directory(vault_dir, true) {
-        eprintln!("[rust] 放行 Vault 目录失败（{}）：{e}", vault_dir.display());
+    if vault.store().native_paths() {
+        let root = vault.root();
+        if let Err(e) = scope.allow_directory(root, true) {
+            eprintln!("[rust] 放行 Vault 目录失败（{}）：{e}", root.display());
+        }
     }
-    if let Ok(dir) = thumbs_dir(app, &Vault::at(vault_dir.to_path_buf())) {
+    if let Ok(dir) = thumbs_dir(app, vault) {
         let _ = scope.allow_directory(&dir, false);
     }
 }

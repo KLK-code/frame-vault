@@ -111,8 +111,8 @@ pub fn add_vault(
     }
     state.save()?;
 
-    if let Some(dir) = reference.as_path() {
-        allow_vault_assets(&app_handle, dir);
+    if let Ok(vault) = vault_for_ref(&app_handle, &reference) {
+        allow_vault_assets(&app_handle, &vault);
     }
     let _ = app_handle.emit("vault://changed", ());
     vault_list(state, &app_handle)
@@ -161,8 +161,8 @@ pub fn create_vault(
     }
     state.save()?;
 
-    if let Some(dir) = reference.as_path() {
-        allow_vault_assets(&app_handle, dir);
+    if let Ok(vault) = vault_for_ref(&app_handle, &reference) {
+        allow_vault_assets(&app_handle, &vault);
     }
     let _ = app_handle.emit("vault://changed", ());
     vault_list(state, &app_handle)
@@ -183,8 +183,9 @@ pub fn switch_vault(
     app_state.save()?;
 
     // 切仓库后必须放行新目录，否则界面里的照片全是碎图
-    if let Some(dir) = reference.as_path() {
-        allow_vault_assets(&app, dir);
+    // （SAF 仓库放行的是它的缩略图缓存；原图走 vaultfs://）
+    if let Ok(vault) = vault_for_ref(&app, &reference) {
+        allow_vault_assets(&app, &vault);
     }
     let _ = app.emit("vault://changed", ());
     Ok(())

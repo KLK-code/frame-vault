@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { assetUrl, type MediaItem } from "../../lib/api";
+import { type MediaItem } from "../../lib/api";
 import MediaLightbox from "./MediaLightbox";
 import { displayableSrc, formatBytes, formatDay } from "./mediaFormat";
 import { useSceneData } from "./useSceneData";
@@ -47,7 +47,7 @@ export default function SceneMedia({ folder }: { folder: FolderNode }) {
                 onClick={() => setPreview(item)}
               >
                 {src ? (
-                  <img loading="lazy" src={assetUrl(src)} alt={item.file} />
+                  <img loading="lazy" src={src} alt={item.file} />
                 ) : (
                   <span className="photo-grid__fallback">{item.ext.toUpperCase()}</span>
                 )}

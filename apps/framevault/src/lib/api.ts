@@ -106,7 +106,10 @@ export type MediaMeta = {
 export type MediaItem = MediaMeta & {
   /** 属于哪条记录。媒体住在记录里，所以一定有值 */
   entryId: string;
+  /** 原图 / 视频的磁盘路径（桌面用；SAF 仓库上是空串） */
   originalPath: string;
+  /** 后端直接可用的地址（安卓 SAF 走 vaultfs://）；桌面是 null */
+  url: string | null;
   /** 缩略图；视频或解不开的格式是 null（那就退回显示原文件） */
   thumbPath: string | null;
 };

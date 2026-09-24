@@ -2,7 +2,7 @@ use crate::error::AppResult;
 use crate::vault::write_json_atomic;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// 一个仓库「在哪儿」。
@@ -20,14 +20,6 @@ pub enum VaultRef {
 }
 
 impl VaultRef {
-    /// 桌面路径那一支；SAF 引用返回 `None`（调用方按平台给人话错误）
-    pub fn as_path(&self) -> Option<&Path> {
-        match self {
-            VaultRef::Fs(path) => Some(path.as_path()),
-            VaultRef::Saf(_) => None,
-        }
-    }
-
     /// 给人看的样子（错误消息 / 界面显示）
     pub fn display(&self) -> String {
         match self {

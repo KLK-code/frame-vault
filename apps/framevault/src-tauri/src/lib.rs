@@ -1,5 +1,6 @@
 mod commands;
 mod error;
+mod saf;
 mod state;
 pub mod vault;
 
@@ -13,9 +14,25 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+
+    // 安卓：把 Kotlin 那边的 SAF 桥挂上（用户选的目录只有 `content://` 树 URI）。
+    // **只有安卓有** —— SAF 是安卓概念，桌面上没有这个插件，也没有这条代码路径。
+    // 句柄存进托管状态：命令层只要手里有 AppHandle，就能把仓库引用变成根句柄。
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(
+        tauri::plugin::Builder::<tauri::Wry, ()>::new("saf")
+            .setup(|app, api| {
+                let handle = api.register_android_plugin("com.framevault.app", "SafBridgePlugin")?;
+                app.manage(crate::saf::SafBridge::new(handle));
+                Ok(())
+            })
+            .build(),
+    );
+
+    builder
         .setup(|app| {
             // app_data_dir 需要 AppHandle，所以 AppState 在这里注册
             let config = app.path().app_data_dir()?.join("vaults.json");
@@ -54,6 +71,7 @@ pub fn run() {
             commands::vault::switch_vault,
             commands::vault::forget_vault,
             commands::vault::vault_exists,
+            commands::vault::pick_saf_tree,
             // 场景（= 文件夹 + 主题）
             commands::folder::list_folder_tree,
             commands::folder::create_folder,

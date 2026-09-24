@@ -49,9 +49,10 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **`invoke` / `listen` / `convertFileSrc` / 插件调用只能出现在 `lib/api.ts`**。别的文件一律从这里 import。
 - 样式跟组件同目录同名；**组件不许 import 别人的样式文件**。
 - 依赖方向单向。外壳不许 import 主题视图的内部实现（只认 `FolderNode` / `SceneInfo` 这类契约类型）。
-- **平台差异只允许出现在两处**：后端 `commands/window.rs`（窗口 builder 的 `#[cfg(target_os = "macos")]` 分支）
+- **平台差异只允许出现在三处**：后端 `commands/window.rs`（窗口 builder 的 `#[cfg(target_os = "macos")]` 分支）、
+  后端 `src/saf.rs`（安卓的 SAF 后端 + Kotlin 桥接线；桌面上有同签名替身，所以**命令层不写 `cfg`**）、
   与前端 `lib/platform.ts`（唯一的 OS 判断）。**别在别处写 `if (isMac)` / `#[cfg]`**——
-  每多一处，就多一处“只在一边编译过”的机会。真要加第三处，先改这一条。
+  每多一处，就多一处“只在一边编译过”的机会。真要加第四处，先改这一条。
 - **两套骨架**：桌面 = 左文件夹树（可收起成一条图标栏）+ 右场景舞台（`App.tsx` 里的 `DesktopShell`）；手机 = 顶部场景切换（右侧一个设置齿轮）+ **左右两页的横滑主体**（左 = 设置，右边那页里再按底栏切 记录 / 照片 / 文件夹）+ 底部标签栏（`app/MobileShell.tsx`）。**设置页住在"记录"左边**：在记录界面向右滑就露出来，所以底部标签栏里**没有**「设置」（2026-09 用户拍板）；**仓库管理也住在设置里**（`SETTINGS_SECTIONS` 的「仓库」一栏就是真面板），手机上不再有独立的仓库页面。横滑用 `scroll-snap` 交给浏览器做手势，不手写 touch 抽屉。
   两者**共用同一份能力与数据**（`useFolders` / `useActiveFolder` / `useSceneData` / `SceneHost`），**区别只有编排**。
   **共用状态挂在 `App` 上，不挂在骨架里**（`SceneShellProps` = 场景树 + 当前选中的场景 + 它的主题信息，
@@ -142,6 +143,12 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **v2 之后的参数变化**：`save_entry` 多了 `day`（本地创建日，前端给 —— 目录名要用）与 `note`（正文）；
   `update_entry` 多了 `note`（不传就不动 `note.md`）；`import_media` 的 `entryId` **变成必填**，
   另加 `nameTemplate`（场景 manifest 里声明的命名模板，前端解析后传入；不传走核心默认）。
+- **SAF（2026-09，安卓）**：新增 `pick_saf_tree`（弹系统目录选择器，返回 `{uri, name}` 或 `null`）。
+  `create_vault` / `add_vault` / `switch_vault` / `forget_vault` / `vault_exists` 的 `path` 参数
+  **接两种东西**：桌面路径、或 `content://` 树 URI（`VaultRef::from_input` 按前缀分流）——
+  前端原样传回，**不做字符串手术**。`list_vaults` / `vault_exists` 多了一个 tauri 注入的
+  `app: AppHandle` 形参（**不进 JSON、前端看不见**）；判据两端统一成**里面有没有 `vault.json`**。
+  命令层拿的是**根句柄**（`Vault`）而不是路径：桌面是文件系统，安卓是 SAF（`src/saf.rs` + Kotlin 桥）。
 - 前端 `invoke` 传 **camelCase**，Rust 形参 **snake_case**，Tauri 自动映射；进 JSON 的结构体一律 `#[serde(rename_all = "camelCase")]`。
 - **关系型改动返回全量**（排序 / 置顶 / 绑定 / 删除 → 返回整个列表）。前端直接替换，不做乐观更新。
   理由：只回一条会让前端自己猜规则，两边迟早不一致。
@@ -344,9 +351,10 @@ apps/framevault/
     ├── tauri.macos.conf.json   macOS 覆盖：窗口走原生红黄绿（Overlay + hiddenTitle）
     ├── capabilities/default.json  三个窗口的权限
     └── src/
-        ├── lib.rs              组装 + generate_handler
+        ├── lib.rs              组装 + generate_handler（含安卓 SAF 插件注册）
         ├── error.rs            AppError / AppResult
         ├── state.rs            VaultRegistry + vaults.json 持久化
+        ├── saf.rs              **安卓 SAF 后端**：Kotlin 桥 + SafStore（桌面上是同签名替身）
         ├── commands/           vault / folder（文件夹 + 主题）/ entry / media / window（薄适配器）
         └── vault/              领域核心（不认识 tauri）：
                                 naming（净化 / 目录名派生 / 媒体模板 / 去重 —— **磁盘名字的唯一出口**）
@@ -354,6 +362,9 @@ apps/framevault/
                                 store（**存储抽象**：VaultStore trait + NativeFs + Vault 根句柄；
                                        SAF 实现住在平台层，见 §2）
                                 model / folder / scene / media / id
+    ├── gen/android/…/com/framevault/app/SafBridgePlugin.kt
+    │                          **手写的 Kotlin 只有这一个文件**（SAF 桥：选目录 + 列/读/写/建/改名/删/复制）。
+    │                          必须待在 `java/com/framevault/app/` —— 隔壁 `generated/` 被忽略且会被覆盖
     └── tests/layout_v2.rs      存储 v2 的端到端验收（走一遍用户流程，每一步都看磁盘）
 ```
 

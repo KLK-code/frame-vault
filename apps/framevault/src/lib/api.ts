@@ -2,6 +2,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { isMobileOS } from "./platform";
 
 /**
  * 前端与 Rust 的唯一接缝。
@@ -133,10 +134,31 @@ export async function openExternal(url: string): Promise<void> {
   await openUrl(url);
 }
 
+/**
+ * 让用户选一个目录（新建 / 导入仓库都走它）。
+ *
+ * 两个平台走的是**两套系统能力**，这是它们的本来面目，不是我们造的差异：
+ * - 桌面：dialog 插件的目录选择器 → 一条普通路径；
+ * - 安卓：**SAF 树选择器**（`ACTION_OPEN_DOCUMENT_TREE`）→ `content://` 树 URI，
+ *   只有它能拿到"重启之后依然有效"的读写授权。官方 dialog 插件在安卓上对目录模式
+ *   直接报 `FolderPickerNotImplemented`，所以那边是另一个命令。
+ *
+ * 两边给出的都是"仓库标识"，前端**不做字符串手术**，原样交给 Rust。
+ */
 export async function pickFolder(title: string): Promise<string | null> {
+  if (isMobileOS) {
+    const picked = await pickSafTree();
+    return picked ? picked.uri : null;
+  }
   const selected = await open({ directory: true, multiple: false, title });
   return typeof selected === "string" ? selected : null;
 }
+
+/** 用户在系统目录选择器里选的目录（安卓专属；桌面调用会报错） */
+export type PickedTree = { uri: string; name: string };
+
+/** 弹安卓的系统目录选择器；用户取消返回 null */
+export const pickSafTree = () => invoke<PickedTree | null>("pick_saf_tree");
 
 // ── 仓库 ──
 export const listVaults = () => invoke<VaultInfo[]>("list_vaults");

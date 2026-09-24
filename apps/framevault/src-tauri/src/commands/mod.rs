@@ -26,21 +26,18 @@ pub(crate) fn active_vault_ref(state: &AppState) -> AppResult<VaultRef> {
 /// 见 `docs/PROPOSAL_mobile_vault_saf_zh-CN.md` 的跨端一致性硬线。
 pub(crate) fn active_vault(state: &AppState, app: &tauri::AppHandle) -> AppResult<Vault> {
     let reference = active_vault_ref(state)?;
-    match reference {
-        VaultRef::Fs(path) => Ok(Vault::at(path)),
-        // SAF 那条链在 S2 接上（Kotlin 桥 + SafStore）。在那之前明确报错 ——
-        // **绝不退化成一条看着能用、实际会写错地方的路径**。
-        VaultRef::Saf(uri) => saf_vault(app, &uri),
-    }
+    vault_for_ref(app, &reference)
 }
 
-/// SAF 仓库的根句柄。**S2 的落点就是这里**：改成
-/// `crate::saf::vault_for_uri(app, uri)`（Kotlin 桥 + `SafStore`）。
-/// 签名先按"要拿得到 AppHandle"写死，免得接上那天又满仓库改调用点。
-fn saf_vault(_app: &tauri::AppHandle, uri: &str) -> AppResult<Vault> {
-    Err(AppError::Invalid(format!(
-        "「{uri}」在安卓的外部存储上，当前版本还不支持读写它（SAF 支持还没做完）"
-    )))
+/// 把一条仓库引用变成根句柄（当前仓库、或者命令参数里指定的那条）。
+///
+/// SAF 那半边由 `saf.rs` 负责：安卓上是 Kotlin 桥，桌面上是"这个平台上用不了"的错误。
+/// 命令层不写 cfg —— 平台差异只有一处落点（AGENTS §2）。
+pub(crate) fn vault_for_ref(app: &tauri::AppHandle, reference: &VaultRef) -> AppResult<Vault> {
+    match reference {
+        VaultRef::Fs(path) => Ok(Vault::at(path.clone())),
+        VaultRef::Saf(uri) => crate::saf::vault_for_uri(app, uri),
+    }
 }
 
 /// 当前仓库的**桌面路径**：只给"真的需要一条文件系统路径"的地方用 ——

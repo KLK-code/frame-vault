@@ -116,7 +116,10 @@ apps/framevault/
     ├── capabilities/default.json          权限清单（三个窗口：main / vault-manager / settings）
     ├── icons/                             打包图标
     ├── tauri.macos.conf.json              macOS 平台覆盖（窗口走原生红黄绿，见 §8）
-    ├── gen/                               自动生成（目前只有 schemas；android 工程尚未生成）
+    ├── gen/android/                       **已纳入版本控制**（`generated/` 与 `.so`、assets 仍被忽略）
+    │   └── app/src/main/java/com/framevault/app/SafBridgePlugin.kt
+    │                                      手写的 Kotlin **只有这一个文件**：SAF 桥
+    │                                      （选目录树 + 列/读/写/建/改名/删/递归复制）
     └── src/                               Rust 源码（第 3 节）
 ```
 
@@ -220,6 +223,17 @@ lib.rs（组装）
 | `media.rs` | `import_media`（`async`，含复制 / sha256 / 探尺寸 / 生成缩略图） / `list_media` | ✅ 本轮 |
 | `window.rs` | `open_vault_manager` / `close_vault_manager` / `open_settings` / `close_settings` | ✅ |
 | `sync.rs` | `sync_now` / `sync_status` / `cancel_sync` | M4 |
+
+#### `src-tauri/src/saf.rs` ✅（安卓）
+- **职责**：安卓上"字节怎么落盘"的后端。SAF（用户选的目录只有 `content://` 树 URI + 持久授权）
+  在这里变成 `VaultStore` 的一个实现（`SafStore`），领域层完全不知道这件事。
+- **分工**：路径解析 / 游标查询 / 流复制这些脏活在 Kotlin（`gen/android/.../SafBridgePlugin.kt`）；
+  这个文件只做三件事：把领域层的绝对路径换算成"树里的相对路径"、把参数包成 JSON、
+  把 Kotlin 的报错翻成人话。另含 `pick_tree`（弹目录选择器）与手写 base64（桥只过 JSON，
+  元数据走 base64；媒体本体走 S3 的流式复制，不过桥）。
+- **平台替身**：桌面上同名的 `vault_for_uri` / `has_vault_file` / `tree_name` / `pick_tree`
+  返回"这个平台上用不了" —— 所以**命令层一处 `cfg` 都不用写**（AGENTS §2 的第三处落点）。
+- **验证**：`cargo check --target aarch64-linux-android`（桌面编译看不到这个模块）。
 
 #### `src-tauri/src/capture/` ⬜
 - **职责**：把「拍照 / 录像 / 选文件」抽象成跨平台能力。
@@ -588,7 +602,9 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 | `add_vault` | `path` | `VaultInfo[]` | 添加已有仓库（必须是带 vault.json 的目录；并设为当前） | ✅ |
 | `switch_vault` | `path` | `void` | 切换当前仓库 | ✅ |
 | `forget_vault` | `path` | `VaultInfo[]` | 从列表移除（**不删磁盘文件**） | ✅ |
-| `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份） | ✅ |
+| `create_vault` | `path` / `name`（留空取目录名）/ `createdAt` | `VaultInfo[]` | 在某目录里建 Vault（写 vault.json 身份）。`path` 也可以是安卓的 `content://` 树 URI | ✅ |
+| `pick_saf_tree` | — | `{uri, name} \| null` | **安卓**：弹系统目录选择器（`ACTION_OPEN_DOCUMENT_TREE`）并取持久授权；取消返回 `null`。桌面调用返回人话错误 | ✅ |
+| `vault_exists` | `path` | `bool` | 里面有没有 `vault.json`（两端同一判据）。多一个 tauri 注入的 `app: AppHandle` 形参，**不进 JSON** | ✅ |
 | `new_id` | — | `string` | 发一个 UUIDv7 记录 id（前端不自己拼时间戳 id） | ✅ |
 | `save_entry` | `id` / `title` / `createdAt?` / `updatedAt?` / `folderId?` / `day?` / `note?` | `EntryView` | 写一条记录（主题**由所属场景解析**后快照进 `scene`）。**新建时算出目录名建目录**；`day` = 创建日（前端给，Rust 无时钟），`note` = 正文（写 `note.md`）；换 `folderId` 会**真的搬目录** | ✅ |
 | `update_entry` | `id` / `title?` / `fields?` / `note?` / `updatedAt?` | `EntryView` | 编辑已有记录：**只改给到的部分**，归属与创建时间不动（`fields` 整体替换，不深合并）；改了标题会**连目录一起改名**（手动改过名的除外） | ✅ |

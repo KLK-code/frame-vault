@@ -1,5 +1,6 @@
-use super::allow_vault_assets;
+use super::{allow_vault_assets, vault_for_ref};
 use crate::error::{AppError, AppResult};
+use crate::saf;
 use crate::state::{AppState, VaultRef};
 use crate::vault;
 use tauri::Emitter;
@@ -15,10 +16,13 @@ pub struct VaultInfo {
     pub exists: bool,
 }
 
-/// SAF 仓库的显示名：URI 末段（就是用户选的那个目录名）。
-/// 不引依赖做百分号解码 —— 名字里常见的中文/空格在 URI 里是编码形态，
-/// 等 S2 桥接好了直接从 ContentResolver 的 `DISPLAY_NAME` 拿真名（那才是权威）。
-fn saf_display_name(uri: &str) -> String {
+/// SAF 仓库的显示名：**问系统要**（`DISPLAY_NAME` 才是权威 —— URI 里是百分号编码，
+/// 中文和空格都不是人看的样子）。问不到就退回 URI 末段，总比空着强。
+fn saf_display_name(app: &tauri::AppHandle, uri: &str) -> String {
+    let from_system = saf::tree_name(app, uri).unwrap_or_default();
+    if !from_system.trim().is_empty() {
+        return from_system;
+    }
     uri.rsplit('/')
         .next()
         .and_then(|tail| tail.rsplit(':').next())
@@ -28,8 +32,8 @@ fn saf_display_name(uri: &str) -> String {
 }
 
 /// 列表逻辑抽出来，add / create / forget 复用
-pub(crate) fn vault_list(app: &AppState) -> AppResult<Vec<VaultInfo>> {
-    let guard = app.vaults.lock()?;
+pub(crate) fn vault_list(state: &AppState, app: &tauri::AppHandle) -> AppResult<Vec<VaultInfo>> {
+    let guard = state.vaults.lock()?;
 
     Ok(guard
         .known
@@ -40,11 +44,17 @@ pub(crate) fn vault_list(app: &AppState) -> AppResult<Vec<VaultInfo>> {
                     dir.file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_default(),
-                    dir.is_dir(),
+                    // "还在不在"用 store 问（同一套判据，别在命令层自己拼路径）
+                    vault_for_ref(app, reference)
+                        .map(|v| v.is_dir(v.root()))
+                        .unwrap_or(false),
                 ),
-                // SAF 的存在性/名字要问系统（ContentResolver），等 S2 的桥接好了再查 ——
-                // 在那之前 Saf 引用不会被生产出来（选目录的入口还没写）
-                VaultRef::Saf(uri) => (saf_display_name(uri), false),
+                // SAF：名字与存在性都要问系统（ContentResolver）。
+                // `exists` 的含义是"里面还有 vault.json" —— 用户删了目录、撤销了授权，都算不存在。
+                VaultRef::Saf(uri) => (
+                    saf_display_name(app, uri),
+                    saf::has_vault_file(app, uri).unwrap_or(false),
+                ),
             };
             VaultInfo {
                 path: reference.display(),
@@ -57,8 +67,18 @@ pub(crate) fn vault_list(app: &AppState) -> AppResult<Vec<VaultInfo>> {
 }
 
 #[tauri::command]
-pub fn list_vaults(state: State<'_, AppState>) -> AppResult<Vec<VaultInfo>> {
-    vault_list(state.inner())
+pub fn list_vaults(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<Vec<VaultInfo>> {
+    vault_list(state.inner(), &app)
+}
+
+/// 弹系统的目录选择器（**安卓专用**）：返回选中的目录 + 持久授权。
+/// 用户取消返回 `null`（取消是正常操作，不是错误）。
+#[tauri::command(async)]
+pub fn pick_saf_tree(app: tauri::AppHandle) -> AppResult<Option<saf::PickedTree>> {
+    saf::pick_tree(&app)
 }
 
 /// 导入一个**已经存在**的 Vault 目录：必须有 vault.json
@@ -69,43 +89,33 @@ pub fn add_vault(
     path: String,
 ) -> AppResult<Vec<VaultInfo>> {
     let app_handle = app;
-    let app = state.inner();
+    let state = state.inner();
     let reference = VaultRef::from_input(&path);
 
-    match &reference {
-        VaultRef::Fs(dir) => {
-            if !dir.is_dir() {
-                return Err(AppError::Invalid(format!("不是有效目录：{path}")));
-            }
-            if !vault::is_vault(dir) {
-                return Err(AppError::Invalid(format!(
-                    "{} 不是 Vault 目录（缺少 vault.json）。\n如果想把它变成 Vault，请用「新建仓库…」。",
-                    dir.display()
-                )));
-            }
-        }
-        // SAF：等桥接好了再校验（S2）；现在给出人话而不是静默失败
-        VaultRef::Saf(_) => {
-            return Err(AppError::Invalid(
-                "安卓的外部目录还没接上（存储抽象还在做），暂时不能导入它".to_string(),
-            ))
-        }
+    // 两端**同一条判据**：里面有 vault.json 才算仓库（跨端一致性硬线 ——
+    // 桌面打的包传到手机、在 SAF 里选中，走的必须是这条判断）。
+    let handle = vault_for_ref(&app_handle, &reference)?;
+    if !handle.is_file(&handle.join("vault.json")) {
+        return Err(AppError::Invalid(format!(
+            "{} 里没有 vault.json，不能当作仓库。\n如果想把它变成仓库，请用「新建仓库…」。",
+            reference.display()
+        )));
     }
 
     {
-        let mut guard = app.vaults.lock()?;
+        let mut guard = state.vaults.lock()?;
         if !guard.known.contains(&reference) {
             guard.known.push(reference.clone());
         }
         guard.active = Some(reference.clone());
     }
-    app.save()?;
+    state.save()?;
 
     if let Some(dir) = reference.as_path() {
         allow_vault_assets(&app_handle, dir);
     }
     let _ = app_handle.emit("vault://changed", ());
-    vault_list(app)
+    vault_list(state, &app_handle)
 }
 
 /// 在指定目录里创建一个新 Vault（会预建「未归类」容器与回收站目录）
@@ -117,41 +127,45 @@ pub fn create_vault(
     name: String,
     created_at: String,
 ) -> AppResult<Vec<VaultInfo>> {
-    let app = state.inner();
+    let state = state.inner();
     let reference = VaultRef::from_input(&path);
-    let dir = match &reference {
-        VaultRef::Fs(dir) => dir.clone(),
-        VaultRef::Saf(_) => {
-            return Err(AppError::Invalid(
-                "安卓的外部目录还没接上（存储抽象还在做），暂时不能在那儿建仓库".to_string(),
-            ))
-        }
-    };
+    let handle = vault_for_ref(&app_handle, &reference)?;
 
-    // 名字留空就取目录名：路径解析属于 Rust 的活，前端不做字符串手术
+    // 名字留空就取目录自己的名字：路径解析属于 Rust 的活，前端不做字符串手术
     let display_name = if name.trim().is_empty() {
-        dir.file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "新仓库".to_string())
+        match &reference {
+            VaultRef::Fs(dir) => dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "新仓库".to_string()),
+            // SAF：目录名照样问系统要
+            VaultRef::Saf(uri) => saf_display_name(&app_handle, uri),
+        }
     } else {
         name
     };
 
-    let meta = vault::create_vault(&dir, &display_name, &created_at)?;
-    println!("[rust] create_vault: {} = {}", meta.name, dir.display());
+    let meta = vault::create_vault(&handle, &display_name, &created_at)?;
+    println!(
+        "[rust] create_vault: {} = {}",
+        meta.name,
+        reference.display()
+    );
 
     {
-        let mut guard = app.vaults.lock()?;
+        let mut guard = state.vaults.lock()?;
         if !guard.known.contains(&reference) {
             guard.known.push(reference.clone());
         }
         guard.active = Some(reference.clone());
     }
-    app.save()?;
+    state.save()?;
 
-    allow_vault_assets(&app_handle, &dir);
+    if let Some(dir) = reference.as_path() {
+        allow_vault_assets(&app_handle, dir);
+    }
     let _ = app_handle.emit("vault://changed", ());
-    vault_list(app)
+    vault_list(state, &app_handle)
 }
 
 #[tauri::command]
@@ -193,15 +207,15 @@ pub fn forget_vault(
     }
     app.save()?;
     let _ = app_handle.emit("vault://changed", ());
-    vault_list(app)
+    vault_list(app, &app_handle)
 }
 
 #[tauri::command]
-pub fn vault_exists(path: String) -> bool {
-    match VaultRef::from_input(&path) {
-        VaultRef::Fs(dir) => vault::is_vault(&dir),
-        // SAF 的存在性要问 ContentResolver（S2）；在那之前一律当"不是"，
-        // 免得把一个根本读不了的 URI 当成有效仓库
-        VaultRef::Saf(_) => false,
+pub fn vault_exists(app: tauri::AppHandle, path: String) -> bool {
+    // 两端同一条判据：里面有没有 vault.json
+    let reference = VaultRef::from_input(&path);
+    match vault_for_ref(&app, &reference) {
+        Ok(handle) => handle.is_file(&handle.join("vault.json")),
+        Err(_) => false,
     }
 }

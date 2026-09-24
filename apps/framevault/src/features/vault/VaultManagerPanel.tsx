@@ -45,8 +45,8 @@ export default function VaultManagerPanel() {
   async function askFolder(title: string): Promise<string | null> {
     try {
       return await pickFolder(title);
-    } catch {
-      setStatus("这台设备还不能选文件夹（安卓端的选择目录还没接），暂时没法新建或导入仓库。");
+    } catch (err) {
+      setStatus(`选目录失败：${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   }

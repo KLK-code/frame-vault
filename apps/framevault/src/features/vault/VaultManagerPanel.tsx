@@ -37,9 +37,23 @@ export default function VaultManagerPanel() {
     });
   }, []);
 
+  /**
+   * 弹系统文件夹选择器。**失败要说话**：安卓端 dialog 插件根本没实现选目录
+   * （`FolderPickerNotImplemented`，见 docs/PROPOSAL_mobile_vault_saf_zh-CN.md），
+   * 以前这里抛的错落在 try 外面成了未捕获的 Promise，界面上一点动静都没有 —— "点了没反应"。
+   */
+  async function askFolder(title: string): Promise<string | null> {
+    try {
+      return await pickFolder(title);
+    } catch {
+      setStatus("这台设备还不能选文件夹（安卓端的选择目录还没接），暂时没法新建或导入仓库。");
+      return null;
+    }
+  }
+
   /** 新建：在选中的文件夹里写 vault.json（名字留空 = 用目录名） */
   async function handleCreate() {
-    const picked = await pickFolder("选择一个文件夹，在里面创建新 Vault");
+    const picked = await askFolder("选择一个文件夹，在里面创建新 Vault");
     if (!picked) return;
     try {
       setVaults(await createVault(picked));
@@ -51,7 +65,7 @@ export default function VaultManagerPanel() {
 
   /** 添加：只接受已经带 vault.json 的目录 */
   async function handleImport() {
-    const picked = await pickFolder("选择已经带 vault.json 的仓库目录");
+    const picked = await askFolder("选择已经带 vault.json 的仓库目录");
     if (!picked) return;
     try {
       setVaults(await addVault(picked));

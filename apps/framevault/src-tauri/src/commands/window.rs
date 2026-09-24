@@ -58,13 +58,17 @@ pub fn open_vault_manager(app: tauri::AppHandle) -> AppResult<()> {
     )
     .title("管理仓库")
     .inner_size(760.0, 540.0)
-    .resizable(true)
-    .closable(true)
-    .center();
+    .resizable(true);
 
+    // 下面三个方法是**桌面专属**：`center` / `closable` / `decorations` 在 tauri 里都挂在
+    // `#[cfg(desktop)]` 的 impl 块上，Android 上根本没有这几个方法（编译就过不去）。
+    // 和 macOS 那三个 `title_bar_style` 是同一类坑，只是这次缺的是"桌面"而不是"macOS"。
+    // 移动端也不需要：那边只有一个 WebView，这两个窗口压根开不出来（见 AGENTS §9）。
+    #[cfg(desktop)]
+    let builder = builder.center().closable(true);
     #[cfg(target_os = "macos")]
     let builder = native_titlebar(&app, builder);
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(desktop, not(target_os = "macos")))]
     let builder = builder.decorations(false); // 自绘标题栏
 
     builder.build()?;
@@ -94,13 +98,13 @@ pub fn open_settings(app: tauri::AppHandle) -> AppResult<()> {
     )
     .title("设置")
     .inner_size(720.0, 560.0)
-    .resizable(true)
-    .closable(true)
-    .center();
+    .resizable(true);
 
+    #[cfg(desktop)]
+    let builder = builder.center().closable(true);
     #[cfg(target_os = "macos")]
     let builder = native_titlebar(&app, builder);
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(desktop, not(target_os = "macos")))]
     let builder = builder.decorations(false);
 
     builder.build()?;

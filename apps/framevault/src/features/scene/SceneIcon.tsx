@@ -1,6 +1,11 @@
 import type { SceneManifest } from "./manifest";
 
-type Icon = NonNullable<SceneManifest["presentation"]>["icon"] | "photo" | "refresh" | "edit";
+type Icon =
+  | NonNullable<SceneManifest["presentation"]>["icon"]
+  | "photo"
+  | "refresh"
+  | "edit"
+  | "settings";
 
 /** 少量共用的线性图标；主题声明只存名字。 */
 export default function SceneIcon({ name = "book", size = 20 }: { name?: Icon; size?: number }) {
@@ -11,6 +16,8 @@ export default function SceneIcon({ name = "book", size = 20 }: { name?: Icon; s
     photo: "M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm-1 14 5-5 4 4 4-6 5 7M8 7h.01",
     refresh: "M20 8a8 8 0 1 0 0 8M20 3v5h-5",
     edit: "M11 5H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-6M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z",
+    // 滑块（三道横线）：设置/偏好用
+    settings: "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"

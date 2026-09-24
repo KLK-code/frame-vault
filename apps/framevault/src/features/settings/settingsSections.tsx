@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import AppearanceSection from "./sections/AppearanceSection";
 import PlaceholderSection, { type Item } from "./sections/PlaceholderSection";
+import VaultManagerPanel from "../vault/VaultManagerPanel";
 
 export type SettingsSection = {
   id: string;
@@ -66,16 +67,6 @@ const IconAbout = (
   </svg>
 );
 
-const VAULT_ITEMS: Item[] = [
-  {
-    id: "vault.defaultLocation",
-    label: "默认 Vault 位置",
-    desc: "新建 Vault 时默认放在哪里",
-    action: "选择…",
-  },
-  { id: "vault.rebuildIndex", label: "重建索引", desc: "删除 SQLite 索引并按 Vault 重新扫描", action: "重建" },
-];
-
 const MEDIA_ITEMS: Item[] = [
   { id: "cache.clearThumbnails", label: "清理缩略图缓存", desc: "不会影响 Vault 里的原图", action: "清理" },
   { id: "cache.openAppData", label: "应用数据目录", desc: "索引、缩略图、仓库列表都放在这里", action: "打开" },
@@ -98,7 +89,9 @@ const ABOUT_ITEMS: Item[] = [
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: "appearance", label: "外观", icon: IconAppearance, Section: AppearanceSection },
-  { id: "vault", label: "Vault", icon: IconVault, Section: () => <PlaceholderSection items={VAULT_ITEMS} /> },
+  // 仓库管理就在设置里（2026-09 用户拍板）：桌面端那个独立窗口、手机端的标签页都并到这儿，
+  // 所以这里放的是**真的面板**，不再是占位假按钮
+  { id: "vault", label: "仓库", icon: IconVault, Section: VaultManagerPanel },
   { id: "media", label: "媒体与缓存", icon: IconMedia, Section: () => <PlaceholderSection items={MEDIA_ITEMS} /> },
   { id: "sync", label: "同步", icon: IconSync, Section: () => <PlaceholderSection items={SYNC_ITEMS} /> },
   { id: "plugins", label: "插件与主题包", icon: IconPlugins, Section: () => <PlaceholderSection items={PLUGIN_ITEMS} /> },

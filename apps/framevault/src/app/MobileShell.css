@@ -17,6 +17,7 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  gap: var(--fv-space-2);
   padding: calc(var(--fv-space-2) + env(safe-area-inset-top)) var(--fv-space-3) var(--fv-space-2);
   border-bottom: 1px solid var(--fv-color-border);
   background: var(--fv-color-surface);
@@ -35,6 +36,84 @@
   font-family: inherit;
   font-size: var(--fv-text-lg);
   font-weight: 600;
+  /* 左边这份吃掉剩余宽度，齿轮就自然被推到右边 */
+  flex: 1;
+  min-width: 0;
+}
+
+/* 设置那一页在"记录"的左边，右滑即到；齿轮是给"不知道能滑"的人的入口。
+   触摸目标 ≥44px（窄屏横切那条规矩） */
+.mobile__gear {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-muted);
+}
+
+.mobile__gear:active {
+  background: var(--fv-color-surface-active);
+  color: var(--fv-color-text);
+}
+
+/* ── 横滑两页：左 = 设置，右 = 记录 / 照片 / 仓库 ──
+   "在记录上向右滑 → 设置"就靠这一层：用 scroll-snap 让**浏览器自己做手势**
+   （惯性、打断、与竖向滚动共存都交给它），比手写 touch 抽屉稳得多。
+   `overscroll-behavior-x: contain` 是必需的：不写的话滑到头会触发 WebView 自己的返回手势。 */
+.mobile__pager {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.mobile__pager::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile__page {
+  flex: 0 0 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  scroll-snap-align: start;
+}
+
+.mobile__page-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+  padding: var(--fv-space-2) var(--fv-space-3);
+  border-bottom: 1px solid var(--fv-color-border);
+}
+
+.mobile__page-title {
+  flex: 1;
+  font-size: var(--fv-text-lg);
+  font-weight: 600;
+  color: var(--fv-color-text);
+}
+
+.mobile__page-back {
+  min-height: 36px;
+  padding: 0 var(--fv-space-3);
+  border: 1px solid var(--fv-color-border-strong);
+  border-radius: var(--fv-radius-md);
+  background: transparent;
+  color: var(--fv-color-text);
+  font-family: inherit;
+  font-size: var(--fv-text-sm);
 }
 
 .mobile__scene:active {
@@ -69,14 +148,6 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
-  padding: 0;
-}
-
-/* 设置是自己内部滚动的两栏，外层别再滚一层 */
-.mobile__body.is-fill {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
   padding: 0;
 }
 
@@ -138,90 +209,5 @@
 
 .mobile__tab:active {
   background: var(--fv-color-surface-active);
-}
-
-/* ── 整屏弹层（场景列表 / 仓库管理）：只盖住骨架，别盖住窗口标题栏 ── */
-.mobile__sheet {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  background: var(--fv-color-bg);
-  padding-top: env(safe-area-inset-top);
-}
-
-.mobile__sheet-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--fv-space-2) var(--fv-space-3);
-  border-bottom: 1px solid var(--fv-color-border);
-  background: var(--fv-color-surface);
-}
-
-.mobile__sheet-title {
-  font-size: var(--fv-text-lg);
-  font-weight: 600;
-}
-
-.mobile__sheet-done {
-  min-height: 40px;
-  padding: 0 var(--fv-space-3);
-  border: none;
-  border-radius: var(--fv-radius-md);
-  background: transparent;
-  color: var(--fv-color-accent);
-  font-family: inherit;
-  font-size: var(--fv-text-base);
-}
-
-.mobile__vault {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: var(--fv-space-2);
-  min-height: 48px;
-  padding: 0 var(--fv-space-3);
-  border: none;
-  border-bottom: 1px solid var(--fv-color-border);
-  background: transparent;
-  color: var(--fv-color-text);
-  font-family: inherit;
-  font-size: var(--fv-text-base);
-}
-
-.mobile__vault:active {
-  background: var(--fv-color-surface-hover);
-}
-
-.mobile__vault-dot {
-  flex: 0 0 7px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--fv-color-accent);
-}
-
-.mobile__vault-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-}
-
-.mobile__sheet-body {
-  overflow-x: hidden;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
-
-.mobile__sheet-body.is-padded {
-  padding: var(--fv-space-4) var(--fv-space-3);
 }
 }

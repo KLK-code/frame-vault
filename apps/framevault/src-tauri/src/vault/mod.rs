@@ -13,7 +13,7 @@ mod model;
 mod naming;
 mod scene;
 mod storage;
-mod store;
+pub mod store;
 
 pub use folder::{
     create_folder_in, delete_folder, folder_dir, folder_path, list_folders, next_order, read_folder,

@@ -10,6 +10,7 @@
 //! 规则都在 `crate::vault` 里。
 
 use super::active_vault;
+use crate::vault::store::Vault;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::vault::{
@@ -55,15 +56,15 @@ impl From<FolderMeta> for FolderNode {
     }
 }
 
-fn to_nodes(vault_dir: &std::path::Path) -> AppResult<Vec<FolderNode>> {
-    Ok(list_folders(vault_dir)?.into_iter().map(FolderNode::from).collect())
+fn to_nodes(vault: &Vault) -> AppResult<Vec<FolderNode>> {
+    Ok(list_folders(vault)?.into_iter().map(FolderNode::from).collect())
 }
 
 /// 文件夹列表（已排序：置顶 → order → 名称）。每项都带着它所在的**主题**。
 #[tauri::command]
-pub fn list_folder_tree(state: State<'_, AppState>) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
-    to_nodes(&vault_dir)
+pub fn list_folder_tree(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResult<Vec<FolderNode>> {
+    let vault = active_vault(&state, &app)?;
+    to_nodes(&vault)
 }
 
 /// 新建文件夹：起名 + 选场景 + 选放哪个主题下，一步到位。
@@ -73,11 +74,12 @@ pub fn list_folder_tree(state: State<'_, AppState>) -> AppResult<Vec<FolderNode>
 #[tauri::command]
 pub fn create_folder(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     name: String,
     scene: Option<String>,
     topic: Option<String>,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
+    let vault = active_vault(&state, &app)?;
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err(AppError::Invalid("名称不能为空".into()));
@@ -89,76 +91,79 @@ pub fn create_folder(
     }
 
     let parent = match topic.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
-        Some(topic_name) => topic_dir(&vault_dir, topic_name)
+        Some(topic_name) => topic_dir(&vault, topic_name)
             .ok_or_else(|| AppError::NotFound(format!("主题不存在：{topic_name}")))?,
-        None => vault_dir.clone(),
+        None => vault.root().to_path_buf(),
     };
 
-    let all = list_folders(&vault_dir)?;
+    let all = list_folders(&vault)?;
     let order = next_order(&all);
     let folder = FolderMeta::new(&new_id(), &name, order, scene);
-    create_folder_in(&vault_dir, &folder, &parent)?;
-    to_nodes(&vault_dir)
+    create_folder_in(&vault, &folder, &parent)?;
+    to_nodes(&vault)
 }
 
 #[tauri::command]
 pub fn rename_folder(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     name: String,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
+    let vault = active_vault(&state, &app)?;
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err(AppError::Invalid("名称不能为空".into()));
     }
 
-    let dir = find_folder_dir(&vault_dir, &id)?;
-    let mut folder = read_folder(&vault_dir, &id)?;
+    let dir = find_folder_dir(&vault, &id)?;
+    let mut folder = read_folder(&vault, &id)?;
     let previous_name = folder.name.clone();
     folder.set_name(&name);
-    save_folder(&vault_dir, &folder, &dir, &previous_name)?;
-    to_nodes(&vault_dir)
+    save_folder(&vault, &folder, &dir, &previous_name)?;
+    to_nodes(&vault)
 }
 
 /// 给场景换主题（`None` = 退回内置普通记录）
 #[tauri::command]
 pub fn bind_folder_scene(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     scene: Option<String>,
     scene_config: Option<serde_json::Value>,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
+    let vault = active_vault(&state, &app)?;
     if let Some(sid) = scene.as_deref() {
         if !is_known_scene(sid) {
             return Err(AppError::Invalid(format!("未知主题：{sid}")));
         }
     }
 
-    let dir = find_folder_dir(&vault_dir, &id)?;
-    let mut folder = read_folder(&vault_dir, &id)?;
+    let dir = find_folder_dir(&vault, &id)?;
+    let mut folder = read_folder(&vault, &id)?;
     folder.scene = scene.filter(|s| !s.trim().is_empty());
     if let Some(config) = scene_config {
         folder.scene_config = config;
     }
     // 名字没变：给同一个名字，就不会触发改名
-    save_folder(&vault_dir, &folder, &dir, &folder.name)?;
-    to_nodes(&vault_dir)
+    save_folder(&vault, &folder, &dir, &folder.name)?;
+    to_nodes(&vault)
 }
 
 #[tauri::command]
 pub fn set_folder_pinned(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     pinned: bool,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
-    let dir = find_folder_dir(&vault_dir, &id)?;
-    let mut folder = read_folder(&vault_dir, &id)?;
+    let vault = active_vault(&state, &app)?;
+    let dir = find_folder_dir(&vault, &id)?;
+    let mut folder = read_folder(&vault, &id)?;
     folder.pinned = pinned;
-    save_folder(&vault_dir, &folder, &dir, &folder.name)?;
-    to_nodes(&vault_dir)
+    save_folder(&vault, &folder, &dir, &folder.name)?;
+    to_nodes(&vault)
 }
 
 /// 按前端给的顺序重排（写回 `order`）。
@@ -166,30 +171,31 @@ pub fn set_folder_pinned(
 #[tauri::command]
 pub fn reorder_folders(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     ordered_ids: Vec<String>,
 ) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
-    let all = list_folders(&vault_dir)?;
+    let vault = active_vault(&state, &app)?;
+    let all = list_folders(&vault)?;
 
     for (index, id) in ordered_ids.iter().enumerate() {
         if let Some(folder) = all.iter().find(|f| &f.id == id) {
-            let dir = find_folder_dir(&vault_dir, id)?;
+            let dir = find_folder_dir(&vault, id)?;
             let mut updated = folder.clone();
             updated.order = index as i64;
-            save_folder(&vault_dir, &updated, &dir, &updated.name)?;
+            save_folder(&vault, &updated, &dir, &updated.name)?;
         }
     }
-    to_nodes(&vault_dir)
+    to_nodes(&vault)
 }
 
 /// 删除场景。**里面还有记录时会拒绝**——宁可让用户先处理，
 /// 也不要出现"场景没了、记录变成孤儿"的情况。
 #[tauri::command]
-pub fn delete_folder(state: State<'_, AppState>, id: String) -> AppResult<Vec<FolderNode>> {
-    let vault_dir = active_vault(&state)?;
+pub fn delete_folder(state: State<'_, AppState>, app: tauri::AppHandle, id: String) -> AppResult<Vec<FolderNode>> {
+    let vault = active_vault(&state, &app)?;
     // "非空拒绝"是业务规则，在领域层；这里只转发（返回全量列表）
-    delete_folder_meta(&vault_dir, &id)?;
-    to_nodes(&vault_dir)
+    delete_folder_meta(&vault, &id)?;
+    to_nodes(&vault)
 }
 
 /// 可用的**场景**（记录方式）清单：随心记 / 认真写作 / 拍照打卡…
@@ -202,9 +208,9 @@ pub fn list_scenes() -> Vec<SceneInfo> {
 /// **主题**清单：根下那些不带 `folder.json` 的一级目录（用户自己分的组）。
 /// 空主题（里面还没放文件夹）也要列出来，否则用户建完看不见它。
 #[tauri::command]
-pub fn list_topics(state: State<'_, AppState>) -> AppResult<Vec<String>> {
-    let vault_dir = active_vault(&state)?;
-    Ok(vault::topic_dirs(&vault_dir)
+pub fn list_topics(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResult<Vec<String>> {
+    let vault = active_vault(&state, &app)?;
+    Ok(vault::topic_dirs(&vault)
         .into_iter()
         .filter_map(|dir| dir.file_name().map(|n| n.to_string_lossy().to_string()))
         .collect())
@@ -212,28 +218,29 @@ pub fn list_topics(state: State<'_, AppState>) -> AppResult<Vec<String>> {
 
 /// 新建主题 = 建一个目录（**不写任何文件**：主题没有字段，位置就是它自己）
 #[tauri::command]
-pub fn create_topic(state: State<'_, AppState>, name: String) -> AppResult<Vec<String>> {
-    let vault_dir = active_vault(&state)?;
-    vault_create_topic(&vault_dir, &name)?;
-    list_topics(state)
+pub fn create_topic(state: State<'_, AppState>, app: tauri::AppHandle, name: String) -> AppResult<Vec<String>> {
+    let vault = active_vault(&state, &app)?;
+    vault_create_topic(&vault, &name)?;
+    list_topics(state, app.clone())
 }
 
 /// 主题改名 = 改目录名（里面的文件夹跟着换主题，因为它们的位置变了）
 #[tauri::command]
 pub fn rename_topic(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     name: String,
     new_name: String,
 ) -> AppResult<Vec<String>> {
-    let vault_dir = active_vault(&state)?;
-    vault_rename_topic(&vault_dir, &name, &new_name)?;
-    list_topics(state)
+    let vault = active_vault(&state, &app)?;
+    vault_rename_topic(&vault, &name, &new_name)?;
+    list_topics(state, app.clone())
 }
 
 /// 删除主题：**里面还有东西就拒绝**（跟删文件夹同一条规矩）
 #[tauri::command]
-pub fn delete_topic(state: State<'_, AppState>, name: String) -> AppResult<Vec<String>> {
-    let vault_dir = active_vault(&state)?;
-    vault_delete_topic(&vault_dir, &name)?;
-    list_topics(state)
+pub fn delete_topic(state: State<'_, AppState>, app: tauri::AppHandle, name: String) -> AppResult<Vec<String>> {
+    let vault = active_vault(&state, &app)?;
+    vault_delete_topic(&vault, &name)?;
+    list_topics(state, app.clone())
 }

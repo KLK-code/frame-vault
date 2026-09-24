@@ -58,6 +58,7 @@ pub fn new_id() -> String {
 #[tauri::command]
 pub fn save_entry(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     title: String,
     created_at: Option<String>,
@@ -66,17 +67,17 @@ pub fn save_entry(
     day: Option<String>,
     note: Option<String>,
 ) -> AppResult<EntryView> {
-    let vault_dir = active_vault(&state)?;
+    let vault = active_vault(&state, &app)?;
 
     let scene = match folder_id.as_deref() {
-        Some(fid) => vault::read_folder(&vault_dir, fid)?.effective_scene(),
+        Some(fid) => vault::read_folder(&vault, fid)?.effective_scene(),
         None => PLAIN_SCENE.to_string(),
     };
 
     let created = created_at.unwrap_or_default();
     let day = day.unwrap_or_default();
 
-    let mut entry = match vault::read_entry(&vault_dir, &id) {
+    let mut entry = match vault::read_entry(&vault, &id) {
         Ok(existing) => existing,
         Err(_) => {
             let mut fresh = Entry::new(&id, &title, &created);
@@ -88,7 +89,7 @@ pub fn save_entry(
             }
             fresh.folder_id = folder_id;
             fresh.scene = Some(scene);
-            vault::create_entry(&vault_dir, &mut fresh)?;
+            vault::create_entry(&vault, &mut fresh)?;
             return Ok(fresh.into());
         }
     };
@@ -108,12 +109,12 @@ pub fn save_entry(
     entry.scene = Some(scene);
     entry.touch(updated_at.as_deref().unwrap_or(&created));
 
-    let dir = vault::find_entry_dir(&vault_dir, &id)?;
+    let dir = vault::find_entry_dir(&vault, &id)?;
     let mut dir = vault::write_entry(&entry, &dir, Some(&previous))?;
 
     // 归属变了（换了场景）→ 记录要跟着搬到那个场景目录下：归属就是物理位置
     if previous.folder_id != entry.folder_id {
-        dir = vault::move_entry_to_slot(&vault_dir, &dir, entry.folder_id.as_deref())?;
+        dir = vault::move_entry_to_slot(&vault, &dir, entry.folder_id.as_deref())?;
     }
     let _ = dir;
 
@@ -127,15 +128,16 @@ pub fn save_entry(
 #[tauri::command]
 pub fn update_entry(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     title: Option<String>,
     fields: Option<serde_json::Value>,
     note: Option<String>,
     updated_at: Option<String>,
 ) -> AppResult<EntryView> {
-    let vault_dir = active_vault(&state)?;
+    let vault = active_vault(&state, &app)?;
 
-    let dir = vault::find_entry_dir(&vault_dir, &id)?;
+    let dir = vault::find_entry_dir(&vault, &id)?;
     let mut entry = vault::read_entry_from(&dir)?;
     let previous = entry.clone();
 
@@ -154,6 +156,7 @@ pub fn update_entry(
 #[tauri::command(async)]
 pub fn delete_entry(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     id: String,
     deleted_at: String,
 ) -> AppResult<EntryView> {
@@ -161,25 +164,25 @@ pub fn delete_entry(
         return Err(AppError::Invalid("缺少删除时间".into()));
     }
 
-    let vault_dir = active_vault(&state)?;
-    vault::trash_entry(&vault_dir, &id, &deleted_at)?;
-    let entry = vault::read_entry(&vault_dir, &id)?;
+    let vault = active_vault(&state, &app)?;
+    vault::trash_entry(&vault, &id, &deleted_at)?;
+    let entry = vault::read_entry(&vault, &id)?;
     println!("[rust] delete_entry: {} 挪进回收站", entry.title);
     Ok(entry.into())
 }
 
 /// 撤销删除：把目录挪回原场景（原场景没了就回「未归类」），清掉墓碑
 #[tauri::command]
-pub fn restore_entry(state: State<'_, AppState>, id: String, now: String) -> AppResult<EntryView> {
-    let vault_dir = active_vault(&state)?;
-    vault::restore_entry(&vault_dir, &id, &now)?;
-    Ok(vault::read_entry(&vault_dir, &id)?.into())
+pub fn restore_entry(state: State<'_, AppState>, app: tauri::AppHandle, id: String, now: String) -> AppResult<EntryView> {
+    let vault = active_vault(&state, &app)?;
+    vault::restore_entry(&vault, &id, &now)?;
+    Ok(vault::read_entry(&vault, &id)?.into())
 }
 
 #[tauri::command]
-pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<EntryView> {
-    let vault_dir = active_vault(&state)?;
-    Ok(vault::read_entry(&vault_dir, &id)?.into())
+pub fn load_entry(state: State<'_, AppState>, app: tauri::AppHandle, id: String) -> AppResult<EntryView> {
+    let vault = active_vault(&state, &app)?;
+    Ok(vault::read_entry(&vault, &id)?.into())
 }
 
 /// 列出记录。`folder_id` 给 `None` = 全部；给字符串 = 只列这个场景里的。
@@ -188,13 +191,14 @@ pub fn load_entry(state: State<'_, AppState>, id: String) -> AppResult<EntryView
 #[tauri::command]
 pub fn list_entries(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     folder_id: Option<String>,
     include_deleted: Option<bool>,
 ) -> AppResult<Vec<EntryView>> {
-    let vault_dir = active_vault(&state)?;
+    let vault = active_vault(&state, &app)?;
     let keep_deleted = include_deleted.unwrap_or(false);
 
-    Ok(vault::list_entries(&vault_dir)?
+    Ok(vault::list_entries(&vault)?
         .into_iter()
         .filter(|e| keep_deleted || !e.is_deleted())
         .filter(|e| match folder_id.as_deref() {
@@ -210,10 +214,11 @@ pub fn list_entries(
 #[tauri::command]
 pub fn reorder_entries(
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
     ordered_ids: Vec<String>,
 ) -> AppResult<Vec<EntryView>> {
-    let vault_dir = active_vault(&state)?;
-    let entries = vault::reorder_entries(&vault_dir, &ordered_ids)?;
+    let vault = active_vault(&state, &app)?;
+    let entries = vault::reorder_entries(&vault, &ordered_ids)?;
 
     // 返回哪一桶：第一条给定记录所属的场景（前端本来就只对一个场景排）
     let folder_id = ordered_ids
@@ -229,9 +234,9 @@ pub fn reorder_entries(
 }
 
 #[tauri::command]
-pub fn read_vault_meta(state: State<'_, AppState>) -> AppResult<VaultMetaInfo> {
-    let vault_dir = active_vault(&state)?;
-    let meta = vault::read_vault_meta(&vault_dir)?;
+pub fn read_vault_meta(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResult<VaultMetaInfo> {
+    let vault = active_vault(&state, &app)?;
+    let meta = vault::read_vault_meta(&vault)?;
     Ok(VaultMetaInfo {
         schema_version: meta.schema_version,
         vault_id: meta.vault_id,

@@ -4,7 +4,7 @@
 //! 文件名在导入那一刻按场景模板生成。领域层存的是事实（文件名、哈希、尺寸、拍摄时间），
 //! 这里额外把**绝对路径**算好交给前端——前端不该做路径拼接。
 
-use super::{active_vault, allow_vault_assets, thumbs_dir};
+use super::{active_vault_dir, allow_vault_assets, thumbs_dir};
 use crate::error::AppResult;
 use crate::state::AppState;
 use crate::vault::{self, MediaMeta, NameVars};
@@ -61,7 +61,7 @@ pub fn import_media(
     name_template: Option<String>,
     added_at: String,
 ) -> AppResult<MediaItem> {
-    let vault_dir = active_vault(&state)?;
+    let vault_dir = active_vault_dir(&state)?;
     let source = Path::new(&source_path);
 
     let entry_dir = vault::find_entry_dir(&vault_dir, &entry_id)?;
@@ -129,7 +129,7 @@ pub fn list_media(
     state: State<'_, AppState>,
     entry_id: Option<String>,
 ) -> AppResult<Vec<MediaItem>> {
-    let vault_dir = active_vault(&state)?;
+    let vault_dir = active_vault_dir(&state)?;
     allow_vault_assets(&app, &vault_dir);
 
     let mut out = Vec::new();

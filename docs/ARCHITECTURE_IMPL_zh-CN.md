@@ -15,6 +15,19 @@
 > 4. §11 演进路线已按 README 的 M1~M5 重写。
 > 5. 数据落点补充：Vault 内新增「文件夹 / 功能主题绑定 / 排序与置顶」元数据（§13.2）。
 
+> **v0.3 修订（2026-09-24：把"现状"章节追到代码上）**
+>
+> 一次纯粹的**对账**，没有新设计。改的都是文档落后于代码的地方：
+>
+> 1. **§2 目录总览**：`capabilities/default.json` 现在管的是**三个窗口**（main / vault-manager / settings）；补上 `tauri.macos.conf.json`；删掉并不存在的 `examples/demo.rs`。
+> 2. **§3.2 文件清单**：`error.rs` 早就实现了（从 ⬜ 改 ✅，补齐 `From<tauri::Error>` / `PoisonError` / `Display` 中文文案）；`vault/` 的文件表还是 v1 时代那套（`write_entry(&Path,&Entry)` / `delete_entry` / `ensure_vault`）—— 按存储 v2 的真实形状重写为 8 个文件，并把 `migration.rs` / `tombstone.rs` 明确标成**未建**（v1→v2 不做迁移；墓碑就是 `Entry.deletedAt`）。
+> 3. **§13.5**：`reorder_entries` 已实现（§5.1 / §3.2 都标了 ✅），从"还没做的命令"里删掉，只留 `set_entry_pinned`。
+> 4. **§13.6 媒体落点**：整节原样保留着 v1 的全局 `media/<id>/orig.jpg` + `meta.json`，与存储 v2 **直接矛盾**（AGENTS §3.8）。按现状重写：媒体住在记录目录里、按模板命名一次、只有一个名字 `MediaMeta.file`、挪记录 = 搬目录；另补**对账**那条规则。
+> 5. **§4.4 的场景契约图**：原来写着"磁盘上扁平 / 移动 = 改一个字段"，与 AGENTS §3.1（**归属 = 物理位置，改归属 = 真的搬目录**）正好相反，按 v2 的"主题 > 文件夹 > 记录"重画。
+> 6. **附录 A**：命令数 29 → **33**（另有一个脚手架 `greet` 未清理）、测试数 27 → **82**、包体数字与四个场景 / `MarkdownWysiwyg` + `livePreview` 补齐，并加了一段**「明确还没做的」**——免得这份清单被读成"全做完了"。
+>
+> 同批对齐的还有：**PRD §12-13**（那条"已定案"的扁平布局记录，补上被 v2 取代的说明）、**技术架构 §7.1 / §7.5**（目录树与 `folder.json` 落点）、**VISION §3.5**（引用的 AGENTS §3.8 旧内容）、**README 实现现状**（"置顶用右键菜单"会被读成记录也能置顶，实际只有文件夹级；写作台那段还把已实现的**自动保存**列在"还没做的"里，一并删掉，并把"图片内联到正文"写成实际边界 —— 编辑器只渲染 `http(s)` / `data` 图片，**不把 asset 协议引进编辑器**）、**AGENTS §12**（文件地图补上 `EntryMenu.tsx`）。
+
 ---
 
 ---
@@ -100,10 +113,10 @@ apps/framevault/
     ├── Cargo.toml / Cargo.lock
     ├── build.rs                           构建脚本（tauri-build）
     ├── tauri.conf.json                    产品名/标识符/窗口/打包
-    ├── capabilities/default.json          权限清单（含第二个窗口）
+    ├── capabilities/default.json          权限清单（三个窗口：main / vault-manager / settings）
     ├── icons/                             打包图标
-    ├── examples/demo.rs                   可单独运行的试验程序
-    ├── gen/                               自动生成（schemas、将来的 android 工程）
+    ├── tauri.macos.conf.json              macOS 平台覆盖（窗口走原生红黄绿，见 §8）
+    ├── gen/                               自动生成（目前只有 schemas；android 工程尚未生成）
     └── src/                               Rust 源码（第 3 节）
 ```
 
@@ -146,17 +159,21 @@ lib.rs（组装）
 - **对外**：`pub fn run()`（被 main.rs 调用）。
 - **现状**：opener / dialog 插件已注册；`AppState` 在 `setup` 里 `manage`；关主窗口时 `exit(0)`。
 
-#### `src-tauri/src/error.rs` ⬜
+#### `src-tauri/src/error.rs` ✅
 - **职责**：统一错误类型，替代到处手写 `map_err(|e| e.to_string())`。
 - **接口**：
   ```rust
-  pub enum AppError { Io(std::io::Error), Json(serde_json::Error), Invalid(String), NotFound(String), NotSelected }
+  pub enum AppError { Io(std::io::Error), Json(serde_json::Error), Invalid(String), NotFound(String), NotSelected, Tauri(tauri::Error) }
   pub type AppResult<T> = Result<T, AppError>;
-  impl From<std::io::Error> for AppError        // 让 ? 直接可用
+  impl From<std::io::Error> for AppError                    // 让 ? 直接可用
   impl From<serde_json::Error> for AppError
-  impl serde::Serialize for AppError            // Tauri 要求错误可序列化
+  impl From<tauri::Error> for AppError                      // 窗口命令也要能 ?
+  impl<T> From<std::sync::PoisonError<T>> for AppError       // .lock()? 直接可用
+  impl std::fmt::Display / std::error::Error for AppError    // 中文人话，见下
+  impl serde::Serialize for AppError                         // Tauri 要求错误可序列化
   ```
 - **为什么**：命令统一返回 `AppResult<T>` 后，函数体里的 `?` 能一路传下去，前端拿到的错误信息也更准确。**这是把领域层写复杂之前必须先做的一件事。**
+- **中文文案在 `Display` 里统一定**（`文件操作失败：…` / `数据格式不对：…` / `还没有选择仓库`），序列化时直接变成这句人话给前端 —— 命令里**不许**再手写 `.map_err()`。
 
 #### `src-tauri/src/state.rs` ✅
 - **职责**：全局状态 + 其持久化。
@@ -173,17 +190,23 @@ lib.rs（组装）
 - **规则**：锁只保护内存，**不要拿着锁做磁盘 IO**（用 `{ }` 把临界区圈小）。
 - **扩展方向**：加「最近打开」等字段；超过一个文件就拆成 `state/` 目录。
 
-#### `src-tauri/src/vault/` ✅（已按下面的形状拆开：mod / model / storage / id）
+#### `src-tauri/src/vault/` ✅（9 个文件：`mod` / `model` / `storage` / `naming` / `folder` / `scene` / `media` / `id` / `store`）
 领域核心。**这个目录里永远不出现 `tauri`。**
+
+路径约定只有 `storage.rs` 说了算，磁盘名字只有 `naming.rs` 说了算（AGENTS §3.8）。
 
 | 文件 | 职责 | 对外接口（签名级） | 阶段 |
 |---|---|---|---|
-| `mod.rs` | 汇总导出 + 常量 | `pub const SCHEMA_VERSION: u32"` | M0 |
-| `model.rs` | 数据结构 | `Entry { schema_version, id, title, tags, created_at, updated_at, media }`、`Media { id, kind, path, byte_size }`、`VaultMeta { schema_version, vault_id, name, created_at }` | M0 |
-| `storage.rs` | 文件读写 | `write_entry(&Path, &Entry) -> io::Result<PathBuf>`、`read_entry(&Path, &str) -> io::Result<Entry>`、`list_entries(&Path) -> io::Result<Vec<Entry>>`、`delete_entry(&Path, &str) -> io::Result<()>`、`write_json_atomic<T: Serialize>(&Path, &T) -> io::Result<()>`、`ensure_vault(&Path) -> io::Result<VaultMeta>` | M0 |
-| `id.rs` | ID 生成与校验 | `new_entry_id() -> String`（UUIDv7）、`is_valid_id(&str) -> bool` | M0 |
-| `migration.rs` | schemaVersion 迁移 | `migrate_vault(&Path) -> io::Result<()>`、`is_supported(u32) -> bool` | M1 |
-| `tombstone.rs` | 删除标记 | `mark_deleted(&Path, &str) -> io::Result<()>`、`list_tombstones(&Path) -> io::Result<Vec<Tombstone>>` | M4 |
+| `mod.rs` | 汇总导出（`pub use` 各模块，外部只见一个面） | — | M0 |
+| `model.rs` | 数据结构 + 版本 | `SCHEMA_VERSION: u32 = 2`、`is_supported(u32)`、`Entry { schema_version, id, title, day, tags, created_at, updated_at, folder_id, scene, scene_version, fields, media, order, deleted_at, note(skip) }`、`VaultMeta`、`apply_update` / `mark_deleted` / `restore` | M0 |
+| `storage.rs` | **路径约定 + 扫描对账 + 原子写 + 回收站** | `write_json_atomic` / `write_text_atomic` / `read_text`（tmp + rename）、`create_vault` / `is_vault` / `read_vault_meta`、`topic_dirs` / `create_topic` / `rename_topic` / `delete_topic` / `ensure_uncategorized`、`folder_dirs` / `entry_dirs_in` / `list_entry_dirs` / `find_entry_dir` / `find_folder_dir` / `entry_slot`、`read_entry` / `create_entry` / `write_entry(entry, dir, previous)` / `move_entry_to_slot`、`trash_entry` / `restore_entry` / `list_trash_dirs`、`list_entries` / `reorder_entries` | M0（v2 重写） |
+| `naming.rs` | **磁盘名字的唯一出口**：净化 / 目录名派生 / 媒体模板 / 去重 | `sanitize` / `sanitize_with` / `scene_dir_name` / `entry_dir_name` / `day_of` / `render_template` / `media_file_stem` / `unique_child_name`、`NameVars`、常量 `NOTE_FILE` / `ENTRY_FILE` / `FOLDER_FILE` / `UNCATEGORIZED` / `DEFAULT_MEDIA_TEMPLATE` / `MAX_NAME` | M1（v2 新增） |
+| `folder.rs` | 文件夹元数据（`folder.json`）+ 排序 / 置顶 | `FolderMeta { id, name, order, pinned, scene, scene_config, topic(skip) }`、`list_folders` / `read_folder` / `create_folder_in` / `save_folder` / `delete_folder`、`sort_folders` / `next_order`、`folder_dir` / `folder_path` | M0 |
+| `scene.rs` | 内置**场景**登记（代码，不是数据） | `builtin_scenes() -> Vec<SceneInfo>`、`is_known(&str)`、常量 `PLAIN_SCENE` / `TRAVEL_SCENE` / `CHALLENGE_SCENE` / `WRITING_SCENE` | M0 |
+| `media.rs` | 媒体导入：复制 / sha256 / 尺寸 / EXIF / 缩略图 / 对账 | `import_into_entry` / `adopt_loose_files` / `drop_missing_files` / `write_thumbnail` / `sort_media` / `sha256_file` / `image_size` / `exif_taken_at` / `guess_mime` / `is_media_ext` / `is_decodable_image` / `normalize_ext`、`MediaMeta` | M1 |
+| `id.rs` | ID 生成 | `new_id() -> String`（UUIDv7，由 Rust 发；**时间戳仍由调用方给**） | M0 |
+| `migration.rs` | schemaVersion 迁移 | ⬜ **未建**：v1 → v2 已拍板**不迁移**（老仓库直接给中文错误），所以文件不存在 | M1 |
+| `tombstone.rs` | 删除标记 | ⬜ **未建**：墓碑现在就是 `Entry.deletedAt` 字段（不单独开文件），`storage.rs` 的 `trash_entry` 负责搬目录 | M4 |
 
 #### `src-tauri/src/commands/` ✅（五个模块：`vault` / `folder` / `entry` / `media` / `window`）
 接线盒。**一个命令只做三件事：收参数（校验）→ 调领域层 → 把结果/错误转成可序列化的形状。**
@@ -279,24 +302,41 @@ src/
 ├── app/                      ── 外壳层：只管窗口与共用外框 ──
 │   ├── TitleBar.tsx / .css     自绘标题栏（各窗口共用）
 │   ├── window.css             独立窗口共用的外框布局
+│   ├── MobileShell.tsx / .css  手机骨架：顶部场景切换 + 设置齿轮 + 左右两页横滑 + 底部三栏
 │   ├── VaultManagerWindow.tsx  管理仓库窗口外壳
 │   └── SettingsWindow.tsx      设置窗口外壳
 ├── features/scene/           ── 场景层：本项目的"页面层" ──
 │   ├── useFolders.ts          场景数据 + 按主题归类（groups，见 §4.4）
+│   ├── useSceneData.ts        **底层能力**（取记录 / 取媒体 / 建改删 / 追加照片 / 刷新 / 忙碌与错误）
 │   ├── SceneTree.tsx / .css    左侧：文件夹树（三种分组：按主题/按场景/平铺）+ 主题与文件夹的增删改
 │   ├── SceneHost.tsx / .css    右侧：按 effectiveScene 找视图并渲染（含空态、缺主题提示）
 │   ├── registry.ts            主题 id → 视图组件（**扩展点**）
+│   ├── manifest.ts            声明契约（字段 / 配置表单 / 命名模板 / 图标）
 │   ├── SceneComposer.tsx/.css  共用快捷录入（照片 / 文字，防重复提交）
-│   ├── EntryTimeline.tsx/.css  共用时间线、编辑、媒体与删除入口
-│   ├── SceneIcon.tsx          主题声明使用的线性图标
+│   ├── EntryTimeline.tsx/.css  共用时间线：读态点标题或正文即编辑、自动保存、拖动排序
+│   ├── EntryMenu.tsx/.css      记录的右键 / 长按菜单（公共件）
+│   ├── SceneFields.tsx/.css    声明 → 表单（多行字段渲染成唯一的 Markdown 控件）
+│   ├── SceneNotice.tsx/.css    可撤销提示
+│   ├── SceneMedia.tsx/.css     场景照片墙（手机"照片"页与桌面同款）
+│   ├── MediaLightbox.tsx/.css  大图 / 视频
+│   ├── mediaFormat.ts          格式化 + "这个格式 WebView 能不能显示"
+│   ├── SceneIcon.tsx           主题声明使用的线性图标（含外壳用的 settings / photo / refresh / edit）
+│   ├── markdown/               **全项目唯一的 Markdown 编辑与渲染控件**
+│   │   ├── MarkdownWysiwyg.tsx + livePreview.ts + .css   CodeMirror 6，三种模式，按需加载
+│   │   └── （MarkdownField / MarkdownView / blocks / registry 是无人引用的旧件，见 §4.9）
 │   └── scenes/{plain,travel,challenge,writing}/  普通日记 / 旅行 / 挑战 / 写作台 自治单元
 │       └── manifest.ts + index.ts + 视图.tsx + 同名.css
-├── features/vault/           仓库：悬浮切换菜单 + 独立窗口里的管理面板
-├── features/settings/        设置：左导航 + 右内容
-├── features/theme/           设计令牌 schema + 实时编辑 + 跨窗口同步
-├── lib/api.ts                唯一 invoke / listen 出口 + 与 Rust 对齐的类型
+├── features/vault/           仓库：悬浮切换菜单 + 管理面板（桌面独立窗口、手机在设置里）
+├── features/settings/        设置：左导航 + 右内容（`SETTINGS_SECTIONS` 的「仓库」栏 = 仓库管理）
+├── features/theme/           设计令牌 schema + 预设 + 实时编辑 + 跨窗口同步
+├── lib/api.ts                唯一 invoke / listen / convertFileSrc 出口 + 与 Rust 对齐的类型
+├── lib/platform.ts           前端唯一一处"现在是什么系统"的判断
+├── lib/useCompact.ts         视口够不够宽（响应式，不是平台分支）
+├── markdown/parse.ts         旧渲染器的解析出口（**已无人引用**，见 §4.9）
+├── skins.css                 外观预设：五套（极简白默认 / 暖纸 / 青碧 / 炭火 / 晴空），每套浅深齐全
 ├── styles/layers.css         层顺序声明（@layer reset, base, components, theme, user）
 ├── styles/reset.css
+├── styles/compact.css        窄屏横切调整（触摸目标 / 安全区 / 面板堆叠）
 └── tokens.css                设计令牌：**唯一允许出现裸色值的地方**
 ```
 
@@ -326,18 +366,24 @@ App.tsx ──▶ features/* ──▶ lib/api.ts ──▶ (invoke / listen) �
 
 ### 4.4 场景契约（新东西都在这一节）
 
-**磁盘上扁平，展示层分组**——这是整个前端模型的核心一句话：
+**磁盘上是"主题 > 文件夹 > 记录"的真实层级，展示层再按主题 / 场景分组**——这是整个前端模型的核心一句话：
 
 ```text
-Vault 里                    前端显示层
-folders/<id>/folder.json    ┌ 挑战（主题）
-entries/<id>/entry.json     │   ├ 晨跑打卡     ← scene: builtin.challenge
-   ↑ 只有 folderId 指回去    │   └ 健身房       ← scene: builtin.challenge
-顺序 / 置顶 / 主题绑定         └ 普通记录（主题）
-                              └ 随手记        ← scene: null → builtin.plain
+科研/                                ← 主题：一层目录，**没有** folder.json
+└── 论文笔记/                          ← 文件夹：folder.json 里绑一个**场景**（怎么记）
+    └── 2026-09-23 周报/               ← 记录：目录名 = 「创建日 标题」
+        ├── entry.json
+        ├── note.md                    ← 正文（唯一真相）
+        └── 2026-09-23_论文笔记_01.jpg
+晨跑打卡/                            ← 文件夹也可以直接摆根下 = 没有主题
+未归类/                              ← 没有文件夹的记录（默认容器，按名字认）
 ```
 
-为什么记录不按文件夹物理嵌套：**移动 = 改一个字段**（同步工具只看到一个文件变），删场景不会牵动一堆子目录，索引（SQLite）坏了大不了重建。
+**归属 = 物理位置**：记录的父目录是谁，它就是谁的（`Entry.folderId` 只是这件事的字段记录）。
+所以"换归属" = **真的搬目录**（`storage::move_entry_to_slot`），不是改一个字段；扫描按结构认，
+用户在资源管理器里把文件夹拖到别的主题下，回应用就是那个主题的（AGENTS §3.1）。
+顺序 / 置顶 / 场景绑定在 `folder.json`，记录的顺序在 `entry.json`——都按稳定 id 记，所以改名不动顺序。
+展示层（`useFolders` 的 `groups`）只决定"导航栏怎么把这堆文件夹排成组"，不改变磁盘上的归属。
 
 前端只做两件事，分别落在两个文件里：
 
@@ -513,20 +559,24 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 
 这个阶段明确不做：自建 Document Model（等有第二个消费者）、`remark-rehype` / `rehype-react`（直连 React，少两个依赖且不产生 HTML）、`remark-directive` 自定义块（等真有主题要用）、语法高亮。
 
-**输入侧（同一层）有两种编辑器，主题只挑"用哪个"**：
+**输入侧只剩一个控件、一个引擎、三种模式**（2026-09 全量切换后定的形状）：
 
-- `MarkdownField.tsx` = textarea + 语法工具栏 + 编辑 / 预览切换。`SceneFields` 渲染多行字段时用的就是它，所以**所有主题自动都有**；
-- `MarkdownWysiwyg.tsx` + `livePreview.ts` = 一整块所见即所得的编辑区，内核是 **CodeMirror 6**（`@codemirror/*` + `@lezer/markdown`，MIT）：**文档本身就是 Markdown 文本**，装饰决定语法符号藏还是显。现在只有写作台用它，**`React.lazy` 按需加载**（带着 CM6 家族；实测主包 417.68 KB + 独立 chunk 500.68 KB / gzip 174.14 KB，写作台之外一行都不下载）。
+- `MarkdownWysiwyg.tsx` + `livePreview.ts` = 全项目**唯一**的 Markdown 编辑与渲染控件，内核是 **CodeMirror 6**（`@codemirror/*` + `@lezer/markdown`，MIT）：**文档本身就是 Markdown 文本**，装饰决定语法符号藏还是显。**`React.lazy` 按需加载**（带着 CM6 家族；实测主包 317 KB + 独立 chunk 509 KB / gzip 177 KB）。
+  **三种模式**：`live`（默认，即时渲染）/ `source`（源码 + 语法高亮 + 一排语法按钮 —— 手机上没有 Ctrl+B 这类快捷键，按钮是真有用）/ 只读（`readOnly`，**时间线的读态就用它**，所以"点一下就改"前后是同一个实例）。切换走 `Compartment` 重配，**不重建实例**（文档没变 ⇒ 不算一次改动、不会误触发保存）；`FieldDecl.editor` 可声明多行字段的默认模式。
+  **宿主决定形态**：`variant="fill"`（写作台吃满剩余高度）/ `variant="inline"`（时间线、表单：跟着内容长、**不内部滚动**）。
   **为什么从 ProseMirror 换过来**（2026-09，见 `docs/PROPOSAL_editor_codemirror6_zh-CN.md`）：PM 的文档是节点树，`**` 根本不在文档里，要做"光标所在处露源码"只能把整块序列化成文本再换成一个控件 —— 于是必然有盒子、有层切换、选区被困在控件里。文档即文本之后，这三样一起消失。
 - **粘贴不需要特殊处理**：纯文本原样插入，因为插入的就是 Markdown，当场按装饰规则渲染（旧的 `handlePaste` + `looksLikeMarkdown` 判据已删）。**已知回退**：从浏览器复制的富文本只剩文字，不做 HTML→MD 转换。
 
-- **实时渲染（live preview）**：整篇按排版渲染，**语法符号只在光标碰到的地方露**——块级记号（`# ` / `> ` / `- ` / 围栏）按行露，行内记号（`**` / `` ` `` / `[](…)`）按令牌露，移开立刻收回（Obsidian / Typora 手感）。实现分两半，因为 **CM6 只允许 `StateField` 提供行级与块级装饰**（`ViewPlugin` 提供会抛 `RangeError` 且整块不渲染）：`outer`（行级类名、整块 widget、表格）走 StateField，`inner`（行内记号与 widget）走 `ViewPlugin` 且只遍历 `view.visibleRanges`。装饰样式在 `MarkdownWysiwyg.css`；**结构性那几条**（滚动容器 / 内边距 / 光标 / 字号）写在 `MarkdownWysiwyg.tsx` 的 `EditorView.theme` 里 —— 因为 CM6 注入的基础样式是**未分层**的，`@layer` 里的规则压不过它。
+- **实时渲染（live preview）**：整篇按排版渲染，**语法符号只在光标碰到的地方露**——块级记号（`# ` / `> ` / `- ` / 围栏）按行露，行内记号（`**` / `` ` `` / `[](…)`）按令牌露，移开立刻收回（Obsidian / Typora 手感）。实现分两半，因为 **CM6 只允许 `StateField` 提供行级与块级装饰**（`ViewPlugin` 提供会抛 `RangeError` 且整块不渲染）：`outer`（行级类名、整块 widget、表格）走 StateField，`inner`（行内记号与 widget）走 `ViewPlugin` 且只遍历 `view.visibleRanges`。装饰样式在 `MarkdownWysiwyg.css`；**结构性那几条**（滚动容器 / 内边距 / 光标 / 字号）写在 `MarkdownWysiwyg.tsx` 的 `EditorView.theme` 里。
+  ⚠️ 只写进 theme **还不够**：CM6 的基础样式（`.cm-content { padding: 4px 0 }`）与我们**同特异性**，于是"谁后注入谁赢"——实测它赢、按变体给的内边距全被盖掉。要抬一层：`"&.cm-editor .cm-content"`；变体值走组件内 CSS 变量（`--md-wysiwyg-pad`）。
 
-**编辑引擎 ≠ 渲染引擎**：`MarkdownView` 负责"把 Markdown 显示成排版"（只读投影，核心唯一的渲染器，主题不许另写）；`MarkdownWysiwyg` 负责"让你不看见语法符号地打字"（可写，是全仓库唯一 import `@codemirror/*` / `@lezer/*` 的地方）。两者之间只有磁盘上那一串 Markdown 文本，所以**记录用哪个编辑器敲的，磁盘格式、渲染器、主题都不知道**。
+**输入与渲染同源**：磁盘上那串 Markdown 就是文档本身，"排版"是装饰算出来的 —— 所以三种模式看的是**同一份数据**，不存在两份真相；记录是用哪种模式敲的，磁盘格式、渲染器、主题都不知道。
 
-四个坑（都写在代码注释里，也进了附录 B）：工具栏按钮要在 `onMouseDown` 里 `preventDefault`（否则手机键盘当场收起）；插入用 `setRangeText` 而不是自己拼字符串（自己拼会清掉浏览器撤销栈）；中文输入法 `composition` 期间不碰选区；**所见即所得编辑器只在"外部换了内容"时回灌**（用 ref 记住自己刚 `onChange` 出去的那份做比对）——每次渲染都 `replaceAll` 会跟打字打架，光标跳、输入法串断、撤销栈被清。
+⚠️ **`MarkdownField`（textarea + 工具栏）、`MarkdownView`（remark 渲染器）、`src/markdown/parse.ts`、`blocks.tsx`、`registry.ts` 已无人引用**（全量切到 CM6 后留下的旧件；`remark` / `unified` 那族因此不进包）。按 2026-09 的决定**暂时留档、不进包、不再维护** —— 新代码一律不要用它们；要加"自定义块"，扩展点在 `livePreview.ts` 的 widget / decoration。
 
-公开类名见 `docs/theme-contract.md` §2 的「Markdown 输入控件」「Markdown 所见即所得编辑器」「Markdown 正文」三行。
+坑（都写在代码注释里，也进了附录 B）：工具栏按钮要在 `onMouseDown` 里 `preventDefault`（否则点按钮时编辑器失焦、手机键盘当场收起）；**所见即所得编辑器只在"外部换了内容"时回灌**（用 ref 记住自己刚 `onChange` 出去的那份做比对）；**读态要显式告诉 livePreview"没有光标"**（否则选区停在 0，第一个块一直露 `#`），而且**重配（读态 ↔ 编辑态）也要重算装饰**；**自动保存的延迟必须大于编辑器的上报延迟**（600ms > 220ms），否则保存按钮会存到旧内容。
+
+公开类名见 `docs/theme-contract.md` §2 的「Markdown 编辑与渲染（全项目唯一的控件）」那一行。
 
 ## 5. 前后端契约（最重要的一节）
 
@@ -747,7 +797,7 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 **功能主题的「巧思」白名单**（只挂舞台容器）：图标、`--fv-scene-banner`、主题视图自己的排版。
 **不许**改底色 / 文字色 / 字号 / 间距 / 圆角尺度（那是“整个软件”的骨架），**不许**给外壳（标题栏 / 侧栏 / 设置窗口）着色。
 
-**优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪套预设：用户选过 > 主题的 `suggestedAppearance` 推荐 > 默认预设。认不出的预设 / 主题 → 回退默认，不白屏。
+**优先级链**：用户单值覆盖 > 预设 > `:root` 默认；选哪套预设**只由用户决定**（**用户选过 > 默认预设**）—— **场景不再推荐配色**（`suggestedAppearance` 已删，2026-09 拍板）。认不出的预设 → 回退默认，不白屏。默认预设是 **`preset.mono`「极简白」**（纯黑白灰）。
 
 **一句判定法**：换掉它，用户的**操作流程**会变吗？会 → 功能主题；只是“整个软件换个样子” → 外观主题。
 **第二条判定法**：这条样式会影响**别的区域**（标题栏 / 侧栏 / 设置窗口）吗？会 → 它属于外观，**不许**写在主题里。
@@ -865,29 +915,31 @@ macOS 靠它给红黄绿留位。所以规则是：**除真移动端（系统自
 
 | 命令 | 参数 | 返回 | 用途 |
 |---|---|---|---|
-| `set_entry_pinned` / `reorder_entries` | `id` / `…` | `Entry[]` | 记录级排序与置顶 |
+| `set_entry_pinned` | `id` / `pinned` | `Entry[]` | **记录级置顶**（拖动排序的 `reorder_entries` 已实现，见 §5.1；置顶目前只有文件夹级 `set_folder_pinned`） |
 | `sync_now` / `sync_status` | — | `SyncReport` / `SyncState` | 手动同步 / 查状态（M4） |
 
 **注意**：已经实现的命令请查 §5.1 全表——这里只列还没做的，避免两处各写一份、早晚不一致。
 
 ---
 
-### 13.6 媒体落点（本轮新增）
+### 13.6 媒体落点
 
 ```text
-<vault>/media/<media-id>/
-├── orig.jpg      原始文件本体，导入后**不可变**（PRD FV-SYN-003）
-└── meta.json     原名 / 扩展名 / MIME / 大小 / 宽高 / sha256 / entryId / addedAt / takenAt
+<vault>/<主题>/<文件夹>/<创建日 标题>/
+├── entry.json
+├── note.md
+└── 2026-09-23_论文笔记_01.jpg    媒体本体：**住在记录目录里**，导入时按模板命名
 ```
 
-四条规则：
+六条规则：
 
-1. **磁盘上叫 `orig.<ext>`，不用用户的原文件名**——导入路径与存储分离（PRD §6.1），躲开中文 / 空格 / 重名 / 大小写；原名只在 meta 里做展示；
-2. **换归属 = 改 meta 里的 `entryId`**，不搬动几 GB 的文件（和记录扁平化同一个理由）；导入时也是“先落盘、再挂到记录上”两步；
-3. **缩略图不进 Vault**：`%APPDATA%/com.framevault.app/thumbs/<vault-id>/<media-id>.jpg`，可随时重建（PRD FV-SYN-002）；
-4. **媒体进 WebView 的唯一通道是 asset 协议**：Cargo 开 `protocol-asset` + `tauri.conf.json` 开 `assetProtocol`，运行时只 `allow_directory` **当前 Vault 和它的缩略图缓存**——不用 `**` 把整台机器打开。前端一律走 `assetUrl()`（`api.ts` 里包着 `convertFileSrc`），绝不手拼路径。
+1. **媒体住在记录目录里**，文件名在导入那一刻按场景的命名模板生成**一次**（默认 `{date}_{scene}_{n}`，见 `naming::media_file_stem` + `unique_child_name` 撞名去重），之后**永不自动改**；用户手动改过的名字永久保留（和目录名同一套语义）；
+2. **媒体只有一个名字：`MediaMeta.file`**（磁盘上那个）—— 界面显示、排序、拼路径全用它（`MediaMeta::path_in`）。**导入前的原名不存**：导入那一刻它就被模板改掉了，留着只会让人以为文件还叫那个名字。**没有"无主媒体"**：归属就是"它在哪个记录目录里"；挪记录 = 连媒体一起搬目录（`move_entry_to_slot`），不再有"改一个 `entryId` 字段"这回事；
+3. **对账（用户直接在资源管理器里往记录目录丢照片）**：扫描时先按**文件名**排重再**收养**（`adopt_loose_files`，只记我们真知道的事实：文件名 / 大小 / 扩展名 / MIME——不算哈希、不解码尺寸），文件不在了就丢掉这条（`drop_missing_files`）；只在"真的变了"时写盘，而且只写 `entry.json`；
+4. **缩略图不进 Vault**：`%APPDATA%/com.framevault.app/thumbs/<vault-id>/<media-id>.jpg`，可随时重建（PRD FV-SYN-002）；
+5. **媒体进 WebView 的唯一通道是 asset 协议**：Cargo 开 `protocol-asset` + `tauri.conf.json` 开 `assetProtocol`，运行时只 `allow_directory` **当前 Vault 和它的缩略图缓存**——不用 `**` 把整台机器打开。前端一律走 `assetUrl()`（`api.ts` 里包着 `convertFileSrc`），绝不手拼路径。
 
-5. **拍摄时间要读 EXIF（`takenAt`）**：拍照那天才是打卡墙 / 日历该用的日期；读不到（截图、微信导出图都没有 EXIF）就退回 `addedAt`，**不许把导入日当成拍摄日**。
+6. **拍摄时间要读 EXIF（`takenAt`）**：拍照那天才是打卡墙 / 日历该用的日期；读不到（截图、微信导出图都没有 EXIF）就退回 `addedAt`，**不许把导入日当成拍摄日**。
 
 > 为什么缩略图放本机：它是**派生数据**。放进 Vault 只会让同步白搬几 GB，还会在每台设备上各自冲突；丢了在导入时重建即可。
 
@@ -922,17 +974,19 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 
 ---
 
-## 附录 A：当前已实现清单（更新于 2026-09-22）
+## 附录 A：当前已实现清单（更新于 2026-09-24）
 
-**Rust 外壳**：`main.rs`；`lib.rs`（插件注册、状态初始化、关主窗口即退出、29 条命令注册——含一个示例 `greet`）；`error.rs`（`AppError` / `AppResult`，命令里不手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
+**Rust 外壳**：`main.rs`；`lib.rs`（opener / dialog 插件注册、状态初始化、关主窗口即退出、**33 条命令**注册——另有一个脚手架残留的示例 `greet` 尚未清理）；`error.rs`（`AppError` / `AppResult`，中文文案在 `Display` 里统一，命令里不手写 `map_err`）；`state.rs`（仓库注册表 + `vaults.json` 持久化）。
 
-**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测）：`model.rs`（`Entry`：`folderId` / `scene` 快照 / `fields` 开放区 / `deletedAt` 墓碑，以及 `apply_update` / `mark_deleted` / `restore`）、`storage.rs`（tmp + rename 原子写入；列出时跳过坏数据；返回**含墓碑**的全部记录）、`folder.rs`（场景元数据 / 排序 / 删场景守卫只数活记录）、`scene.rs`（内置主题登记：普通日记、旅行、挑战）、`media.rs`（导入 / sha256 / 尺寸 / EXIF 拍摄时间 / 缩略图）、`id.rs`（UUIDv7）。
+**领域层**（`vault/`，**不认识 tauri**，`cargo test` 直接测，8 个文件）：`model.rs`（`SCHEMA_VERSION = 2` / `is_supported` / `Entry`：`folderId` / `scene` 快照 + `sceneVersion` / `fields` 开放区 / `order` / `deletedAt` 墓碑 / `note`（`#[serde(skip)]`））、`storage.rs`（路径约定 + 扫描对账 + tmp/rename 原子写 + 回收站 + `move_entry_to_slot` + `reorder_entries`）、`naming.rs`（**磁盘名字的唯一出口**：净化 / 目录名派生 / 媒体模板 / 撞名去重）、`folder.rs`（`FolderMeta` / 排序 / 置顶 / 删文件夹守卫）、`scene.rs`（内置**场景**登记：普通日记 / 旅行 / 挑战 / 写作台）、`media.rs`（导入 / sha256 / 尺寸 / EXIF 拍摄时间 / 缩略图 / `adopt_loose_files` 对账）、`id.rs`（UUIDv7）。
 
-**命令层**（`commands/`，薄适配器，29 条）：`vault.rs`（6）、`folder.rs`（8）、`entry.rs`（8，含 `delete_entry` / `restore_entry`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
+**命令层**（`commands/`，薄适配器，33 条）：`vault.rs`（6）、`folder.rs`（12，含主题的建 / 改名 / 删 4 条）、`entry.rs`（9，含 `delete_entry` / `restore_entry` / `reorder_entries` 与 `read_vault_meta`）、`media.rs`（2，导入是 `async`）、`window.rs`（4，全部 `async`）。命令层另外负责 `thumbs_dir` / `allow_vault_assets` 两个应用级副作用。
 
-**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `mediaFormat` / `MediaLightbox` / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 四个主题单元 `scenes/{plain,travel,challenge,writing}`）；`features/vault/*`；`features/settings/*`；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 + 跨窗口同步）；`skins.css`（四套外观预设，每套浅深齐全）；`src/markdown/` + `features/scene/markdown/`（Markdown 渲染 + 注册表 + 输入控件 `MarkdownField`）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`tokens.css` + `styles/{layers,reset}.css`。
+**前端**：`main.tsx`（按窗口 label 分派）；`App.tsx`（外壳：可拖动侧栏 + 场景树 + 场景舞台）；`app/*`（TitleBar / MobileShell（手机骨架：顶部场景切换 + 右侧设置齿轮 + **左右两页横滑主体**（左 = 设置、右 = 记录 / 照片 / 文件夹）+ 底部标签栏；仓库管理内嵌在设置里）/ 两个独立窗口外壳）；`features/scene/*`（场景树 / 宿主 / 注册表 / `useFolders` 归类 / **`useSceneData` 底层能力** / `manifest.ts` 声明契约 / `SceneFields` 声明→表单 / `SceneNotice` 可撤销提示 / `EntryMenu` 右键与长按菜单 / `mediaFormat` / `MediaLightbox` / `SceneMedia` 照片墙 / `SceneComposer` / `EntryTimeline` / `SceneIcon` / 四个主题单元 `scenes/{plain,travel,challenge,writing}`）；`features/vault/*`；`features/settings/*`（`SETTINGS_SECTIONS` 的「仓库」一栏就是 `VaultManagerPanel`）；`features/theme/*`（预设选择 `presets.ts` / `useAppearance.ts` + 实时覆盖 `useThemeOverrides` + 跨窗口同步 `themeSync`）；`skins.css`（**五套外观预设：极简白（默认）/ 暖纸 / 青碧 / 炭火 / 晴空**，每套浅深齐全）；`features/scene/markdown/`（**全项目唯一的 Markdown 编辑与渲染控件** `MarkdownWysiwyg.tsx` + `livePreview.ts`，CodeMirror 6，**按需加载**；`MarkdownField` / `MarkdownView` / `blocks` / `registry` 与 `src/markdown/parse.ts` 已是无人引用的旧件）；`lib/api.ts`（唯一 `invoke` / `listen` / `convertFileSrc` 出口）；`lib/platform.ts` + `lib/useCompact.ts`；`tokens.css` + `styles/{layers,reset,compact}.css`。
 
-**验证状态**：`cargo test` 27 passed；`cargo check` / `cargo build` 干净；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过（JS 约 294 KB / CSS 约 45 KB；gzip 后 90 KB / 7 KB）。
+**验证状态（2026-09-24 实测）**：`cargo test` **86 passed**（领域层 82 + `tests/layout_v2.rs` 端到端 4），0 failed；`cargo check` 干净（零警告）；`cargo build` 通过（只吐一条 MSVC linker 的 stdout 被当作 warning 的 `linker_messages` 噪声，非代码问题）；`pnpm exec tsc --noEmit` 干净；`pnpm build` 通过 —— 主包 **317.28 KB（gzip 96.26）**、CSS **57.45 KB（gzip 8.85）**，编辑器是**独立懒加载分块**（`MarkdownWysiwyg` 508.73 KB / gzip 176.90），不进首屏。
+
+**明确还没做的**（免得这份清单被读成"全做完了"）：**安卓端能跑但还不能用** —— 构建链已通（`gen/android` 已生成、debug 包出得来、MuMu 上跑得起来），但**SAF 还没接**，所以在安卓上建不了仓库（只能看空态）；真机（arm64）未验；系统相机（计划 S6）；同步（M4）；插件宿主与 Marketplace（M5）；搜索 / 日历 / 标签 UI；**记录级置顶**（只有文件夹级）；以及**按拍板推迟**的 SQLite 本地索引（PRD §12-20）。SAF 的分期与每期验证见 `docs/PROPOSAL_mobile_vault_saf_zh-CN.md`。
 
 ## 附录 B：已经踩过的坑（别重复踩）
 
@@ -984,3 +1038,6 @@ README 工程约定最后一条要求：**功能主题绑定、用户排序、�
 | 两套骨架各自 `useState` 存"当前选中的场景" | 跨过断点换骨架时组件重挂载，选择重置成第一个场景 | 共用状态挂在公共父节点（`App`）上，经 `SceneShellProps` 传下去；骨架里只留视图开关 |
 | 在跑着的 dev 实例里验证 `MarkdownWysiwyg` 的行为改动 | vite HMR 只热替换组件代码，而**编辑器实例只在挂载时创建一次**（`useEffect(…, [])` 里 `new EditorView`），已挂载的编辑器继续跑旧逻辑 —— 「提交了修复但还是坏的」多半是在旧实例里验的 | 整页刷新（Ctrl+R）或重启 `pnpm tauri dev` 后**真的敲一遍**。另外，字面粘贴过的老条目存盘时语法字符已被转义（`\>`、`\*\*`），重开看着仍像"没渲染"—— 那是坏数据不是复现，用**新建条目**验证 |
 | 想让场景内的面板（列表 / 照片 / 编辑器）各自独立滚动 | 给内层 `flex:1; min-height:0` 之后**整页还在滚** —— 断点在祖先：`.scene-host` 用 `min-height: 100%` 只是"最小高度"，内容一高容器跟着长，整条收缩链从它这里作废（2026-09 写作台实测：编辑器把 `.writing` 撑到 2000+px）；改成 `height: 100%` 后**又断了一次**——上方加了兄弟元素（视图标签行），100% + 标签行高度 = 依旧溢出；另外 grid 的 `1fr` 行默认是 `minmax(auto, 1fr)`，auto 下限会被列表的自然高度撑爆 | 锚点层**挂在 flex 链上**：父级（`.content`）改纵向 flex，锚点用 `flex: 1; min-height: 0` —— 上方加多少兄弟元素都严格吃剩余高度；中间每一环都显式写：grid 行 `minmax(0, 1fr)`、flex 子项 `min-height: 0`，一层都不能省；滚动容器照 §4.6 长写。怀疑哪层断了就临时给各层加彩色 `outline`，看谁的框跟着内容长 |
+| 在 `commands/window.rs` 里直接链 `.center()` / `.closable()` / `.decorations()` | Windows / macOS 编得过，**Android 编译不过**：`no method named center found for struct WebviewWindowBuilder`。这三个方法在 tauri 里挂在 `#[cfg(desktop)]` 的 impl 块上（`tauri/src/webview/webview_window.rs` 456 / 521 / 550 行），移动端没有。**rustc 每次只报一条**：修掉 `center` 才轮到 `closable`，再修才轮到 `decorations` —— 一个一个试很费时间 | 三个一起 gate：`#[cfg(desktop)] let builder = builder.center().closable(true);`、自绘标题栏那条用 `#[cfg(all(desktop, not(target_os = "macos")))]`。`set_focus` / `close` 是跨平台的（2260 / 2217 行）不用动。要一次看全哪些方法是桌面专属：`grep -n "cfg(desktop)" tauri/src/webview/webview_window.rs` 找 impl 块边界，或直接读 §2 允许写平台分支的那两处 |
+| Windows 上跑 `tauri android build` / `dev`，卡在 "Failed to create a symbolic link" | `Creation symbolic link is not allowed for this system.` Tauri 把编好的 `libframevault_lib.so`（debug 下 174 MB）**软链接**进 `gen/android/app/src/main/jniLibs/<abi>/`，Windows 默认只允许管理员创建符号链接。**坑在于死得很晚**：两个 target 都 `Finished` 之后才在这一步失败，看起来像"代码编译不过"，极易误判 | 开**开发者模式**（设置 → 系统 → 开发者选项 → 开发人员模式），或者用**管理员终端**跑这一条命令。**开发者模式不是立刻生效**：这条权限在登录组装进程令牌时授予，开关之前就存在的会话拿不到（`whoami /priv` 里看不到 `SeCreateSymbolicLinkPrivilege`），需要注销重登/重启。CLI 没有"改成复制"的开关，gradle 里的 `BuildTask.kt` 也会回调 `pnpm tauri android android-studio-script`（同一条 CLI 代码路径），所以绕不开 |
+| 以为 `tauri android build` 只做本地编译，卡到就查代码 | `Downloading https://services.gradle.org/distributions/gradle-8.14.3-bin.zip failed: timeout` —— Gradle wrapper 要先下自己的发行包（131 MB，解压 277 MB），国内直连该域名基本必超时；报错还是 Java 栈（`org.gradle.wrapper.Download` → `SocketTimeoutException`），容易被误读成构建脚本的问题 | 把 `gen/android/gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl` 换成腾讯云镜像 `mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip`（**版本号必须与原值一致**；阿里云没有 gradle 镜像，实测 404）。**`gen/android` 是生成目录，重跑 `tauri android init` 会冲掉这行**。Maven 仓库不用动：`dl.google.com` / Maven Central 实测都通（0.17s / 1.06s）|

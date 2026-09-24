@@ -93,11 +93,14 @@
 | 对比度 | 正文 `--fv-color-text` ≥ 4.5:1，次要文字 `--fv-color-muted` ≥ 3:1（同第 1 节规则 0） |
 | id 命名空间 | 内置 `preset.*`；第三方 `vendor.*`（M3 之后再放开） |
 | 认不出来 | 回退默认预设，**不白屏、不报错打断** |
-| 优先级 | 用户在设置里的**单值覆盖 > 预设 > `:root` 默认**；选哪套预设：**用户选过 > 当前主题的 `suggestedAppearance` 推荐 > 默认预设** |
+| 优先级 | 用户在设置里的**单值覆盖 > 预设 > `:root` 默认**；选哪套预设**只由用户决定**：**用户选过 > 默认预设** |
 
-功能主题可以在 `manifest.presentation.suggestedAppearance` 里**推荐**一套预设（纯数据），但**不能强制**。
+**场景不参与配色**（2026-09 拍板，`manifest.presentation.suggestedAppearance` 已删）：场景只决定怎么排版，
+配色归用户。所以设置里那个下拉只有"选一套"，没有"跟随主题/场景"这一项。
 
-内置四套（id / 名字 / 代码落点三处一致）：`preset.paper` 暖纸、`preset.tide` 青碧、`preset.ember` 炭火、`preset.azure` 晴空（Obsidian 默认 / Things 那种干净的蓝）—— 值写在 `src/skins.css`，列表写在 `features/theme/presets.ts`。
+内置五套（id / 名字 / 代码落点三处一致）：**`preset.mono` 极简白（默认）**、`preset.paper` 暖纸、`preset.tide` 青碧、`preset.ember` 炭火、`preset.azure` 晴空（Obsidian 默认 / Things 那种干净的蓝）—— 值写在 `src/skins.css`，列表写在 `features/theme/presets.ts`。
+
+「极简白」的取法值得记一句：**纯黑白灰、一点彩色都没有**（按钮/选中/链接全是黑白反转），而且灰都比"直觉值"**提亮一档、带一丝冷调**——纯中性灰挨着纯白底会显脏。
 
 ## 2. 公开 selector 表（承诺稳定的类名）
 
@@ -121,10 +124,8 @@
 | 仓库切换菜单 | `.vault-switcher`、`.vault-switcher__button`、`.vault-switcher__name`、`.vault-switcher__menu`、`.vault-switcher__item`、`.vault-switcher__path`、`.vault-switcher__sep` |
 | 设置界面 | `.settings`、`.settings__nav`、`.settings__search`、`.settings__nav-item`、`.settings__nav-icon`、`.settings__nav-label`、`.settings__content`、`.settings__title`、`.settings__group-title`、`.settings__card`、`.settings__row`、`.settings__text`、`.settings__label`、`.settings__desc`、`.settings__badge`、`.settings__action`、`.settings__status` |
 | 管理仓库 | `.manager__head`、`.manager__head-actions`、`.manager__hint`、`.manager__list`、`.manager__info`、`.manager__actions`、`.manager__empty`、`.manager__status` |
-| Markdown 输入控件 | `.md-field`、`.md-field__head`、`.md-field__bar`、`.md-field__btn`、`.md-field__modes`、`.md-field__mode`、`.md-field__input`、`.md-field__preview`、`.md-field__empty` |
+| Markdown 编辑与渲染（**全项目唯一的控件**） | 承诺 `.md-wysiwyg` 与它的两个**形态修饰**：`.md-wysiwyg.is-inline`（时间线/表单里的小块：跟着内容长、不内部滚动）、`.md-wysiwyg.is-editing`（编辑态才亮边框与底色；读态是"排好版的文字"，不该给每条记录套方框）。**内部类名不算承诺**：`CodeMirror` 自己的 `.cm-editor` / `.cm-content` / `.cm-line` 等跟着它的版本走，本仓库自己挂的装饰类名 `.cm-fv-*`、以及工具条那几个（`.md-wysiwyg__bar` / `__tools` / `__btn` / `__mode`）都属于实现细节，会跟着一起调 |
 | 主题的 manifest 声明（`FieldDecl.note` / `SceneManifest.mediaNameTemplate`） | **承诺语义，不承诺字段名之外的形状**：`note: true` 的多行字段 = 这条记录的正文（落磁盘上的 `note.md`，不进 `entry.json`），一个主题最多一个；`mediaNameTemplate` = 媒体导入时的命名模板（纯数据，可用 `{date}` / `{scene}` / `{title}` / `{field:<key>}` / `{n}`），不声明就走核心默认 `{date}_{scene}_{n}`。两者都由核心渲染 / 执行，主题不写实现 |
-| Markdown 所见即所得编辑器 | `.md-wysiwyg`（**内部类名不算承诺**：`CodeMirror` 自己的 `.cm-editor` / `.cm-content` / `.cm-line` 等跟着它的版本走，本仓库自己挂的装饰类名 `.cm-fv-*` 也属于实现细节，会跟排版一起调） |
-| Markdown 正文 | `.md`、`.md__h` 与 `.md__h--1`…`.md__h--6`、`.md__p`、`.md__quote`、`.md__list`、`.md__list--ordered`、`.md__item`、`.md__item--task`、`.md__item-body`、`.md__check`、`.md__pre`、`.md__code`、`.md__inline-code`、`.md__strong`、`.md__em`、`.md__del`、`.md__hr`、`.md__link`、`.md__link-blocked`、`.md__table-wrap`、`.md__table`、`.md__cell`、`.md__cell--head`、`.md__cell--center`、`.md__cell--right`、`.md__notice` |
 
 **没写进上表的都不承诺。** 尤其是网格的**列宽数值**（`.entry__media` / `.wall` / `.photo-grid` 用的 `minmax(最小, 上限)`）属于实现细节：
 它跟着「拖窗口别抖」这个目标调过几轮，以后还会调。主题要改网格密度就自己写 `grid-template-columns`，

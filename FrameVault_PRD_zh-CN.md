@@ -481,11 +481,17 @@ MyVault/
 
 ### M2：Android 核心体验
 
-> **当前进度（2026-09）**：**界面适配已开始，构建链未接**。已完成手机骨架（顶部场景切换 + 底部标签栏）与窄屏横切调整；
-> Android 的构建环境（JDK 17 / Android SDK / NDK / Rust 交叉目标）与真机验证尚未做，本节其余条目均未开工。
+> **当前进度（2026-09-24）**：**构建链已打通，界面适配已开始**。已完成手机骨架（顶部场景切换 + 底部标签栏）与窄屏横切调整；
+> **构建环境齐备且出过包**：JDK 17 / Android SDK（compileSdk 36）/ NDK 29 / 四个 Rust 交叉目标，
+> `pnpm tauri android build --debug --apk` 已成功，并装在 MuMu（x86_64 / Android 12）上跑通（骨架与标签栏正常、logcat 无崩溃）。
+> **真机（arm64）尚未验证**；本节其余条目仍未开工 —— 尤其下一条：dialog 插件在 Android 上**没有"选目录"能力**，
+> 所以现在**建不了仓库**（跑起来只能停在空态）。
 > 图片 / 网格尺寸也仍是桌面那一套 `minmax` 数值，尚未按手机单独调（见 §12 第 17 条）。
+> **「Android Vault 访问」的设计已定稿（2026-09-23 用户拍板：像 Obsidian 一样选目录）**：走系统 SAF ——
+> Kotlin 桥 + Rust StorageProvider 抽象，用户选的目录就是 Vault。设计见
+> [docs/PROPOSAL_mobile_vault_saf_zh-CN.md](./docs/PROPOSAL_mobile_vault_saf_zh-CN.md)，前置依赖安卓构建环境。
 
-- Android Vault 访问；
+- Android Vault 访问（SAF 方案已定稿，见上）；
 - 系统相机拍照/录像；
 - 当前 Entry 自动归档；
 - Android 生命周期恢复；
@@ -595,7 +601,7 @@ MyVault/
 10. 左侧展开文件夹是否直接列出 Entry，还是在右侧显示记录列表；
 11. 图库聚合整个文件夹还是当前 Entry 的媒体，以及阅读模式的记录选择流程；**（v1 已定：图库 = 当前文件夹/场景的照片墙，桌面与手机同款 `SceneMedia`；全仓库聚合待后续需要时再定）**
 12. ~~嵌套文件夹的主题继承/覆盖~~（已定案：仓库层面扁平，不做嵌套继承）、~~已有文件夹更换主题~~（已定案：记录写入时快照主题，换主题不影响老记录的解读）、跨主题移动记录的兼容规则；
-13. ~~物理文件夹与 Entry 存储目录的映射、文件夹元数据结构~~（已定案：`folders/<id>/folder.json`、`entries/<id>/entry.json`、`media/<id>/{orig.<ext>, meta.json}`，仓库层面扁平，见 ARCHITECTURE_IMPL §13）；旧布局迁移方式；
+13. ~~物理文件夹与 Entry 存储目录的映射、文件夹元数据结构~~（**已定案、并被存储 v2 取代**：原方案是 `folders/<id>/folder.json`、`entries/<id>/entry.json`、`media/<id>/{orig.<ext>, meta.json}` 那套扁平布局；2026-09-23 起改为「主题 > 文件夹 > 记录」的人可读层级 —— `folder.json` 就在文件夹目录里、正文落记录目录里的 `note.md`、媒体也住进记录目录并按模板命名，见 [PROPOSAL_storage_v2](./docs/PROPOSAL_storage_v2_zh-CN.md) 与 ARCHITECTURE_IMPL §13）；旧布局迁移方式（v2 已拍板**不做迁移**，老仓库直接给中文错误）；
 14. 同级混排、置顶区域及其内部顺序、跨文件夹拖动的交互规则；
 15. 功能主题插件的 UI 接管范围、接口形式，以及插件缺失时的通用浏览回退；
 16. ~~打卡与连续天数的判定~~（已定案：一个自然日有 ≥1 条记录即打卡，日期取 EXIF 拍摄日、否则记录时间，按本机时区算自然日；最后打卡日是今天或昨天才算连续未断，**今天没打不算断**；只统计、不清零）；违规判定、进度清零与轮次重启、补记 / 纠错、历史尝试保留策略仍待定。

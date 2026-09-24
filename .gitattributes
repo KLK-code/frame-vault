@@ -1,6 +1,10 @@
 # 统一换行：仓库里一律存 LF，Windows 上也不会因编辑器差异产生整文件 diff
 * text=auto eol=lf
 
+# 例外：Windows 批处理。cmd.exe 对 LF-only 的 .bat 不稳（`goto` / 标签），
+# 而 `gen/android/gradlew.bat` 是安卓构建的入口 —— 重新 checkout 时必须还是 CRLF。
+*.bat text eol=crlf
+
 # 明确标记二进制，避免误转换
 *.png binary
 *.ico binary

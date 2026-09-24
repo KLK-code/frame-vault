@@ -268,14 +268,22 @@ frame-vault/
 
 ### 7.1 推荐目录
 
-**目录规范已冻结（2026-04）**，实际实现见 ARCHITECTURE_IMPL §13.2 / §13.6：
+**本节已按存储规范 v2 修订（2026-09-23）**：早期"扁平 `entries/` + 全局 `media/<id>/orig.<ext>`"的目录规范**已作废**，
+v2 是"主题 > 文件夹 > 记录"的人可读层级。权威描述见
+[docs/PROPOSAL_storage_v2_zh-CN.md](./docs/PROPOSAL_storage_v2_zh-CN.md)，路径与字段细节见 ARCHITECTURE_IMPL §13.2 / §13.6：
 
 ```text
-<用户选的目录>/
-├── vault.json                        身份文件（有它才算 Vault）
-├── entries/<entry-id>/entry.json     记录本体（扁平，归属靠 folderId）
-├── folders/<folder-id>/folder.json   场景元数据（扁平，没有父子关系）
-└── media/<media-id>/                 媒体（orig.<ext> + meta.json，导入后不可变）
+<用户选的目录>/                        Vault：一个目录 = 一个仓库
+├── vault.json                         身份文件（有它才算 Vault；layout: 2）
+├── .framevault/trash/<原目录名>/       删掉的记录挪这儿（撤销 = 挪回原文件夹）
+├── 科研/                              **主题**：一级目录 + 没有 folder.json（用户自己分的组）
+│   └── 论文笔记/                       文件夹：folder.json 绑一个**场景**（怎么记）
+│       └── 2026-09-23 周报/            记录：创建日 + 标题
+│           ├── entry.json
+│           ├── note.md               正文（唯一真相）
+│           └── 2026-09-23_论文笔记_01.jpg
+├── 晨跑打卡/                          文件夹也可以直接摆根下 = 没有主题
+└── 未归类/                            没有文件夹的记录（默认容器）
 
 %APPDATA%/com.framevault.app/         可重建缓存，**不进同步**
 ├── vaults.json                       已知仓库列表 + 当前仓库
@@ -347,7 +355,8 @@ MyVault/
 ### 7.5 文件夹组织与功能主题元数据（**已实现，字段名已冻结**）
 
 文件夹、功能主题和排序置顶的持久化数据采用版本化 JSON 开放格式，**不只保存于 React 内存、浏览器本地存储或 SQLite**。
-实际落点是 `folders/<id>/folder.json`，字段名已冻结如下（见 ARCHITECTURE_IMPL §13.2）：
+实际落点是**文件夹自己的目录里**那份 `folder.json`（v2 之前是 `folders/<id>/folder.json`；现在目录名就是文件夹名，
+`id` 在文件里，见 AGENTS §3.1），字段名已冻结如下（见 ARCHITECTURE_IMPL §13.2）：
 
 | 字段 | 作用 |
 |---|---|

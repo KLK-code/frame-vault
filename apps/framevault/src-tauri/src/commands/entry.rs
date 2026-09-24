@@ -42,7 +42,7 @@ impl From<Entry> for EntryView {
 }
 
 /// 新建记录时要的 id，由 Rust 统一发放（UUID v7：按时间单调递增，天然适合排序）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn new_id() -> String {
     vault::new_id()
 }
@@ -55,7 +55,7 @@ pub fn new_id() -> String {
 /// - `day`：**创建日的本地日期**（`YYYY-MM-DD`），前端给。Rust 不带时钟，
 ///   没有它就算不出目录名；留空时退回从 `createdAt` 里取日期部分。
 /// - `note`：正文。给了就写进 `note.md`，不给则保持原样（新建时为空）。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_entry(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -125,7 +125,7 @@ pub fn save_entry(
 ///
 /// `fields` 是**整体替换**（不是深合并）：主题自己负责把旧值一起传上来。
 /// `note` 给了就写 `note.md`，没给就不动它。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_entry(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -172,14 +172,14 @@ pub fn delete_entry(
 }
 
 /// 撤销删除：把目录挪回原场景（原场景没了就回「未归类」），清掉墓碑
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_entry(state: State<'_, AppState>, app: tauri::AppHandle, id: String, now: String) -> AppResult<EntryView> {
     let vault = active_vault(&state, &app)?;
     vault::restore_entry(&vault, &id, &now)?;
     Ok(vault::read_entry(&vault, &id)?.into())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn load_entry(state: State<'_, AppState>, app: tauri::AppHandle, id: String) -> AppResult<EntryView> {
     let vault = active_vault(&state, &app)?;
     Ok(vault::read_entry(&vault, &id)?.into())
@@ -188,7 +188,7 @@ pub fn load_entry(state: State<'_, AppState>, app: tauri::AppHandle, id: String)
 /// 列出记录。`folder_id` 给 `None` = 全部；给字符串 = 只列这个场景里的。
 ///
 /// **墓碑默认不出现**（它们是"已删除"，躺在回收站里），要看得显式传 `include_deleted`。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_entries(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -198,8 +198,16 @@ pub fn list_entries(
     let vault = active_vault(&state, &app)?;
     let keep_deleted = include_deleted.unwrap_or(false);
 
-    Ok(vault::list_entries(&vault)?
+    // 只要活记录时不去读回收站（省一趟扫描）；要撤销视图时才整仓扫
+    let rows = if keep_deleted {
+        vault::list_entries_with_dirs(&vault, true)?
+    } else {
+        vault::list_live_entries_with_dirs(&vault, true)?
+    };
+
+    Ok(rows
         .into_iter()
+        .map(|(entry, _)| entry)
         .filter(|e| keep_deleted || !e.is_deleted())
         .filter(|e| match folder_id.as_deref() {
             Some(fid) => e.folder_id.as_deref() == Some(fid),
@@ -211,7 +219,7 @@ pub fn list_entries(
 
 /// 手动排序：前端把当前场景的记录 id 按**新顺序**整表发来。
 /// 只认活着的记录；没发到的保持原样。返回该场景的全量记录（对齐「关系型改动返回全量」）。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reorder_entries(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -233,7 +241,7 @@ pub fn reorder_entries(
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_vault_meta(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResult<VaultMetaInfo> {
     let vault = active_vault(&state, &app)?;
     let meta = vault::read_vault_meta(&vault)?;

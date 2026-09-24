@@ -163,8 +163,11 @@ export function useSceneData(folder: FolderNode): SceneData {
     ) => {
       setBusy(entry.id);
       try {
-        await updateEntry(entry.id, patch);
-        await reload();
+        const updated = await updateEntry(entry.id, patch);
+        // **不重扫整个仓库**：写回来的那条就是权威形状，直接替换列表里的它。
+        // 这条很要紧 —— 编辑器打字停顿 600ms 就自动存一次，每次重扫在安卓 SAF 上
+        // 是几十次跨进程查询（桌面感觉不到，手机上就是"打字卡"）。
+        setEntries((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
         return true;
       } catch (err) {
         setError(String(err));

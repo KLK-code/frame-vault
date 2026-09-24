@@ -74,6 +74,22 @@ class SafSourceArgs {
 class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   private val resolver: ContentResolver get() = activity.contentResolver
 
+  /**
+   * "一次列目录过程内"的路径 → 文档 id 缓存。
+   *
+   * 安卓上解析一段路径就是一次跨进程查询，而一次扫描里同一个目录会被反复解析
+   * （判存在 → 读 `entry.json` → 读 `note.md`…），一条记录就能多出十几次查询 ——
+   * 界面卡顿的主要来源就在这里。
+   *
+   * **生命周期刻意很短**：每次 `list` 与任何写操作都清空。所以"用户在文件管理器里
+   * 改了名字、刷新一下就该看见"这条规矩不受影响（跨刷新的陈旧缓存正是它会破坏的东西）。
+   */
+  private val docCache = HashMap<String, String>()
+
+  private fun forgetPaths() {
+    docCache.clear()
+  }
+
   // ── 选目录（唯一一个要弹系统界面的命令）──
 
   @Command
@@ -139,6 +155,8 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun list(invoke: Invoke) {
     try {
+      // 刷新就是"重新看磁盘"：把上一次扫描攒下的路径缓存丢掉
+      forgetPaths()
       val args = invoke.parseArgs(SafPathArgs::class.java)
       val root = Uri.parse(args.root)
       val parentId = docIdOf(root, args.path) ?: throw IOException("目录不存在：${args.path}")
@@ -205,6 +223,7 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun writeText(invoke: Invoke) {
     try {
+      forgetPaths()
       val args = invoke.parseArgs(SafWriteTextArgs::class.java)
       writeFile(Uri.parse(args.root), args.path, args.text.toByteArray(Charsets.UTF_8))
       invoke.resolve(JSObject())
@@ -216,6 +235,7 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun writeBytes(invoke: Invoke) {
     try {
+      forgetPaths()
       val args = invoke.parseArgs(SafWriteBytesArgs::class.java)
       val bytes = Base64.decode(args.base64, Base64.DEFAULT)
       writeFile(Uri.parse(args.root), args.path, bytes)
@@ -228,6 +248,7 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun mkdir(invoke: Invoke) {
     try {
+      forgetPaths()
       val args = invoke.parseArgs(SafPathArgs::class.java)
       ensureDir(Uri.parse(args.root), args.path)
       invoke.resolve(JSObject())
@@ -239,6 +260,7 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun delete(invoke: Invoke) {
     try {
+      forgetPaths()
       val args = invoke.parseArgs(SafPathArgs::class.java)
       val root = Uri.parse(args.root)
       val docId = docIdOf(root, args.path)
@@ -254,6 +276,7 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun renameOrMove(invoke: Invoke) {
     try {
+      forgetPaths()
       val args = invoke.parseArgs(SafRenameArgs::class.java)
       val root = Uri.parse(args.root)
       val fromParent = parentOf(args.from)
@@ -340,6 +363,7 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun copyIn(invoke: Invoke) {
     try {
+      forgetPaths()
       val args = invoke.parseArgs(SafSourceArgs::class.java)
       val root = Uri.parse(args.root)
       val source = Uri.parse(args.uri)
@@ -529,13 +553,21 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
-  /** 树里的相对路径 → 文档 id（一段一段按名字走下去） */
+  /** 树里的相对路径 → 文档 id（一段一段按名字走下去；同一次扫描内走缓存） */
   private fun docIdOf(root: Uri, path: String): String? {
+    val key = "$root|$path"
+    docCache[key]?.let { return it }
+
     var current = DocumentsContract.getTreeDocumentId(root)
+    var walked = ""
     for (segment in path.split("/")) {
       if (segment.isEmpty()) continue
+      walked = if (walked.isEmpty()) segment else "$walked/$segment"
       current = childDocId(root, current, segment) ?: return null
+      // 走过的每一段都记下来：一次扫描里后面的调用直接就命中
+      docCache["$root|$walked"] = current
     }
+    docCache[key] = current
     return current
   }
 

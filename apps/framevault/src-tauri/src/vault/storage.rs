@@ -445,6 +445,12 @@ pub fn entry_slot(vault: impl AsVault, folder_id: Option<&str>) -> AppResult<Pat
 /// 对账就是"磁盘为准"：用户往记录目录里丢的照片被收养进 `media[]`，
 /// 被删掉的照片从 `media[]` 里剔除。两件事都不摧毁任何文件。
 fn load_entry_dir(vault: &Vault, dir: &Path) -> Option<Entry> {
+    load_entry_dir_opts(vault, dir, true)
+}
+
+/// `with_note = false` 时**不读 `note.md`**（省一次读）—— 只给只读场景用：
+/// 拿这种 Entry 去写回会把正文清空（`write_entry` 写的就是 `entry.note`）。
+fn load_entry_dir_opts(vault: &Vault, dir: &Path, with_note: bool) -> Option<Entry> {
     let file = entry_json_path(dir);
     if !vault.is_file(&file) {
         return None;
@@ -458,7 +464,9 @@ fn load_entry_dir(vault: &Vault, dir: &Path) -> Option<Entry> {
         }
     };
 
-    entry.note = read_text_in(vault, &note_path(dir));
+    if with_note {
+        entry.note = read_text_in(vault, &note_path(dir));
+    }
 
     let mut media = std::mem::take(&mut entry.media);
     // **对账只在"目录真的在、也列得出来"时做**：SAF 下落目录会失败，
@@ -684,20 +692,67 @@ fn sort_entries(out: &mut [Entry]) {
 /// 扫描 Vault 下所有记录（含回收站里的 —— 它们的 `deletedAt` 有值）。
 /// 原则：**一条坏数据不该毁掉整次扫描** —— 单独跳过并打日志。
 pub fn list_entries(vault: impl AsVault) -> AppResult<Vec<Entry>> {
-    let vault = vault.as_vault();
-    let mut out: Vec<Entry> = list_entry_dirs(&vault)
+    Ok(list_entries_with_dirs(vault, true)?
         .into_iter()
-        .filter_map(|dir| load_entry_dir(&vault, &dir))
+        .map(|(entry, _)| entry)
+        .collect())
+}
+
+/// 扫一遍仓库，把**每条记录和它所在的目录**一起给出（含回收站里的）。
+///
+/// 为什么要连目录一起给：安卓上"按 id 找目录"（`find_entry_dir`）是**又一遍全仓扫描**，
+/// 每次跨进程查询都要钱。调用方本来就要遍历一遍，顺手带走目录就省掉一整轮。
+///
+/// `with_note = false` 时不读 `note.md`（媒体列表只需要 id / `media[]`）。
+/// **只读场景才能这么用** —— 拿没读正文的 Entry 去写回会把 `note.md` 清空。
+pub fn list_entries_with_dirs(
+    vault: impl AsVault,
+    with_note: bool,
+) -> AppResult<Vec<(Entry, PathBuf)>> {
+    list_entries_impl(vault, with_note, true)
+}
+
+/// 只扫**活着的**记录（不读回收站那一趟）。
+///
+/// 命令层不需要"撤销 / 回收站视图"时用它 —— 回收站在 `.framevault/trash` 下，
+/// 读它意味着把删掉的记录也逐个读一遍；安卓上那是实打实的跨进程查询。
+pub fn list_live_entries_with_dirs(
+    vault: impl AsVault,
+    with_note: bool,
+) -> AppResult<Vec<(Entry, PathBuf)>> {
+    list_entries_impl(vault, with_note, false)
+}
+
+fn list_entries_impl(
+    vault: impl AsVault,
+    with_note: bool,
+    with_trash: bool,
+) -> AppResult<Vec<(Entry, PathBuf)>> {
+    let vault = vault.as_vault();
+    let mut out: Vec<(Entry, PathBuf)> = list_entry_dirs(&vault)
+        .into_iter()
+        .filter_map(|dir| {
+            load_entry_dir_opts(&vault, &dir, with_note).map(|entry| (entry, dir))
+        })
         .collect();
 
     // 回收站里的也读出来：撤销 / 回收站视图都要用（命令层按 deletedAt 过滤）
-    for dir in list_trash_dirs(&vault) {
-        if let Some(entry) = load_entry_dir(&vault, &dir) {
-            out.push(entry);
+    if with_trash {
+        for dir in list_trash_dirs(&vault) {
+            if let Some(entry) = load_entry_dir_opts(&vault, &dir, with_note) {
+                out.push((entry, dir));
+            }
         }
     }
 
-    sort_entries(&mut out); // 手动块在前，其余新的在前
+    out.sort_by(|(a, _), (b, _)| {
+        match (a.order, b.order) {
+            (Some(x), Some(y)) => x.cmp(&y).then_with(|| b.created_at.cmp(&a.created_at)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => b.created_at.cmp(&a.created_at),
+        }
+    });
     Ok(out)
 }
 

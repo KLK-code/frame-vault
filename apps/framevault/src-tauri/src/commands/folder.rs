@@ -61,7 +61,7 @@ fn to_nodes(vault: &Vault) -> AppResult<Vec<FolderNode>> {
 }
 
 /// 文件夹列表（已排序：置顶 → order → 名称）。每项都带着它所在的**主题**。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_folder_tree(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResult<Vec<FolderNode>> {
     let vault = active_vault(&state, &app)?;
     to_nodes(&vault)
@@ -71,7 +71,7 @@ pub fn list_folder_tree(state: State<'_, AppState>, app: tauri::AppHandle) -> Ap
 ///
 /// `topic`：`Some("科研")` = 建在那个主题目录里；`None` = 直接建在仓库根下（**没有主题**）。
 /// 主题不存在会报错（前端应当先 `create_topic_cmd`）—— 不悄悄替用户建目录。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_folder(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -103,7 +103,7 @@ pub fn create_folder(
     to_nodes(&vault)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_folder(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -125,7 +125,7 @@ pub fn rename_folder(
 }
 
 /// 给场景换主题（`None` = 退回内置普通记录）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn bind_folder_scene(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -151,7 +151,7 @@ pub fn bind_folder_scene(
     to_nodes(&vault)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_folder_pinned(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -168,7 +168,7 @@ pub fn set_folder_pinned(
 
 /// 按前端给的顺序重排（写回 `order`）。
 /// 只认仓库里真实存在的 id，顺序外的场景保持原位。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reorder_folders(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -190,7 +190,7 @@ pub fn reorder_folders(
 
 /// 删除场景。**里面还有记录时会拒绝**——宁可让用户先处理，
 /// 也不要出现"场景没了、记录变成孤儿"的情况。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_folder(state: State<'_, AppState>, app: tauri::AppHandle, id: String) -> AppResult<Vec<FolderNode>> {
     let vault = active_vault(&state, &app)?;
     // "非空拒绝"是业务规则，在领域层；这里只转发（返回全量列表）
@@ -200,14 +200,14 @@ pub fn delete_folder(state: State<'_, AppState>, app: tauri::AppHandle, id: Stri
 
 /// 可用的**场景**（记录方式）清单：随心记 / 认真写作 / 拍照打卡…
 /// 场景是代码（决定界面与录入怎么特化），所以清单来自内置注册表。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_scenes() -> Vec<SceneInfo> {
     vault::builtin_scenes()
 }
 
 /// **主题**清单：根下那些不带 `folder.json` 的一级目录（用户自己分的组）。
 /// 空主题（里面还没放文件夹）也要列出来，否则用户建完看不见它。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_topics(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResult<Vec<String>> {
     let vault = active_vault(&state, &app)?;
     Ok(vault::topic_dirs(&vault)
@@ -217,7 +217,7 @@ pub fn list_topics(state: State<'_, AppState>, app: tauri::AppHandle) -> AppResu
 }
 
 /// 新建主题 = 建一个目录（**不写任何文件**：主题没有字段，位置就是它自己）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_topic(state: State<'_, AppState>, app: tauri::AppHandle, name: String) -> AppResult<Vec<String>> {
     let vault = active_vault(&state, &app)?;
     vault_create_topic(&vault, &name)?;
@@ -225,7 +225,7 @@ pub fn create_topic(state: State<'_, AppState>, app: tauri::AppHandle, name: Str
 }
 
 /// 主题改名 = 改目录名（里面的文件夹跟着换主题，因为它们的位置变了）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_topic(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
@@ -238,7 +238,7 @@ pub fn rename_topic(
 }
 
 /// 删除主题：**里面还有东西就拒绝**（跟删文件夹同一条规矩）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_topic(state: State<'_, AppState>, app: tauri::AppHandle, name: String) -> AppResult<Vec<String>> {
     let vault = active_vault(&state, &app)?;
     vault_delete_topic(&vault, &name)?;

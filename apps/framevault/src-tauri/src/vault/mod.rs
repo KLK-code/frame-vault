@@ -34,7 +34,7 @@ pub use store::{DirEntry, MemStore, NativeFs, Vault, VaultStore};
 pub use storage::{
     create_entry, create_vault, ensure_uncategorized, entry_dirs_in, entry_json_path, entry_slot,
     find_entry_dir, find_folder_dir, folder_dirs, folder_json_path, internal_dir, is_vault,
-    list_entries, list_trash_dirs, move_entry_to_slot, reorder_entries, note_path, read_entry, read_entry_from,
+    list_entries, list_entries_with_dirs, list_live_entries_with_dirs, list_trash_dirs, move_entry_to_slot, reorder_entries, note_path, read_entry, read_entry_from,
     read_text, read_vault_meta, rename_topic, restore_entry, root_dirs, topic_dir, topic_dirs,
     trash_entry, trash_entry_path, vault_meta_path, write_entry, write_entry_in,
     write_json_atomic, write_text_atomic,

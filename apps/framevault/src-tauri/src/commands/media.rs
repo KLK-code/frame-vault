@@ -41,8 +41,8 @@ pub struct MediaItem {
 }
 
 fn to_item(
-    app: &AppHandle,
     vault: &Vault,
+    thumbs: Option<&std::path::Path>,
     entry_dir: &std::path::Path,
     entry_id: &str,
     meta: MediaMeta,
@@ -58,8 +58,7 @@ fn to_item(
     } else {
         Some(crate::vaultfs::url_for(vault, &meta.path_in(entry_dir)))
     };
-    let thumb_path = thumbs_dir(app, vault)
-        .ok()
+    let thumb_path = thumbs
         .map(|dir| dir.join(format!("{}.jpg", meta.id)))
         .filter(|path| path.is_file())
         .map(|path| path.display().to_string());
@@ -147,6 +146,8 @@ pub fn import_media(
     vault::write_entry_in(&vault, &entry, &entry_dir, Some(&previous))?;
 
     allow_vault_assets(&app, &vault);
+    // 缩略图目录**一次调用只算一次**（算它要读一遍 vault.json）
+    let thumbs = thumbs_dir(&app, &vault).ok();
     println!(
         "[rust] import_media: {} → {}（{}）",
         source.display(),
@@ -154,14 +155,14 @@ pub fn import_media(
         entry.title
     );
 
-    Ok(to_item(&app, &vault, &entry_dir, &entry_id, meta))
+    Ok(to_item(&vault, thumbs.as_deref(), &entry_dir, &entry_id, meta))
 }
 
 /// 列出媒体（新的在前）。给了 `entry_id` 就只看那条记录的。
 ///
 /// 媒体元数据现在住在各条记录的 `entry.json` 里，所以这里是"把记录扫一遍再汇总"，
 /// **不再有全局 `media/` 目录**，也不再有"导入了但没归属"的媒体。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_media(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -169,9 +170,13 @@ pub fn list_media(
 ) -> AppResult<Vec<MediaItem>> {
     let vault = active_vault(&state, &app)?;
     allow_vault_assets(&app, &vault);
+    // 缩略图目录**一次调用只算一次**（算它要读一遍 vault.json）
+    let thumbs = thumbs_dir(&app, &vault).ok();
 
+    // **一趟扫完**（记录 + 它所在的目录一起拿到），而且不读正文 ——
+    // 媒体列表用不上 note.md。安卓上这两件事省掉的就是"每多一条记录多几次跨进程查询"。
     let mut out = Vec::new();
-    for entry in vault::list_entries(&vault)? {
+    for (entry, dir) in vault::list_live_entries_with_dirs(&vault, false)? {
         // 回收站里的记录不参与：它们已经"不在仓库里"了
         if entry.is_deleted() {
             continue;
@@ -181,12 +186,8 @@ pub fn list_media(
                 continue;
             }
         }
-
-        let Ok(dir) = vault::find_entry_dir(&vault, &entry.id) else {
-            continue;
-        };
         for meta in entry.media {
-            out.push(to_item(&app, &vault, &dir, &entry.id, meta));
+            out.push(to_item(&vault, thumbs.as_deref(), &dir, &entry.id, meta));
         }
     }
 

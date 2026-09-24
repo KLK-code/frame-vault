@@ -66,7 +66,7 @@ pub(crate) fn vault_list(state: &AppState, app: &tauri::AppHandle) -> AppResult<
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_vaults(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -82,7 +82,7 @@ pub fn pick_saf_tree(app: tauri::AppHandle) -> AppResult<Option<saf::PickedTree>
 }
 
 /// 导入一个**已经存在**的 Vault 目录：必须有 vault.json
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_vault(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -119,7 +119,7 @@ pub fn add_vault(
 }
 
 /// 在指定目录里创建一个新 Vault（会预建「未归类」容器与回收站目录）
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_vault(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -168,7 +168,7 @@ pub fn create_vault(
     vault_list(state, &app_handle)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn switch_vault(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -191,7 +191,7 @@ pub fn switch_vault(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn forget_vault(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
@@ -211,7 +211,7 @@ pub fn forget_vault(
     vault_list(app, &app_handle)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_exists(app: tauri::AppHandle, path: String) -> bool {
     // 两端同一条判据：里面有没有 vault.json
     let reference = VaultRef::from_input(&path);

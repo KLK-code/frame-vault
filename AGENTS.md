@@ -245,7 +245,7 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 | 坑 | 正确做法 |
 |---|---|
 | 改了 `generate_handler!` 里的命令名，界面报 `command xxx not found` | 重启 `pnpm tauri dev` |
-| 窗口命令写成同步的 | 窗口/长任务命令一律 `#[tauri::command(async)]` |
+| 碰磁盘（尤其 SAF）的命令写成同步的 | `#[tauri::command]` 不带 `async` **跑在主线程**：桌面上文件系统快、看不出来；安卓 SAF 上每个操作都是跨进程查询，几十次加起来几百毫秒全压在 UI 线程上——界面就是"特别卡"（2026-09 实测：手机上渲染 99 分位 89ms、jank 16.5%；把 26 个命令全改成 `async` 后消失） | **凡是会碰盘/碰 store 的命令一律 `#[tauri::command(async)]`**；窗口命令同理（建窗口会把消息循环搞坏）。另：别在自动保存这类高频路径上做"整仓重扫"（`listMedia(null)` + `listEntries` 一次就是两趟全仓）——写回来的东西就地替换，别 reload |
 | 新窗口没在 `capabilities` 里授权 | `capabilities/default.json` 的 `windows` 要列出**每个**窗口 label |
 | 用 URL 查询串区分窗口 | 读 `getCurrentWindow().label` |
 | 只关主窗口，进程不退出 | `on_window_event` 里对主窗口 `CloseRequested` 调 `app.exit(0)` |

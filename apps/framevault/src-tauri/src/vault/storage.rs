@@ -28,7 +28,7 @@
 
 use super::folder::FolderMeta;
 use super::id::new_id;
-use super::media::{adopt_loose_files_in, drop_missing_files_in, sort_media};
+use super::media::{reconcile_dir, sort_media};
 use super::model::{is_supported, Entry, VaultMeta, SCHEMA_VERSION};
 use super::naming::{self, ENTRY_FILE, FOLDER_FILE, NOTE_FILE, UNCATEGORIZED};
 use super::store::{AsVault, Vault};
@@ -127,11 +127,6 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     Ok(())
 }
 
-/// 读文本；文件不在就返回空串（正文可以为空，缺文件与空文件是一回事）
-pub fn read_text(path: &Path) -> String {
-    fs::read_to_string(path).unwrap_or_default()
-}
-
 // ── store 版原语（正路）──
 //
 // 调用方把自己手里的根句柄传进来，**字节怎么落盘由 store 决定** —— 桌面上是文件系统，
@@ -140,10 +135,6 @@ pub fn read_text(path: &Path) -> String {
 pub(crate) fn read_json_in<T: DeserializeOwned>(vault: &Vault, path: &Path) -> AppResult<T> {
     let text = vault.read_text(path)?;
     Ok(serde_json::from_str(&text)?)
-}
-
-pub(crate) fn read_text_in(vault: &Vault, path: &Path) -> String {
-    vault.read_text_or_empty(path)
 }
 
 /// 原子写 JSON（store 版：tmp + rename 在 store 里）
@@ -452,44 +443,64 @@ fn load_entry_dir(vault: &Vault, dir: &Path) -> Option<Entry> {
 /// 拿这种 Entry 去写回会把正文清空（`write_entry` 写的就是 `entry.note`）。
 fn load_entry_dir_opts(vault: &Vault, dir: &Path, with_note: bool) -> Option<Entry> {
     let file = entry_json_path(dir);
-    if !vault.is_file(&file) {
-        return None;
-    }
 
+    // 读元数据：**只有"明确不存在"才算没有这条记录**（调用方按目录扫过来，
+    // 这种情况本来就不该发生）；其余失败一律是"读不出来"，不能悄悄当成空记录。
     let mut entry = match read_json_in::<Entry>(vault, &file) {
         Ok(entry) => entry,
+        Err(AppError::NotFound(_)) => return None,
         Err(err) => {
-            eprintln!("[vault] 跳过损坏的记录 {}：{err}", file.display());
+            eprintln!("[vault] 记录读不出来，跳过（{}）：{err}", file.display());
             return None;
         }
     };
 
     if with_note {
-        entry.note = read_text_in(vault, &note_path(dir));
+        match vault.read_text_opt(&note_path(dir)) {
+            Ok(Some(text)) => entry.note = text,
+            // 没写过正文 —— 正常情况（空正文与没有这个文件是一回事）
+            Ok(None) => {}
+            Err(err) => {
+                // **正文在、但读不出来**：绝不能当成空的。
+                // 当成空的话，用户一编辑一保存，原来的正文就被覆盖了。
+                eprintln!(
+                    "[vault] 正文读不出来，跳过这条记录（{}）：{err}",
+                    note_path(dir).display()
+                );
+                return None;
+            }
+        }
     }
 
+    // 对账（§5）：**只从一次成功的目录列表**得出结论 —— 列不出来就一个字节都不动。
+    // 逐项探测（`is_file`）在 SAF 上会"答不上来"，而答不上来与"文件真的没了"分不开，
+    // 一次临时故障就能把 `media[]` 清空写回磁盘（静默删数据，见 AGENTS §9）。
     let mut media = std::mem::take(&mut entry.media);
-    // **对账只在"目录真的在、也列得出来"时做**：SAF 下落目录会失败，
-    // 一次失败若被当成"文件全没了"，就会把所有记录的 `media[]` 清空写回 —— 那是数据破坏，
-    // 不是"磁盘为准"（AGENTS §9 有这一行）。
-    let (adopted, dropped) = if vault.is_dir(dir) {
-        (
-            adopt_loose_files_in(vault, dir, &mut media),
-            drop_missing_files_in(vault, dir, &mut media),
-        )
-    } else {
-        (Vec::new(), 0)
-    };
-    if !adopted.is_empty() || dropped > 0 {
+    let reconciled = reconcile_dir(vault, dir, &mut media);
+
+    if reconciled.skipped {
+        entry.media = media; // 原样放回
+        return Some(entry);
+    }
+
+    if !reconciled.adopted.is_empty() || !reconciled.dropped.is_empty() {
         sort_media(&mut media);
-        if !adopted.is_empty() {
+        if !reconciled.adopted.is_empty() {
             eprintln!(
                 "[vault] 收养 {} 个媒体文件（{}）",
-                adopted.len(),
+                reconciled.adopted.len(),
+                dir.display()
+            );
+        }
+        if !reconciled.dropped.is_empty() {
+            eprintln!(
+                "[vault] 剔除 {} 个已经不在目录里的媒体（{}）",
+                reconciled.dropped.len(),
                 dir.display()
             );
         }
         entry.media = media;
+        // 只有"真的变了"才写回，而且只写 entry.json
         if let Err(err) = write_json_atomic_in(vault, &file, &entry) {
             eprintln!("[vault] 对账结果写不回去（{}）：{err}", file.display());
         }
@@ -892,14 +903,17 @@ mod tests {
         let dir = temp_vault("crlf");
         fs::create_dir_all(&dir).unwrap();
         write_text_atomic(&note_path(&dir), "第一行\r\n第二行\r第三行").unwrap();
-        assert_eq!(read_text(&note_path(&dir)), "第一行\n第二行\n第三行");
+        assert_eq!(
+            Vault::at(dir.clone()).read_text(&note_path(&dir)).unwrap(),
+            "第一行\n第二行\n第三行"
+        );
     }
 
     #[test]
     fn missing_note_reads_as_empty() {
         let dir = temp_vault("nonote");
         fs::create_dir_all(&dir).unwrap();
-        assert_eq!(read_text(&note_path(&dir)), "");
+        assert_eq!(fs::read_to_string(note_path(&dir)).unwrap_or_default(), "");
     }
 
     #[test]

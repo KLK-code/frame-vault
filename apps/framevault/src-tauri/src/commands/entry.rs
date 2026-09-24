@@ -79,7 +79,10 @@ pub fn save_entry(
 
     let mut entry = match vault::read_entry(&vault, &id) {
         Ok(existing) => existing,
-        Err(_) => {
+        // **只有"明确没有这条记录"才新建**。读失败（没权限 / 存储抖动 / 文件损坏）
+        // 一律往上抛：拿它当"不存在"，就会凭空多出一条同 id 的记录，
+        // 或者把一条损坏的记录悄悄换掉（执行计划 P3）。
+        Err(AppError::NotFound(_)) => {
             let mut fresh = Entry::new(&id, &title, &created);
             if !day.trim().is_empty() {
                 fresh.day = day.trim().to_string();
@@ -92,6 +95,7 @@ pub fn save_entry(
             vault::create_entry(&vault, &mut fresh)?;
             return Ok(fresh.into());
         }
+        Err(err) => return Err(err),
     };
 
     let previous = entry.clone();

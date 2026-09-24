@@ -249,7 +249,9 @@ mod android {
 
     #[derive(Deserialize)]
     struct TextResult {
-        text: String,
+        /// `null` = **这个文件不存在**（不是读失败）—— 没写过正文的记录就是这种情况
+        #[serde(default)]
+        text: Option<String>,
     }
 
     #[derive(Deserialize)]
@@ -295,6 +297,16 @@ mod android {
         }
 
         fn read_text(&self, path: &Path) -> AppResult<String> {
+            match self.read_text_opt(path)? {
+                Some(text) => Ok(text),
+                None => Err(AppError::NotFound(format!(
+                    "文件不存在：{}",
+                    self.rel(path)
+                ))),
+            }
+        }
+
+        fn read_text_opt(&self, path: &Path) -> AppResult<Option<String>> {
             let args = PathArgs {
                 root: &self.tree,
                 path: &self.rel(path),

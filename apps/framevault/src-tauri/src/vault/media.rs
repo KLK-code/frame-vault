@@ -20,7 +20,7 @@
 use super::id::new_id;
 use super::model::SCHEMA_VERSION;
 use super::naming::{self, NameVars};
-use super::store::Vault;
+use super::store::{DirEntry, Vault};
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -111,12 +111,6 @@ pub fn is_decodable_image(ext: &str) -> bool {
         ext,
         "jpg" | "jpeg" | "jpe" | "png" | "webp" | "gif" | "bmp" | "tif" | "tiff"
     )
-}
-
-pub fn normalize_ext(path: &Path) -> String {
-    path.extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .unwrap_or_default()
 }
 
 /// 从内存里拿尺寸（安卓上的来源没有路径，只有字节）
@@ -338,29 +332,75 @@ pub fn sha256_bytes(bytes: &[u8]) -> String {
     hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// 对账（§5）：记录目录里**多出来的**媒体文件 → 收养进 `media[]`。
-///
-/// 只记我们真知道的事实（文件名 / 大小 / 扩展名 / MIME）—— **不算哈希、不解码尺寸**：
-/// 用户在资源管理器里丢进来的照片，扫描时不该让我们去读一遍几百兆的视频。
-/// 返回新收养的文件名（给调用方判断要不要写盘）。
-pub fn adopt_loose_files_in(
-    vault: &Vault,
-    entry_dir: &Path,
-    media: &mut Vec<MediaMeta>,
-) -> Vec<String> {
-    let known: Vec<String> = media.iter().map(|m| m.file.clone()).collect();
-    let mut adopted = Vec::new();
+/// 一次对账的结果
+pub struct Reconcile {
+    /// 新收养的文件名
+    pub adopted: Vec<String>,
+    /// 从名册里剔除的文件名（目录里确实没有它们了）
+    pub dropped: Vec<String>,
+    /// 目录**列不出来** —— 什么都没做（这不是"文件都没了"，是"这次问不到"）
+    pub skipped: bool,
+}
 
-    let Ok(items) = vault.list_dir(entry_dir) else {
-        return adopted;
+/// 对账（§5）：把"目录里有什么"与"名册里有什么"比一次。
+///
+/// **只从一次成功的目录列表得出结论**，这是刻意的：
+/// - 逐项探测（`is_file`）在 SAF 上可能失败，而"探测失败"与"文件真的没了"分不开 ——
+///   一次临时故障就会把 `media[]` 清空并写回磁盘（静默删数据，见 AGENTS §9）；
+/// - "有什么"和"没有什么"来自**同一份证据**，不会出现一边说有一套说不存在。
+///
+/// 列不出来（目录不存在 / 无权限 / 存储暂时不可用）→ `skipped = true`，调用方原样保留。
+pub fn reconcile_dir(vault: &Vault, entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Reconcile {
+    let items = match vault.list_dir(entry_dir) {
+        Ok(items) => items,
+        Err(err) => {
+            eprintln!(
+                "[vault] 列不出记录目录，这次不对账（{}）：{err}",
+                entry_dir.display()
+            );
+            return Reconcile {
+                adopted: Vec::new(),
+                dropped: Vec::new(),
+                skipped: true,
+            };
+        }
     };
 
-    for item in items {
-        if item.is_dir {
-            continue;
-        }
-        let file = item.name;
-        // 标记文件与正文不算媒体；已经收过的跳过
+    let (adopted, dropped) = reconcile_lists(&items, media);
+    Reconcile {
+        adopted,
+        dropped,
+        skipped: false,
+    }
+}
+
+/// 纯比较：不碰盘，便于测试。
+///
+/// 收养只按**文件名**排重（`file` 是磁盘上的唯一身份）；剔除只针对"这份列表里确实没有"的项。
+fn reconcile_lists(items: &[DirEntry], media: &mut Vec<MediaMeta>) -> (Vec<String>, Vec<String>) {
+    let present: std::collections::HashSet<&str> = items
+        .iter()
+        .filter(|item| !item.is_dir)
+        .map(|item| item.name.as_str())
+        .collect();
+    let known: std::collections::HashSet<String> =
+        media.iter().map(|m| m.file.clone()).collect();
+
+    // ① 剔除：名册里有、这份列表里没有（同一份证据说了算）
+    let dropped: Vec<String> = media
+        .iter()
+        .filter(|m| m.file.is_empty() || !present.contains(m.file.as_str()))
+        .map(|m| m.file.clone())
+        .collect();
+    if !dropped.is_empty() {
+        let dropped_set: std::collections::HashSet<&String> = dropped.iter().collect();
+        media.retain(|m| !dropped_set.contains(&m.file));
+    }
+
+    // ② 收养：目录里有、名册里没有的媒体文件
+    let mut adopted = Vec::new();
+    for item in items.iter().filter(|item| !item.is_dir) {
+        let file = item.name.clone();
         if file == naming::ENTRY_FILE
             || file == naming::NOTE_FILE
             || file.ends_with(".tmp")
@@ -368,19 +408,18 @@ pub fn adopt_loose_files_in(
         {
             continue;
         }
-
-        let ext = normalize_ext(Path::new(&file));
+        let ext = ext_of_name(&file);
         if !is_media_ext(&ext) {
             continue; // 别的文件一律不动（宽容条款）
         }
-
         media.push(MediaMeta {
             schema_version: SCHEMA_VERSION,
             id: new_id(),
             file: file.clone(),
             ext: ext.clone(),
             mime: guess_mime(&ext).to_string(),
-            bytes: item.size, // 列目录时一起拿到的，不用再 stat 一次
+            // 大小来自这次列表（SAF 上一次查询就有 COLUMN_SIZE，不用再 stat）
+            bytes: item.size,
             width: None,
             height: None,
             taken_at: None,
@@ -390,14 +429,7 @@ pub fn adopt_loose_files_in(
         adopted.push(file);
     }
 
-    adopted
-}
-
-/// 对账的另一半：`media[]` 里有、磁盘上却没有的 → 剔除（返回被剔除的个数）
-pub fn drop_missing_files_in(vault: &Vault, entry_dir: &Path, media: &mut Vec<MediaMeta>) -> usize {
-    let before = media.len();
-    media.retain(|m| !m.file.is_empty() && vault.is_file(&entry_dir.join(&m.file)));
-    before - media.len()
+    (adopted, dropped)
 }
 
 /// 生成缩略图到指定路径（**目标目录由调用方给**，领域层不认识应用数据目录）。
@@ -572,18 +604,20 @@ mod tests {
         fs::write(entry_dir.join("随手丢进来的照片.JPG"), b"x").unwrap();
         fs::write(entry_dir.join("读书笔记.txt"), "别人的笔记").unwrap();
 
+        let vault = Vault::at(entry_dir.clone());
         let mut media = Vec::new();
-        let adopted = adopt_loose_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media);
+        let reconciled = reconcile_dir(&vault, &entry_dir, &mut media);
 
-        assert_eq!(adopted, vec!["随手丢进来的照片.JPG".to_string()]);
+        assert!(!reconciled.skipped, "目录列得出来，不该跳过");
+        assert_eq!(reconciled.adopted, vec!["随手丢进来的照片.JPG".to_string()]);
         assert_eq!(media.len(), 1);
         assert_eq!(media[0].file, "随手丢进来的照片.JPG");
         assert_eq!(media[0].mime, "image/jpeg", "扩展名大小写不影响判 MIME");
         assert!(media[0].hash.is_empty(), "收养不假装算过哈希");
 
         // 再扫一次不该重复收养
-        let again = adopt_loose_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media);
-        assert!(again.is_empty());
+        let again = reconcile_dir(&vault, &entry_dir, &mut media);
+        assert!(again.adopted.is_empty() && again.dropped.is_empty());
         assert_eq!(media.len(), 1);
     }
 
@@ -600,11 +634,30 @@ mod tests {
             mime: "image/jpeg".into(),
             ..Default::default()
         }];
-        assert_eq!(drop_missing_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media), 0);
+        let vault = Vault::at(entry_dir.clone());
+        assert!(reconcile_dir(&vault, &entry_dir, &mut media).dropped.is_empty());
 
         fs::remove_file(entry_dir.join("gone.jpg")).unwrap();
-        assert_eq!(drop_missing_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media), 1);
+        assert_eq!(reconcile_dir(&vault, &entry_dir, &mut media).dropped, vec!["gone.jpg".to_string()]);
         assert!(media.is_empty());
+    }
+
+    #[test]
+    fn reconcile_does_nothing_when_dir_cannot_be_listed() {
+        // 目录根本不存在 = "列不出来"的一种 —— 这时**不许**把名册当"文件都没了"清掉
+        let vault = Vault::at(temp_dir("reconcile-skip").join("不存在的目录"));
+        let mut media = vec![MediaMeta {
+            schema_version: SCHEMA_VERSION,
+            id: "m1".into(),
+            file: "还在.jpg".into(),
+            ext: "jpg".into(),
+            mime: "image/jpeg".into(),
+            ..Default::default()
+        }];
+
+        let reconciled = reconcile_dir(&vault, vault.root(), &mut media);
+        assert!(reconciled.skipped, "列不出来必须标记为跳过");
+        assert_eq!(media.len(), 1, "名册必须原样不动");
     }
 
     #[test]

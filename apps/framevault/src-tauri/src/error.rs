@@ -10,8 +10,15 @@ pub enum AppError {
     Json(serde_json::Error),
     /// 参数不合法（比如"不是有效目录"）
     Invalid(String),
-    /// 找不到东西
+    /// 找不到东西（**明确不存在** —— 这是唯一允许"那就新建吧""那就当没有"的依据）
     NotFound(String),
+    /// 没有权限（用户的目录授权被撤销、或系统不允许访问这个位置）
+    NoPermission(String),
+    /// 暂时不可用（存储服务抖动、SAF 桥失败、没联网的网盘……）——
+    /// **它和"不存在"是两回事**：拿它去新建/清空就是丢数据
+    Unavailable(String),
+    /// 内容损坏（JSON 解析不了、字段对不上）
+    Corrupt(String),
     /// 还没有选择仓库
     NotSelected,
     /// 来自 Tauri 本身（窗口操作等）
@@ -52,6 +59,9 @@ impl std::fmt::Display for AppError {
             AppError::Json(e) => write!(f, "数据格式不对：{e}"),
             AppError::Invalid(msg) => write!(f, "{msg}"),
             AppError::NotFound(msg) => write!(f, "{msg}"),
+            AppError::NoPermission(msg) => write!(f, "没有访问权限：{msg}"),
+            AppError::Unavailable(msg) => write!(f, "存储暂时不可用：{msg}"),
+            AppError::Corrupt(msg) => write!(f, "文件内容有问题：{msg}"),
             AppError::NotSelected => write!(f, "还没有选择仓库"),
             AppError::Tauri(e) => write!(f, "窗口操作失败：{e}"),
         }

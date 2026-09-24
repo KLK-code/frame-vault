@@ -74,10 +74,13 @@ pub trait VaultStore: Send + Sync {
         self.write_bytes(path, text.replace("\r\n", "\n").as_bytes())
     }
 
-    /// 读文本，读不到就是空串（`note.md` 缺了不该让整条记录读不出来）。
-    fn read_text_or_empty(&self, path: &Path) -> String {
-        self.read_text(path).unwrap_or_default()
-    }
+    /// 读文本，**把"文件不存在"和"读失败"分开**：
+    /// - `Ok(Some(text))`：读到了；
+    /// - `Ok(None)`：文件**明确不存在**（`note.md` 没写过就是这种情况，是正常的）；
+    /// - `Err(..)`：存在但读不出来（权限 / 存储抖动 / 损坏）—— **绝不能当成空内容**：
+    ///   当成空的话，用户一保存就把原来的正文覆盖了。
+    fn read_text_opt(&self, path: &Path) -> AppResult<Option<String>>;
+
 }
 
 /// 临时文件路径：`entry.json` → `entry.json.tmp`（同目录，rename 才可能是原子的）。
@@ -97,6 +100,15 @@ impl VaultStore for NativeFs {
 
     fn read_text(&self, path: &Path) -> AppResult<String> {
         Ok(std::fs::read_to_string(path)?)
+    }
+
+    fn read_text_opt(&self, path: &Path) -> AppResult<Option<String>> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => Ok(Some(text)),
+            // **只有"确实没有这个文件"才算不存在**；其余一律往上抛
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 
     fn write_bytes(&self, path: &Path, bytes: &[u8]) -> AppResult<()> {
@@ -277,6 +289,14 @@ impl VaultStore for MemStore {
             .map_err(|e| AppError::Invalid(format!("不是 UTF-8：{e}")))
     }
 
+    fn read_text_opt(&self, path: &Path) -> AppResult<Option<String>> {
+        let key = Self::key(path);
+        let files = self.files.lock().unwrap();
+        Ok(files
+            .get(&key)
+            .map(|bytes| String::from_utf8_lossy(bytes).to_string()))
+    }
+
     fn write_bytes(&self, path: &Path, bytes: &[u8]) -> AppResult<()> {
         let key = Self::key(path);
         // 父目录得存在（与 NativeFs 的 create_dir_all 一致）
@@ -439,8 +459,10 @@ impl Vault {
         self.store.read_text(path)
     }
 
-    pub fn read_text_or_empty(&self, path: &Path) -> String {
-        self.store.read_text_or_empty(path)
+    /// 读文本：**"文件不存在"与"读失败"分开**（见 `VaultStore::read_text_opt`）。
+    /// 旧的"读失败就返回空串"是数据丢失的入口 —— 已删除，别再把它加回来。
+    pub fn read_text_opt(&self, path: &Path) -> AppResult<Option<String>> {
+        self.store.read_text_opt(path)
     }
 
     pub fn read_bytes(&self, path: &Path) -> AppResult<Vec<u8>> {
@@ -602,8 +624,10 @@ mod tests {
         let ghost = vault.join("不存在");
         assert!(!vault.is_file(&ghost) && !vault.is_dir(&ghost));
         assert!(vault.read_text(&ghost).is_err());
-        // `read_text_or_empty` 是给 note.md 用的：缺了就当空
-        assert_eq!(vault.read_text_or_empty(&ghost), "");
+        // **"不存在"和"读失败"必须分得开**：不存在给 Ok(None)，读失败给 Err。
+        // 没写过正文的记录就是第一种情况（正常的），读不出来是第二种（必须报错，
+        // 否则用户一保存就把原文覆盖了）。
+        assert_eq!(vault.read_text_opt(&ghost).unwrap(), None);
     }
 
     #[test]

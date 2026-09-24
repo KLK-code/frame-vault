@@ -140,11 +140,17 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
   fun readText(invoke: Invoke) {
     try {
       val args = invoke.parseArgs(SafPathArgs::class.java)
+      val out = JSObject()
       val uri = uriOf(Uri.parse(args.root), args.path)
-        ?: throw IOException("文件不存在：${args.path}")
+      if (uri == null) {
+        // **明确不存在**：这不是错误（没写过正文的记录就是这样），
+        // 交给 Rust 判断；"读失败"才走下面的 reject。两者绝不能混。
+        out.put("text", null)
+        invoke.resolve(out)
+        return
+      }
       val text = resolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
         ?: throw IOException("打不开：${args.path}")
-      val out = JSObject()
       out.put("text", text)
       invoke.resolve(out)
     } catch (ex: Exception) {

@@ -161,23 +161,26 @@ pub fn write_json_atomic_in<T: Serialize>(vault: &Vault, path: &Path, value: &T)
 
 /// 这个目录是 Vault 根吗？判断依据只有一条：**有没有 vault.json**。
 /// 这样就不会再把 «.../未归类» 这种子目录误当成 Vault（之前踩过）。
-pub fn is_vault(dir: &Path) -> bool {
-    vault_meta_path(dir).is_file()
+pub fn is_vault(dir: impl AsVault) -> bool {
+    let vault = dir.as_vault();
+    vault.is_file(&vault_meta_path(vault.root()))
 }
 
 /// 在 dir 里创建一个新 Vault：建目录结构 + 写身份文件。
 ///
 /// 预建的就两样：`未归类/`（不属于任何场景的记录要有地方去）与 `.framevault/trash/`。
-pub fn create_vault(dir: &Path, name: &str, created_at: &str) -> AppResult<VaultMeta> {
-    if is_vault(dir) {
+pub fn create_vault(dir: impl AsVault, name: &str, created_at: &str) -> AppResult<VaultMeta> {
+    let vault = dir.as_vault();
+    let root = vault.root().to_path_buf();
+    if is_vault(&root) {
         return Err(AppError::Invalid(format!(
             "{} 已经是一个 Vault 了",
-            dir.display()
+            root.display()
         )));
     }
 
-    fs::create_dir_all(dir.join(UNCATEGORIZED))?;
-    fs::create_dir_all(trash_dir(dir))?;
+    vault.create_dir_all(&root.join(UNCATEGORIZED))?;
+    vault.create_dir_all(&trash_dir(&root))?;
 
     let meta = VaultMeta {
         schema_version: SCHEMA_VERSION,
@@ -186,21 +189,23 @@ pub fn create_vault(dir: &Path, name: &str, created_at: &str) -> AppResult<Vault
         name: name.to_string(),
         created_at: created_at.to_string(),
     };
-    write_json_atomic(&vault_meta_path(dir), &meta)?;
+    write_json_atomic_in(&vault, &vault_meta_path(&root), &meta)?;
 
     Ok(meta)
 }
 
-pub fn read_vault_meta(dir: &Path) -> AppResult<VaultMeta> {
-    let path = vault_meta_path(dir);
-    if !path.is_file() {
+pub fn read_vault_meta(dir: impl AsVault) -> AppResult<VaultMeta> {
+    let vault = dir.as_vault();
+    let root = vault.root().to_path_buf();
+    let path = vault_meta_path(&root);
+    if !vault.is_file(&path) {
         return Err(AppError::NotFound(format!(
             "{} 不是 Vault（缺少 vault.json）",
-            dir.display()
+            root.display()
         )));
     }
 
-    let meta: VaultMeta = read_json(&path)?;
+    let meta: VaultMeta = read_json_in(&vault, &path)?;
     if !is_supported(meta.schema_version) || meta.layout != SCHEMA_VERSION {
         return Err(AppError::Invalid(format!(
             "这个仓库是旧版布局（v{}，现在是 v{}），本程序已不再支持它。\n\
@@ -255,20 +260,22 @@ pub fn topic_dir(vault: impl AsVault, name: &str) -> Option<PathBuf> {
 }
 
 /// 新建主题：一个没有 `folder.json` 的目录（撞名加 ` (2)`）
-pub fn create_topic(vault: &Path, name: &str) -> AppResult<PathBuf> {
+pub fn create_topic(vault: impl AsVault, name: &str) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
     let name = naming::sanitize(name);
     if name.is_empty() {
         return Err(AppError::Invalid("主题名不能为空".into()));
     }
-    let dir = vault.join(naming::unique_child_name(vault, &name, None));
-    fs::create_dir_all(&dir)?;
+    let dir = vault.join(naming::unique_child_name_in(&vault, vault.root(), &name, None));
+    vault.create_dir_all(&dir)?;
     Ok(dir)
 }
 
 /// 主题改名：就是改目录名（里面的文件夹跟着换主题 —— 因为它们的位置变了）
-pub fn rename_topic(vault: &Path, name: &str, new_name: &str) -> AppResult<PathBuf> {
-    let dir =
-        topic_dir(vault, name).ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
+pub fn rename_topic(vault: impl AsVault, name: &str, new_name: &str) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let dir = topic_dir(&vault, name)
+        .ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
     let new_name = naming::sanitize(new_name);
     if new_name.is_empty() {
         return Err(AppError::Invalid("主题名不能为空".into()));
@@ -282,8 +289,8 @@ pub fn rename_topic(vault: &Path, name: &str, new_name: &str) -> AppResult<PathB
         return Ok(dir);
     }
 
-    let target = vault.join(naming::unique_child_name(vault, &new_name, None));
-    fs::rename(&dir, &target)?;
+    let target = vault.join(naming::unique_child_name_in(&vault, vault.root(), &new_name, None));
+    vault.rename(&dir, &target)?;
     Ok(target)
 }
 
@@ -315,9 +322,10 @@ pub fn delete_topic(vault: impl AsVault, name: &str) -> AppResult<()> {
 /// 为什么这里按名字、扫描却按结构：**扫描**是"磁盘上有什么就是什么"（任何容器都能装记录），
 /// 而**写路径**得有个说得准的落点 —— "没有文件夹的记录放哪儿"必须有确定答案，
 /// 不能随仓库里恰好有几个主题而变。
-pub fn ensure_uncategorized(vault: &Path) -> AppResult<PathBuf> {
-    let dir = topic_dir(vault, UNCATEGORIZED).unwrap_or_else(|| vault.join(UNCATEGORIZED));
-    fs::create_dir_all(&dir)?;
+pub fn ensure_uncategorized(vault: impl AsVault) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let dir = topic_dir(&vault, UNCATEGORIZED).unwrap_or_else(|| vault.join(UNCATEGORIZED));
+    vault.create_dir_all(&dir)?;
     Ok(dir)
 }
 
@@ -433,7 +441,7 @@ pub fn entry_slot(vault: impl AsVault, folder_id: Option<&str>) -> AppResult<Pat
     let vault = vault.as_vault();
     match folder_id {
         Some(id) => find_folder_dir(&vault, id),
-        None => ensure_uncategorized(vault.root()),
+        None => ensure_uncategorized(&vault),
     }
 }
 
@@ -506,7 +514,8 @@ pub fn read_entry(vault: impl AsVault, id: &str) -> AppResult<Entry> {
 }
 
 /// 新建一条记录：按「创建日 + 标题」算出目录名（撞名加后缀），建目录、写正文、写元数据。
-pub fn create_entry(vault: &Path, entry: &mut Entry) -> AppResult<PathBuf> {
+pub fn create_entry(vault: impl AsVault, entry: &mut Entry) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
     if !is_supported(entry.schema_version) {
         return Err(AppError::Invalid(format!(
             "不支持的 schemaVersion: {}",
@@ -514,14 +523,14 @@ pub fn create_entry(vault: &Path, entry: &mut Entry) -> AppResult<PathBuf> {
         )));
     }
 
-    let parent = entry_slot(vault, entry.folder_id.as_deref())?;
+    let parent = entry_slot(&vault, entry.folder_id.as_deref())?;
     let desired = naming::entry_dir_name(&entry.day, &entry.title);
-    let dir_name = naming::unique_child_name(&parent, &desired, None);
+    let dir_name = naming::unique_child_name_in(&vault, &parent, &desired, None);
     let dir = parent.join(dir_name);
-    fs::create_dir_all(&dir)?;
+    vault.create_dir_all(&dir)?;
 
-    write_text_atomic(&note_path(&dir), &entry.note)?;
-    write_json_atomic(&entry_json_path(&dir), entry)?;
+    vault.write_text(&note_path(&dir), &entry.note)?;
+    write_json_atomic_in(&vault, &entry_json_path(&dir), entry)?;
     Ok(dir)
 }
 
@@ -532,7 +541,26 @@ pub fn create_entry(vault: &Path, entry: &mut Entry) -> AppResult<PathBuf> {
 ///
 /// 顺序（§6）：先写 `note.md`、再写 `entry.json`、最后才 `rename` 目录。
 /// 最坏情况是"内容更新了、目录名还是旧的"，下次保存自动收敛；绝不会出现名字新、内容半截。
+pub fn write_entry_in(
+    vault: impl AsVault,
+    entry: &Entry,
+    dir: &Path,
+    previous: Option<&Entry>,
+) -> AppResult<PathBuf> {
+    write_entry_impl(&vault.as_vault(), entry, dir, previous)
+}
+
+/// 过渡壳：调用方还没拿句柄时走这儿（桌面专用，SAF 上一律用 `write_entry_in`）。
 pub fn write_entry(entry: &Entry, dir: &Path, previous: Option<&Entry>) -> AppResult<PathBuf> {
+    write_entry_in(Vault::at(dir.to_path_buf()), entry, dir, previous)
+}
+
+fn write_entry_impl(
+    vault: &Vault,
+    entry: &Entry,
+    dir: &Path,
+    previous: Option<&Entry>,
+) -> AppResult<PathBuf> {
     if !is_supported(entry.schema_version) {
         return Err(AppError::Invalid(format!(
             "不支持的 schemaVersion: {}",
@@ -540,8 +568,8 @@ pub fn write_entry(entry: &Entry, dir: &Path, previous: Option<&Entry>) -> AppRe
         )));
     }
 
-    write_text_atomic(&note_path(dir), &entry.note)?;
-    write_json_atomic(&entry_json_path(dir), entry)?;
+    vault.write_text(&note_path(dir), &entry.note)?;
+    write_json_atomic_in(vault, &entry_json_path(dir), entry)?;
 
     let current = dir
         .file_name()
@@ -555,8 +583,8 @@ pub fn write_entry(entry: &Entry, dir: &Path, previous: Option<&Entry>) -> AppRe
 
     if may_rename && current != wanted {
         if let Some(parent) = dir.parent() {
-            let target = parent.join(naming::unique_child_name(parent, &wanted, None));
-            fs::rename(dir, &target)?;
+            let target = parent.join(naming::unique_child_name_in(vault, parent, &wanted, None));
+            vault.rename(dir, &target)?;
             return Ok(target);
         }
     }
@@ -567,8 +595,13 @@ pub fn write_entry(entry: &Entry, dir: &Path, previous: Option<&Entry>) -> AppRe
 
 /// 换场景：把记录目录挪到新场景下（**归属就是物理位置**，改字段必须配一次真实的移动）。
 /// 已经在目的地下就什么都不做。
-pub fn move_entry_to_slot(vault: &Path, dir: &Path, folder_id: Option<&str>) -> AppResult<PathBuf> {
-    let parent = entry_slot(vault, folder_id)?;
+pub fn move_entry_to_slot(
+    vault: impl AsVault,
+    dir: &Path,
+    folder_id: Option<&str>,
+) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let parent = entry_slot(&vault, folder_id)?;
     if dir.parent() == Some(parent.as_path()) {
         return Ok(dir.to_path_buf());
     }
@@ -577,8 +610,8 @@ pub fn move_entry_to_slot(vault: &Path, dir: &Path, folder_id: Option<&str>) -> 
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
-    let target = parent.join(naming::unique_child_name(&parent, &name, None));
-    fs::rename(dir, &target)?;
+    let target = parent.join(naming::unique_child_name_in(&vault, &parent, &name, None));
+    vault.rename(dir, &target)?;
     Ok(target)
 }
 
@@ -586,55 +619,57 @@ pub fn move_entry_to_slot(vault: &Path, dir: &Path, folder_id: Option<&str>) -> 
 ///
 /// 先把 `deletedAt` 写进去再挪 —— 这样回收站里的记录自己就知道"我是被删的"。
 /// 目录名在回收站里保持不变，所以撤销能把用户手动改过的名字原样还回去。
-pub fn trash_entry(vault: &Path, id: &str, deleted_at: &str) -> AppResult<PathBuf> {
-    let dir = find_entry_dir(vault, id)?;
+pub fn trash_entry(vault: impl AsVault, id: &str, deleted_at: &str) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let dir = find_entry_dir(&vault, id)?;
     let mut entry = read_entry_from(&dir)?;
     entry.mark_deleted(deleted_at);
-    write_json_atomic(&entry_json_path(&dir), &entry)?;
+    write_json_atomic_in(&vault, &entry_json_path(&dir), &entry)?;
 
-    if in_trash(vault, &dir) {
+    if in_trash(vault.root(), &dir) {
         return Ok(dir); // 已经在回收站里了（重复删一次不该再挪）
     }
 
-    let trash = trash_dir(vault);
-    fs::create_dir_all(&trash)?;
+    let trash = trash_dir(vault.root());
+    vault.create_dir_all(&trash)?;
     let name = dir
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| entry.id.clone());
-    let target = trash.join(naming::unique_child_name(&trash, &name, None));
-    fs::rename(&dir, &target)?;
+    let target = trash.join(naming::unique_child_name_in(&vault, &trash, &name, None));
+    vault.rename(&dir, &target)?;
     Ok(target)
 }
 
 /// 撤销删除：把目录挪回原场景（原场景没了就回「未归类」），清掉 `deletedAt`。
 ///
 /// **名字保持它在回收站里的样子** —— 用户手动改过的目录名不会因为删了再撤销就丢掉。
-pub fn restore_entry(vault: &Path, id: &str, now: &str) -> AppResult<PathBuf> {
-    let dir = find_entry_dir(vault, id)?;
+pub fn restore_entry(vault: impl AsVault, id: &str, now: &str) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let dir = find_entry_dir(&vault, id)?;
     let mut entry = read_entry_from(&dir)?;
     entry.restore(now);
 
-    if !in_trash(vault, &dir) {
-        write_json_atomic(&entry_json_path(&dir), &entry)?;
+    if !in_trash(vault.root(), &dir) {
+        write_json_atomic_in(&vault, &entry_json_path(&dir), &entry)?;
         return Ok(dir);
     }
 
     let parent = match entry.folder_id.as_deref() {
         Some(folder_id) => {
-            entry_slot(vault, Some(folder_id)).unwrap_or(ensure_uncategorized(vault)?)
+            entry_slot(&vault, Some(folder_id)).unwrap_or(ensure_uncategorized(&vault)?)
         }
-        None => ensure_uncategorized(vault)?,
+        None => ensure_uncategorized(&vault)?,
     };
 
     let name = dir
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| naming::entry_dir_name(&entry.day, &entry.title));
-    let target = parent.join(naming::unique_child_name(&parent, &name, None));
+    let target = parent.join(naming::unique_child_name_in(&vault, &parent, &name, None));
 
-    fs::rename(&dir, &target)?;
-    write_json_atomic(&entry_json_path(&target), &entry)?;
+    vault.rename(&dir, &target)?;
+    write_json_atomic_in(&vault, &entry_json_path(&target), &entry)?;
     Ok(target)
 }
 

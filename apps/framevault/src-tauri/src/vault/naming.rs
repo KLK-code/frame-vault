@@ -5,6 +5,7 @@
 //! 场景目录名 = 净化后的场景名，记录目录名 = `"{创建日} {净化后的标题}"`，
 //! 所以 `FolderMeta.name` / `Entry.title` 与磁盘目录名**永远相等**，不需要额外的"目录名字段"。
 
+use super::store::Vault;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -266,7 +267,35 @@ fn tidy_separators(raw: &str) -> String {
 /// 判重**按大小写不敏感**（拿小写当键）：Windows / macOS 的文件系统本来就不敏感，这样两端行为
 /// 与今天一致；同时让 Linux 与 FAT/exFAT（手机 SD 卡）也跟上 —— 三端一条规则。
 /// 方向是"宁可多让一个名字"：判重严格顶多名字不漂亮，判重宽松就会**覆盖别人的文件**。
+pub fn unique_child_name_in(vault: &Vault, dir: &Path, stem: &str, ext: Option<&str>) -> String {
+    // **列一次目录**（SAF 上没有"逐个 exists 探测"这条路；桌面上也省掉上百次 syscall）。
+    // 拿不到目录（不存在 / 读不了）就按空目录处理 —— 与旧实现"`exists()` 全 false"的结果一致。
+    let taken: HashSet<String> = vault
+        .list_dir(dir)
+        .map(|items| {
+            items
+                .into_iter()
+                .map(|item| item.name.to_lowercase())
+                .collect()
+        })
+        .unwrap_or_default();
+    pick_unique(&taken, stem, ext)
+}
+
+/// 过渡壳（只跑桌面）：拿裸路径的调用方走这儿，域内调用点正在往 `unique_child_name_in` 迁。
 pub fn unique_child_name(dir: &Path, stem: &str, ext: Option<&str>) -> String {
+    let mut taken: HashSet<String> = HashSet::new();
+    if let Ok(items) = std::fs::read_dir(dir) {
+        for item in items.flatten() {
+            // `to_string_lossy`：非 UTF-8 的名字也占位（宁可多让一个，也别撞上）
+            taken.insert(item.file_name().to_string_lossy().to_lowercase());
+        }
+    }
+    pick_unique(&taken, stem, ext)
+}
+
+/// 挑一个没被占用的名字：`名字.ext` → `名字 (2).ext` → `名字 (3).ext` ……（大小写不敏感）
+fn pick_unique(taken: &HashSet<String>, stem: &str, ext: Option<&str>) -> String {
     let stem = if stem.trim().is_empty() {
         FALLBACK_ENTRY.to_string()
     } else {
@@ -276,15 +305,6 @@ pub fn unique_child_name(dir: &Path, stem: &str, ext: Option<&str>) -> String {
         Some(e) if !e.is_empty() => format!(".{e}"),
         _ => String::new(),
     };
-
-    // 拿不到目录（不存在 / 读不了）就按空目录处理 —— 与旧实现"`exists()` 全 false"的结果一致
-    let mut taken: HashSet<String> = HashSet::new();
-    if let Ok(items) = std::fs::read_dir(dir) {
-        for item in items.flatten() {
-            // `to_string_lossy`：非 UTF-8 的名字也占位（宁可多让一个，也别撞上）
-            taken.insert(item.file_name().to_string_lossy().to_lowercase());
-        }
-    }
 
     let candidate = format!("{stem}{suffix}");
     if !taken.contains(&candidate.to_lowercase()) {

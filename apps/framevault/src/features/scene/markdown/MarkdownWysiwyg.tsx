@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { Compartment, EditorSelection, EditorState, type StateCommand } from "@codemirror/state";
 import {
@@ -56,6 +56,15 @@ type Props = {
   /** CM6 里没有可 `htmlFor` 的元素，无障碍标签走这里 */
   ariaLabel?: string;
   variant?: "fill" | "inline";
+  /**
+   * 把"立刻把还没交出去的文本交出去"的把手交给宿主。
+   *
+   * 为什么必须有：上报有 220ms 防抖，而**卸载时定时器会被清掉** ——
+   * 打完字立刻切篇 / 切场景 / 切页，最后那几个字就永远不会到父组件那里（丢字）。
+   * 宿主在自己的"落盘前"调一次这个把手（返回值是刚补交的文本，没有就是 null），
+   * 就能把这段尾巴要回来。
+   */
+  onFlushReady?: (flush: () => string | null) => void;
 };
 
 /** 每次按键都重渲染没必要；攒一小会儿再报上去（与旧实现的 200ms 体感一致） */
@@ -271,6 +280,7 @@ function urlAt(instance: EditorView, x: number, y: number): string | null {
 function Surface({
   value,
   onChange,
+  onFlushReady,
   readOnly = false,
   mode: initialMode = "live",
   focus = false,
@@ -285,8 +295,34 @@ function Surface({
   // 记住"我们自己刚发出去的那份"，用来分辨 value 的变化是外部换篇还是自己回显
   const emitted = useRef(value);
   const timer = useRef<number | null>(null);
+  /** 防抖里还没送出去的那份文本 —— **卸载 / 失焦 / 落盘前必须补送**，否则丢字 */
+  const pending = useRef<string | null>(null);
   /** 当场切换以用户为准：宿主给的只是**默认值**（重新挂载会回到它） */
   const [mode, setMode] = useState<Mode>(initialMode);
+
+  /**
+   * 立刻把最新文本交出去，不等防抖。返回刚补交的文本（没有待交的就返回 null）。
+   * 宿主在自己的落盘前调它，就能把"打完字立刻切走"的那一段尾巴要回来。
+   */
+  const flush = useCallback((): string | null => {
+    if (timer.current != null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+    const text = pending.current;
+    pending.current = null;
+    if (text != null) onChangeRef.current(text);
+    return text;
+  }, []);
+
+  // 把手交给宿主（写盘前 / 失焦 / 卸载都要用）
+  useEffect(() => {
+    onFlushReady?.(flush);
+  }, [onFlushReady, flush]);
+
+  // **卸载前补送最后一段** —— 这是"打完字立刻切场景/切篇"最常见的丢字点
+  // （子组件先于父组件卸载，所以父组件的补写能看到这份文本）
+  useEffect(() => () => { flush(); }, [flush]);
 
   useEffect(() => {
     const parent = host.current;
@@ -322,13 +358,20 @@ function Surface({
             const markdownText = update.state.doc.toString();
             // 先记下"这是我们自己写出去的那份"，再攒一小会儿报给父组件
             emitted.current = markdownText;
+            pending.current = markdownText; // 防抖期间也留着：卸载/失焦前能补交
             if (timer.current != null) window.clearTimeout(timer.current);
             timer.current = window.setTimeout(() => {
               timer.current = null;
+              pending.current = null;
               onChangeRef.current(markdownText);
             }, EMIT_DELAY);
           }),
           EditorView.domEventHandlers({
+            // 失焦立刻补交：不等防抖（点标题框、点别的记录、切到别的窗口）
+            blur() {
+              flush();
+              return false;
+            },
             // Ctrl/Cmd + 点击链接 → 交给系统浏览器，别让 WebView 自己跳走
             mousedown(event, instance) {
               if (!event.metaKey && !event.ctrlKey) return false;

@@ -140,6 +140,12 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
   const saveTimer = useRef<number | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  /**
+   * 编辑器的"立刻交出还没上报的那段文本"。
+   * 编辑器上报有 220ms 防抖，**卸载时会清掉定时器** —— 打完字立刻切篇/切场景，
+   * 最后那几个字就永远不会到这里（丢字）。落盘前先把它要回来。
+   */
+  const editorFlush = useRef<(() => string | null) | null>(null);
 
   function snapshotOf(entry: Entry, values: Draft): string {
     return JSON.stringify({
@@ -152,17 +158,28 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
 
   /** 立刻把待写的那一份落盘（停手后、切篇前、失焦时、卸载时都调它） */
   async function flush() {
+    // 先把编辑器里还没上报的那段要回来（防抖里的尾巴）
+    const tail = editorFlush.current?.() ?? null;
+    if (tail != null) {
+      setDraft((prev) => (prev.text === tail ? prev : { ...prev, text: tail }));
+    }
+
     const job = pending.current;
-    if (!job) return;
+    if (!job && tail == null) return;
     if (saveTimer.current != null) {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
     setSaveState("saving");
-    const values = draftRef.current;
-    const ok = await data.edit(job.entry, {
-      title: job.entry.title,
-      ...writeValues(job.entry, scene.id, fields, {
+    // **这次要写的正文以"刚补交的尾巴"为准**（draftRef 要等下一次渲染才更新，
+    // 读它会拿到补交之前的那份）
+    const base = draftRef.current;
+    const values = tail != null ? { ...base, text: tail } : base;
+    const target = job?.entry ?? current;
+    if (!target) return;
+    const ok = await data.edit(target, {
+      title: target.title,
+      ...writeValues(target, scene.id, fields, {
         ...values.meta,
         ...(textField ? { [textField.key]: values.text } : {}),
       }),
@@ -171,7 +188,7 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
       setSaveState("error");
       return; // 留着 pending：下一次改动或补写还会再试
     }
-    if (pending.current?.snapshot === job.snapshot) pending.current = null;
+    if (job && pending.current?.snapshot === job.snapshot) pending.current = null;
     setSaveState("clean");
   }
 
@@ -439,6 +456,9 @@ export default function WritingScene({ folder, scene }: SceneViewProps) {
 
               <Suspense fallback={<p className="writing__loading">编辑器加载中…</p>}>
                 <MarkdownWysiwyg
+                  onFlushReady={(f) => {
+                    editorFlush.current = f;
+                  }}
                   value={draft.text}
                   onChange={(next) => {
                     // 编辑器挂载时会把内容回灌一次（自己的 value 又报回来），那不算用户改动 ——

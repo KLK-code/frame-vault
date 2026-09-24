@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteEntry,
   importMedia,
@@ -75,6 +75,8 @@ export function useSceneData(folder: FolderNode): SceneData {
   const [notice, setNotice] = useState<string | null>(null);
   /** 刚被删掉的那条，供撤销用 */
   const [lastDeleted, setLastDeleted] = useState<string | null>(null);
+  /** 每条记录一条保存队列：同一条的写入串行，避免相互覆盖 */
+  const saveChains = useRef(new Map<string, Promise<boolean>>());
 
   // 提示自己会消失；消失后就不能撤销了（和大多数应用的"撤销"窗口一致）
   useEffect(() => {
@@ -162,17 +164,31 @@ export function useSceneData(folder: FolderNode): SceneData {
       patch: { title?: string; fields?: Record<string, unknown>; note?: string },
     ) => {
       setBusy(entry.id);
+      // **同一条记录的保存串行**：自动保存、失焦补写、切篇补写可能几乎同时发生，
+      // 两次写入交错就会各自基于旧内容，把对方的改动盖掉
+      // （前端的 busy 提示不能代替这个机制）。
+      const previous = saveChains.current.get(entry.id) ?? Promise.resolve();
+      const job = previous
+        .catch(() => undefined) // 上一次失败不该挡住这一次
+        .then(async () => {
+          const updated = await updateEntry(entry.id, patch);
+          // **不重扫整个仓库**：写回来的那条就是权威形状，直接替换列表里的它。
+          // 这条很要紧 —— 编辑器打字停顿 600ms 就自动存一次，每次重扫在安卓 SAF 上
+          // 是几十次跨进程查询（桌面感觉不到，手机上就是"打字卡"）。
+          setEntries((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+          return true;
+        })
+        .catch((err) => {
+          setError(String(err));
+          return false;
+        });
+
+      saveChains.current.set(entry.id, job);
       try {
-        const updated = await updateEntry(entry.id, patch);
-        // **不重扫整个仓库**：写回来的那条就是权威形状，直接替换列表里的它。
-        // 这条很要紧 —— 编辑器打字停顿 600ms 就自动存一次，每次重扫在安卓 SAF 上
-        // 是几十次跨进程查询（桌面感觉不到，手机上就是"打字卡"）。
-        setEntries((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-        return true;
-      } catch (err) {
-        setError(String(err));
-        return false;
+        return await job;
       } finally {
+        // 队尾还是自己时才清掉，别把后来者的链断了
+        if (saveChains.current.get(entry.id) === job) saveChains.current.delete(entry.id);
         setBusy(null);
       }
     },

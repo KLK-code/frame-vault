@@ -21,7 +21,8 @@ pub use folder::{
 };
 pub use id::new_id;
 pub use media::{
-    exif_taken_at, import_into_entry, is_media_ext, sort_media, write_thumbnail, MediaMeta,
+    exif_taken_at, import_into_entry, is_media_ext, plan_import, sha256_bytes, sort_media,
+    write_thumbnail, CopiedFile, ImportPlan, MediaMeta, MediaSource, SourceInfo,
 };
 pub use naming::{
     day_of, entry_dir_name, media_file_stem, sanitize, scene_dir_name, NameVars,
@@ -35,7 +36,7 @@ pub use storage::{
     find_entry_dir, find_folder_dir, folder_dirs, folder_json_path, internal_dir, is_vault,
     list_entries, list_trash_dirs, move_entry_to_slot, reorder_entries, note_path, read_entry, read_entry_from,
     read_text, read_vault_meta, rename_topic, restore_entry, root_dirs, topic_dir, topic_dirs,
-    trash_entry, trash_entry_path, vault_meta_path, write_entry, write_json_atomic,
-    write_text_atomic,
+    trash_entry, trash_entry_path, vault_meta_path, write_entry, write_entry_in,
+    write_json_atomic, write_text_atomic,
 };
 pub use storage::{create_topic, delete_topic};

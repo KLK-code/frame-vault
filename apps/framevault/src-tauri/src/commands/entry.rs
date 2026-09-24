@@ -110,7 +110,7 @@ pub fn save_entry(
     entry.touch(updated_at.as_deref().unwrap_or(&created));
 
     let dir = vault::find_entry_dir(&vault, &id)?;
-    let mut dir = vault::write_entry(&entry, &dir, Some(&previous))?;
+    let mut dir = vault::write_entry_in(&vault, &entry, &dir, Some(&previous))?;
 
     // 归属变了（换了场景）→ 记录要跟着搬到那个场景目录下：归属就是物理位置
     if previous.folder_id != entry.folder_id {
@@ -146,7 +146,7 @@ pub fn update_entry(
         entry.set_note(note);
     }
 
-    vault::write_entry(&entry, &dir, Some(&previous))?;
+    vault::write_entry_in(&vault, &entry, &dir, Some(&previous))?;
     Ok(entry.into())
 }
 

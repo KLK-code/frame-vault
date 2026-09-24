@@ -32,6 +32,7 @@ import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.io.IOException
+import java.security.MessageDigest
 
 // ── 入参（字段名与 Rust 侧一一对应）──
 
@@ -60,6 +61,13 @@ class SafRenameArgs {
   lateinit var root: String
   lateinit var from: String
   lateinit var to: String
+}
+
+@InvokeArg
+class SafSourceArgs {
+  lateinit var root: String
+  lateinit var path: String
+  lateinit var uri: String
 }
 
 @TauriPlugin
@@ -270,6 +278,105 @@ class SafBridgePlugin(private val activity: Activity) : Plugin(activity) {
       invoke.resolve(JSObject())
     } catch (ex: Exception) {
       invoke.reject(ex.message ?: "移动失败")
+    }
+  }
+
+  // ── 媒体来源（用户从系统选择器选的相册 / 文件）──
+  //
+  // 这几个命令的"来源"是一条 content:// 文档 URI，不是仓库里的相对路径。
+  // Rust 那边照旧只跑导入规则（命名模板 / 撞名去重 / 元数据），
+  // **字节怎么进来由这里决定** —— 视频走 copyIn 流式复制，一个字节都不进内存也不经过 JSON 桥。
+
+  @Command
+  fun probeSource(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(SafSourceArgs::class.java)
+      val uri = Uri.parse(args.uri)
+      var name = ""
+      var size = 0L
+      resolver.query(
+        uri,
+        arrayOf(
+          DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+          DocumentsContract.Document.COLUMN_SIZE
+        ),
+        null, null, null
+      )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+          name = cursor.getString(0) ?: ""
+          size = if (cursor.isNull(1)) 0L else cursor.getLong(1)
+        }
+      }
+      if (name.isEmpty()) throw IOException("读不出这个文件的名字")
+      val out = JSObject()
+      out.put("name", name)
+      out.put("size", size)
+      invoke.resolve(out)
+    } catch (ex: Exception) {
+      invoke.reject(ex.message ?: "读不出这个来源")
+    }
+  }
+
+  /** 把来源整个读进来（base64）。**只给"图片且不大"用** —— 视频走 copyIn。 */
+  @Command
+  fun readSource(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(SafSourceArgs::class.java)
+      val uri = Uri.parse(args.uri)
+      val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+        ?: throw IOException("打不开这个来源")
+      val out = JSObject()
+      out.put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+      invoke.resolve(out)
+    } catch (ex: Exception) {
+      invoke.reject(ex.message ?: "读不出这个来源")
+    }
+  }
+
+  /**
+   * 把来源**流式**复制进仓库，一遍过把 sha256 也算掉。
+   * 视频几百兆也不会有内存问题：这里只有 64KB 的缓冲。
+   */
+  @Command
+  fun copyIn(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(SafSourceArgs::class.java)
+      val root = Uri.parse(args.root)
+      val source = Uri.parse(args.uri)
+
+      val parentId = ensureDir(root, parentOf(args.path))
+      val name = nameOf(args.path)
+      if (name.isEmpty()) throw IOException("路径里没有文件名：${args.path}")
+
+      // 领域层已经按"撞名去重"给过唯一名字了，这里撞上就删掉旧的（不该发生，但别让它变成两份）
+      childDocId(root, parentId, name)?.let { deleteRecursive(root, it) }
+
+      val created = DocumentsContract.createDocument(
+        resolver, documentUri(root, parentId), mimeOf(name), name
+      ) ?: throw IOException("建不出文件：$name")
+      verifyName(created, name)
+
+      val digest = MessageDigest.getInstance("SHA-256")
+      var size = 0L
+      resolver.openInputStream(source)?.use { input ->
+        resolver.openOutputStream(created, "wt")?.use { output ->
+          val buf = ByteArray(64 * 1024)
+          while (true) {
+            val read = input.read(buf)
+            if (read <= 0) break
+            digest.update(buf, 0, read)
+            output.write(buf, 0, read)
+            size += read
+          }
+        } ?: throw IOException("写不进去：$name")
+      } ?: throw IOException("打不开这个来源")
+
+      val out = JSObject()
+      out.put("size", size)
+      out.put("sha256", digest.digest().joinToString("") { "%02x".format(it) })
+      invoke.resolve(out)
+    } catch (ex: Exception) {
+      invoke.reject(ex.message ?: "复制失败")
     }
   }
 

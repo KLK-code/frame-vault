@@ -9,8 +9,11 @@
 //! 路径约定：领域层手里的路径是**仓库根拼出来的绝对路径**（`Vault::join`）。
 //! 桌面实现直接用；SAF 实现自己按 `root` 剥前缀换成树里的相对路径 —— 所以领域代码不用知道这件事。
 
+use super::media::{CopiedFile, MediaSource, SourceInfo};
 use crate::error::{AppError, AppResult};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -40,6 +43,30 @@ pub trait VaultStore: Send + Sync {
     fn remove_dir_all(&self, path: &Path) -> AppResult<()>;
     fn is_file(&self, path: &Path) -> bool;
     fn is_dir(&self, path: &Path) -> bool;
+    /// 删掉**一个文件**（不是目录）。导入失败时清理那半个文件要用它。
+    fn remove_file(&self, path: &Path) -> AppResult<()>;
+
+    /// 这个后端手里的路径**是不是真的指向文件系统**？
+    ///
+    /// 桌面（`NativeFs`）是；SAF 不是 —— 那边的"路径"只是树的相对位置的载体，
+    /// 拿给 WebView（asset 协议）或当磁盘路径用都会出错。所以这类事靠**能力**分叉，
+    /// 而不是靠"现在是什么系统"。
+    fn native_paths(&self) -> bool {
+        true
+    }
+
+    // ── 媒体来源 ──
+    //
+    // 导入的"源头"在两端形态不同：桌面是文件路径，安卓是系统选择器给的
+    // `content://` 文档 URI。领域层只把它当不透明标识，怎么读全在这里决定 ——
+    // 这样"导入一篇照片"的规则（命名模板 / 撞名去重 / 元数据）两端一模一样。
+
+    /// 看一眼来源（不读内容）：名字与大小。领域层靠它决定要不要算元数据。
+    fn probe_source(&self, source: &MediaSource) -> AppResult<SourceInfo>;
+    /// 读来源的全部字节。**只给"图片且不大"用** —— 大文件走 `copy_source` 流式复制。
+    fn read_source(&self, source: &MediaSource) -> AppResult<Vec<u8>>;
+    /// 把来源**流式**复制到 dest，一遍过把 sha256 也算掉（大视频不进内存）。
+    fn copy_source(&self, source: &MediaSource, dest: &Path) -> AppResult<CopiedFile>;
 
     /// 文本落盘：**行尾一律 LF**。跨端一致要靠它 —— Windows 写出的 CRLF 会让
     /// 别的端与 git 看到"整个文件都变了"（storage.rs 的 `write_text_atomic` 一直在做这件事）。
@@ -122,6 +149,72 @@ impl VaultStore for NativeFs {
     fn is_dir(&self, path: &Path) -> bool {
         path.is_dir()
     }
+
+    fn remove_file(&self, path: &Path) -> AppResult<()> {
+        Ok(std::fs::remove_file(path)?)
+    }
+
+    fn probe_source(&self, source: &MediaSource) -> AppResult<SourceInfo> {
+        let path = match source {
+            MediaSource::Path(path) => path,
+            MediaSource::Uri(uri) => {
+                return Err(AppError::Invalid(format!("这条来源只有安卓认识：{uri}")))
+            }
+        };
+        let meta = std::fs::metadata(path)
+            .map_err(|_| AppError::Invalid(format!("找不到这个文件：{}", path.display())))?;
+        if !meta.is_file() {
+            return Err(AppError::Invalid(format!("不是文件：{}", path.display())));
+        }
+        Ok(SourceInfo {
+            name: path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            size: meta.len(),
+        })
+    }
+
+    fn read_source(&self, source: &MediaSource) -> AppResult<Vec<u8>> {
+        match source {
+            MediaSource::Path(path) => Ok(std::fs::read(path)?),
+            MediaSource::Uri(uri) => Err(AppError::Invalid(format!(
+                "这条来源只有安卓认识：{uri}"
+            ))),
+        }
+    }
+
+    fn copy_source(&self, source: &MediaSource, dest: &Path) -> AppResult<CopiedFile> {
+        let path = match source {
+            MediaSource::Path(path) => path,
+            MediaSource::Uri(uri) => {
+                return Err(AppError::Invalid(format!("这条来源只有安卓认识：{uri}")))
+            }
+        };
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // 一遍过：边拷边算哈希（原来是拷完之后再读一遍整个文件算）
+        let mut input = std::fs::File::open(path)?;
+        let mut output = std::fs::File::create(dest)?;
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut size = 0u64;
+        loop {
+            let read = input.read(&mut buf)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buf[..read]);
+            output.write_all(&buf[..read])?;
+            size += read as u64;
+        }
+        Ok(CopiedFile {
+            size,
+            hash: hasher.finalize().iter().map(|b| format!("{b:02x}")).collect(),
+        })
+    }
 }
 
 /// 内存实现：**给测试用的**，也是"SAF 实现该有什么语义"的可执行说明书。
@@ -145,6 +238,29 @@ impl MemStore {
 }
 
 impl VaultStore for MemStore {
+    fn remove_file(&self, path: &Path) -> AppResult<()> {
+        self.files.lock().unwrap().remove(&Self::key(path));
+        Ok(())
+    }
+
+    fn native_paths(&self) -> bool {
+        false
+    }
+
+    // 内存实现没有"仓库外面的文件"，导入那条链一律报错 ——
+    // 它守的是"仓库内部读写长什么样"，不是"字节从哪来"。
+    fn probe_source(&self, _source: &MediaSource) -> AppResult<SourceInfo> {
+        Err(AppError::Invalid("内存实现不支持外部来源".to_string()))
+    }
+
+    fn read_source(&self, _source: &MediaSource) -> AppResult<Vec<u8>> {
+        Err(AppError::Invalid("内存实现不支持外部来源".to_string()))
+    }
+
+    fn copy_source(&self, _source: &MediaSource, _dest: &Path) -> AppResult<CopiedFile> {
+        Err(AppError::Invalid("内存实现不支持外部来源".to_string()))
+    }
+
     fn read_bytes(&self, path: &Path) -> AppResult<Vec<u8>> {
         let key = Self::key(path);
         self.files

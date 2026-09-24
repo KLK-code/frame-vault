@@ -40,24 +40,14 @@ pub(crate) fn vault_for_ref(app: &tauri::AppHandle, reference: &VaultRef) -> App
     }
 }
 
-/// 当前仓库的**桌面路径**：只给"真的需要一条文件系统路径"的地方用 ——
-/// asset 协议放行、缩略图缓存目录、以及 S3 之前的媒体导入。理由同上：宁可报错。
-pub(crate) fn active_vault_dir(state: &AppState) -> AppResult<PathBuf> {
-    let reference = active_vault_ref(state)?;
-    match reference.as_path() {
-        Some(path) => Ok(path.to_path_buf()),
-        None => Err(AppError::Invalid(
-            "这个仓库在安卓的外部存储上，当前版本还不支持读写它".to_string(),
-        )),
-    }
-}
-
 /// 缩略图缓存目录：`<应用数据>/thumbs/<vault-id>/`
 ///
 /// **刻意不进 Vault**（PRD §9 / FV-SYN-002）：缩略图是可重建缓存，
 /// 放进 Vault 只会让同步白白搬几 GB，还会在每台设备上冲突。
-pub(crate) fn thumbs_dir(app: &tauri::AppHandle, vault_dir: &Path) -> AppResult<PathBuf> {
-    let vault_id = crate::vault::read_vault_meta(vault_dir)?.vault_id;
+pub(crate) fn thumbs_dir(app: &tauri::AppHandle, vault: &Vault) -> AppResult<PathBuf> {
+    // vault_id 经 store 读（SAF 上照样读得到）—— 缩略图本身落在应用数据目录，
+    // 那是真文件系统，两端一样
+    let vault_id = crate::vault::read_vault_meta(vault)?.vault_id;
     Ok(app.path().app_data_dir()?.join("thumbs").join(vault_id))
 }
 
@@ -70,7 +60,7 @@ pub(crate) fn allow_vault_assets(app: &tauri::AppHandle, vault_dir: &Path) {
     if let Err(e) = scope.allow_directory(vault_dir, true) {
         eprintln!("[rust] 放行 Vault 目录失败（{}）：{e}", vault_dir.display());
     }
-    if let Ok(dir) = thumbs_dir(app, vault_dir) {
+    if let Ok(dir) = thumbs_dir(app, &Vault::at(vault_dir.to_path_buf())) {
         let _ = scope.allow_directory(&dir, false);
     }
 }

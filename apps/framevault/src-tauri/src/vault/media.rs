@@ -25,7 +25,6 @@ use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// 认作"媒体"的扩展名（对账时用它区分"用户顺手放进来的照片"和"别的文件"）
@@ -120,32 +119,22 @@ pub fn normalize_ext(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// 流式算 sha256：大视频也不会把内存吃爆
-pub fn sha256_file(path: &Path) -> AppResult<String> {
-    let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buf = vec![0u8; 64 * 1024];
-
-    loop {
-        let read = file.read(&mut buf)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buf[..read]);
-    }
-
-    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
-}
-
-/// 只读文件头拿尺寸，不解码整张图
-pub fn image_size(path: &Path) -> Option<(u32, u32)> {
-    image::image_dimensions(path).ok()
+/// 从内存里拿尺寸（安卓上的来源没有路径，只有字节）
+pub fn image_size_bytes(bytes: &[u8]) -> Option<(u32, u32)> {
+    let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    reader.into_dimensions().ok()
 }
 
 /// 读 EXIF 拍摄时间。任何一步失败都返回 None —— 照片本身没问题，只是没这个信息。
 pub fn exif_taken_at(path: &Path) -> Option<String> {
-    let file = fs::File::open(path).ok()?;
-    let mut reader = std::io::BufReader::new(file);
+    exif_taken_at_bytes(&fs::read(path).ok()?)
+}
+
+/// 从内存里读 EXIF（理由同上：安卓的来源没有路径）
+pub fn exif_taken_at_bytes(bytes: &[u8]) -> Option<String> {
+    let mut reader = std::io::BufReader::new(std::io::Cursor::new(bytes));
     let exif = exif::Reader::new().read_from_container(&mut reader).ok()?;
 
     let field = exif
@@ -183,47 +172,139 @@ pub fn normalize_exif_datetime(raw: &str) -> Option<String> {
     ))
 }
 
-/// 导入一个文件：**复制**进记录目录（原文件不动），**按模板改名**，记下大小 / 哈希 / 尺寸。
+/// 媒体的**来源**：桌面是文件路径，安卓是系统选择器给的 `content://` 文档 URI。
+///
+/// 领域层只把它当**不透明标识**（不认识平台），"怎么读"由 `VaultStore` 决定 ——
+/// 这样同一条导入规则在两端一模一样，只有"字节从哪来"不同。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaSource {
+    Path(PathBuf),
+    Uri(String),
+}
+
+impl MediaSource {
+    /// 前端传来的是一个裸字符串：`content://` 开头的当 URI，其余当路径。
+    /// 与仓库引用（`VaultRef::from_input`）用同一条规矩，前端不做字符串手术。
+    pub fn from_input(input: &str) -> Self {
+        if input.starts_with("content://") {
+            MediaSource::Uri(input.to_string())
+        } else {
+            MediaSource::Path(PathBuf::from(input))
+        }
+    }
+
+    pub fn display(&self) -> String {
+        match self {
+            MediaSource::Path(path) => path.display().to_string(),
+            MediaSource::Uri(uri) => uri.clone(),
+        }
+    }
+}
+
+/// 看一眼来源（不读内容）得到的事实
+#[derive(Debug, Clone)]
+pub struct SourceInfo {
+    /// 来源自己的名字（用它取扩展名 —— 我们按扩展名决定"要不要算图片元数据"）
+    pub name: String,
+    pub size: u64,
+}
+
+/// 流式复制的结果：一遍过把大小与 sha256 都算出来（不再为了哈希把文件读第二遍）
+#[derive(Debug, Clone)]
+pub struct CopiedFile {
+    pub size: u64,
+    pub hash: String,
+}
+
+/// 导入第一步的产物：**来源只读一次**。
+///
+/// 为什么分两步：命名模板要用拍摄时间（`{date}`），元数据要用字节 ——
+/// 如果各读一次，安卓上就得把同一张照片从系统里拉两遍。
+pub struct ImportPlan {
+    pub ext: String,
+    pub size: u64,
+    pub taken_at: Option<String>,
+    /// 图片且不太大时把字节一起带上（算哈希 / EXIF / 尺寸）；大文件是 `None`，走流式复制
+    pub inline: Option<Vec<u8>>,
+}
+
+/// 超过这个大小就不往内存里读了（视频基本都在这一档）：
+/// 元数据（哈希 / EXIF / 尺寸）对大文件本来也没多大意义，宁可少几个字段也别把内存吃爆。
+const MAX_INLINE_BYTES: u64 = 24 * 1024 * 1024;
+
+/// 导入第一步：来源是什么、多大、拍摄于何时、要不要把字节带上来。
+pub fn plan_import(vault: &Vault, source: &MediaSource) -> AppResult<ImportPlan> {
+    let info = vault.store().probe_source(source)?;
+    let ext = ext_of_name(&info.name);
+
+    // 只有"图片 + 不太大"才把字节读进来。视频 / 超大文件一个字节都不进内存。
+    let inline = if is_decodable_image(&ext) && info.size > 0 && info.size <= MAX_INLINE_BYTES {
+        Some(vault.store().read_source(source)?)
+    } else {
+        None
+    };
+
+    // 拍摄时间要单独读：EXIF 只在图片里有，而且经常压根没有
+    let taken_at = inline.as_deref().and_then(exif_taken_at_bytes);
+
+    Ok(ImportPlan {
+        ext,
+        size: info.size,
+        taken_at,
+        inline,
+    })
+}
+
+/// 从文件名取扩展名（小写）。来源可能是 URI，所以这里不碰路径。
+pub fn ext_of_name(name: &str) -> String {
+    name.rsplit_once('.')
+        .map(|(_, ext)| ext.to_lowercase())
+        .unwrap_or_default()
+}
+
+/// 导入一个媒体文件：**复制**进记录目录（原文件不动），**按模板改名**，记下大小 / 哈希 / 尺寸。
 ///
 /// 名字只有一套规矩：**`file` 是磁盘上那个名字**（导入时按模板生成、撞名去重），
 /// 界面显示与路径拼接都用它；导入前的原名不留。
 ///
 /// 失败时清掉已经拷进去的那半个文件，不留"有条目没文件"的垃圾。
 pub fn import_into_entry(
+    vault: &Vault,
     entry_dir: &Path,
-    source: &Path,
+    source: &MediaSource,
+    plan: &ImportPlan,
     template: Option<&str>,
     vars: &NameVars,
     added_at: &str,
 ) -> AppResult<MediaMeta> {
-    if !source.is_file() {
-        return Err(AppError::Invalid(format!("不是文件：{}", source.display())));
-    }
-    if !entry_dir.is_dir() {
+    if !vault.is_dir(entry_dir) {
         return Err(AppError::NotFound(format!(
             "记录目录不存在：{}",
             entry_dir.display()
         )));
     }
 
-    let ext = normalize_ext(source);
+    let ext = plan.ext.clone();
     let stem = naming::media_file_stem(template, vars);
-    let file = naming::unique_child_name(entry_dir, &stem, Some(&ext));
+    let file = naming::unique_child_name_in(vault, entry_dir, &stem, Some(&ext));
     let dest = entry_dir.join(&file);
 
     let result = (|| -> AppResult<MediaMeta> {
-        fs::copy(source, &dest)?;
-
-        let bytes = fs::metadata(&dest)?.len();
-        let hash = sha256_file(&dest)?;
-        let size = if is_decodable_image(&ext) {
-            image_size(&dest)
-        } else {
-            None
+        let (bytes, hash) = match &plan.inline {
+            // 图片：字节已经在上一步读上来了，直接落盘 + 就地算哈希
+            Some(content) => {
+                vault.write_bytes(&dest, content)?;
+                (content.len() as u64, sha256_bytes(content))
+            }
+            // 视频 / 大文件：流式复制，一遍过把 sha256 也算掉，内存里只有 64KB 的缓冲
+            None => {
+                let copied = vault.store().copy_source(source, &dest)?;
+                (copied.size, copied.hash)
+            }
         };
-        // 拍摄时间要单独读：EXIF 只在图片里有，而且经常压根没有
-        let taken_at = if is_decodable_image(&ext) {
-            exif_taken_at(&dest)
+
+        let size = if plan.inline.is_some() && is_decodable_image(&ext) {
+            image_size_bytes(plan.inline.as_deref().unwrap_or_default())
         } else {
             None
         };
@@ -238,16 +319,23 @@ pub fn import_into_entry(
             bytes,
             width: size.map(|(w, _)| w),
             height: size.map(|(_, h)| h),
-            taken_at,
+            taken_at: plan.taken_at.clone(),
             hash,
             added_at: added_at.to_string(),
         })
     })();
 
     if result.is_err() {
-        let _ = fs::remove_file(&dest);
+        let _ = vault.store().remove_file(&dest);
     }
     result
+}
+
+/// 从内存算 sha256（导入图片时用；流式那条路在 store 里算）
+pub fn sha256_bytes(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// 对账（§5）：记录目录里**多出来的**媒体文件 → 收养进 `media[]`。
@@ -314,11 +402,14 @@ pub fn drop_missing_files_in(vault: &Vault, entry_dir: &Path, media: &mut Vec<Me
 
 /// 生成缩略图到指定路径（**目标目录由调用方给**，领域层不认识应用数据目录）。
 /// 长边不超过 `max`，输出 JPEG——先转 RGB，否则 JPEG 编码器会拒绝带 alpha 的 RGBA。
-pub fn write_thumbnail(source: &Path, dest: &Path, max: u32) -> AppResult<()> {
+///
+/// 吃**字节**而不是路径：安卓上的照片来自 `content://`，磁盘上没有那个文件；
+/// 而缩略图落在应用数据目录（真文件系统）——所以只有"读来源"那一半需要抽象。
+pub fn write_thumbnail(bytes: &[u8], dest: &Path, max: u32) -> AppResult<()> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
     }
-    let thumb = image::open(source)
+    let thumb = image::load_from_memory(bytes)
         .map_err(|e| AppError::Invalid(format!("解码失败：{e}")))?
         .thumbnail(max, max)
         .to_rgb8();
@@ -340,6 +431,21 @@ pub fn sort_media(list: &mut [MediaMeta]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 导入的测试外壳：测试里"仓库"就是那个临时目录，句柄按它造；
+    /// 来源按路径给（其它形态由 store 的实现负责，见 store.rs 的一致性测试）。
+    fn import(
+        entry_dir: &Path,
+        source: &Path,
+        template: Option<&str>,
+        vars: &NameVars,
+        added_at: &str,
+    ) -> AppResult<MediaMeta> {
+        let vault = Vault::at(entry_dir.to_path_buf());
+        let source = MediaSource::Path(source.to_path_buf());
+        let plan = plan_import(&vault, &source)?;
+        import_into_entry(&vault, entry_dir, &source, &plan, template, vars, added_at)
+    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("framevault-media-{name}"));
@@ -366,7 +472,7 @@ mod tests {
         let source_bytes = fs::metadata(&source).unwrap().len();
 
         let meta =
-            import_into_entry(&entry_dir, &source, None, &vars(), "2026-04-01T10:00:00Z").unwrap();
+            import(&entry_dir, &source, None, &vars(), "2026-04-01T10:00:00Z").unwrap();
 
         assert!(
             !serde_json::to_string(&meta).unwrap().contains("name"),
@@ -393,9 +499,9 @@ mod tests {
         image::RgbImage::new(2, 2).save(&source).unwrap();
 
         let mut v = vars();
-        let first = import_into_entry(&entry_dir, &source, None, &v, "now").unwrap();
+        let first = import(&entry_dir, &source, None, &v, "now").unwrap();
         v.n = 2;
-        let second = import_into_entry(&entry_dir, &source, None, &v, "now").unwrap();
+        let second = import(&entry_dir, &source, None, &v, "now").unwrap();
 
         assert_eq!(first.file, "2026-04-01_晨跑打卡_01.png");
         assert_eq!(second.file, "2026-04-01_晨跑打卡_02.png");
@@ -409,8 +515,8 @@ mod tests {
         image::RgbImage::new(2, 2).save(&source).unwrap();
 
         // 同一个序号导入两次（用户手快点了两下）：第二个加 (2)，绝不覆盖
-        let first = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
-        let second = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
+        let first = import(&entry_dir, &source, None, &vars(), "now").unwrap();
+        let second = import(&entry_dir, &source, None, &vars(), "now").unwrap();
 
         assert_eq!(first.file, "2026-04-01_晨跑打卡_01.png");
         assert_eq!(second.file, "2026-04-01_晨跑打卡_01 (2).png");
@@ -425,7 +531,7 @@ mod tests {
 
         let mut v = vars();
         v.fields = serde_json::json!({ "builtin.challenge": { "distance": 5 } });
-        let meta = import_into_entry(
+        let meta = import(
             &entry_dir,
             &source,
             Some("{date}_{title}_{field:distance}_{n}"),
@@ -534,7 +640,8 @@ mod tests {
         image::RgbImage::new(800, 400).save(&source).unwrap();
 
         let dest = vault.join("cache").join("m-1.jpg");
-        write_thumbnail(&source, &dest, 200).unwrap();
+        let bytes = fs::read(&source).unwrap();
+        write_thumbnail(&bytes, &dest, 200).unwrap();
 
         let (w, h) = image::image_dimensions(&dest).unwrap();
         assert_eq!((w, h), (200, 100), "等比缩放");
@@ -542,7 +649,8 @@ mod tests {
         // 认不出的格式不该 panic，只返回错误
         let weird = vault.join("x.heic");
         fs::write(&weird, b"not really a heic").unwrap();
-        assert!(write_thumbnail(&weird, &vault.join("cache").join("x.jpg"), 64).is_err());
+        let not_an_image = fs::read(&weird).unwrap();
+        assert!(write_thumbnail(&not_an_image, &vault.join("cache").join("x.jpg"), 64).is_err());
     }
 
     #[test]
@@ -578,7 +686,7 @@ mod tests {
         let source = entry_dir.join("a.png");
         image::RgbImage::new(2, 2).save(&source).unwrap();
 
-        let meta = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
+        let meta = import(&entry_dir, &source, None, &vars(), "now").unwrap();
         assert!(
             meta.taken_at.is_none(),
             "没有 EXIF 就必须留空，让上层退回 added_at"
@@ -591,7 +699,7 @@ mod tests {
         let source = entry_dir.join("clip.MP4");
         fs::write(&source, vec![0u8; 1024]).unwrap();
 
-        let meta = import_into_entry(&entry_dir, &source, None, &vars(), "now").unwrap();
+        let meta = import(&entry_dir, &source, None, &vars(), "now").unwrap();
         assert_eq!(meta.ext, "mp4", "扩展名统一小写");
         assert_eq!(meta.mime, "video/mp4");
         assert_eq!(meta.file, "2026-04-01_晨跑打卡_01.mp4");
@@ -604,7 +712,7 @@ mod tests {
         let entry_dir = temp_dir("failed");
         let before = fs::read_dir(&entry_dir).unwrap().count();
 
-        let result = import_into_entry(
+        let result = import(
             &entry_dir,
             &entry_dir.join("nope.png"),
             None,
@@ -616,7 +724,7 @@ mod tests {
 
         // 记录目录不存在时也要明确报错，而不是建出一个孤儿目录
         let ghost = entry_dir.join("没有这个记录");
-        assert!(import_into_entry(&ghost, &entry_dir.join("nope.png"), None, &vars(), "now")
+        assert!(import(&ghost, &entry_dir.join("nope.png"), None, &vars(), "now")
             .is_err());
         assert!(!ghost.exists());
     }

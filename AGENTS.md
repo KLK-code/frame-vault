@@ -143,6 +143,11 @@ main.tsx（按窗口 label 分派）→ App.tsx / app/*（外壳）→ features/
 - **v2 之后的参数变化**：`save_entry` 多了 `day`（本地创建日，前端给 —— 目录名要用）与 `note`（正文）；
   `update_entry` 多了 `note`（不传就不动 `note.md`）；`import_media` 的 `entryId` **变成必填**，
   另加 `nameTemplate`（场景 manifest 里声明的命名模板，前端解析后传入；不传走核心默认）。
+- **媒体来源（2026-09）**：`import_media` 的 `sourcePath` 改名 **`source`** —— 它
+  **两端形态不同但都原样传**：桌面是文件路径，安卓是系统选择器给的 `content://` 文档 URI
+  （`MediaSource::from_input` 按前缀分流）。领域层只把它当不透明标识，"怎么读"由 `VaultStore`
+  决定（`probe_source` / `read_source` / `copy_source`）—— **图片走字节、视频走流式复制**，
+  两端的导入规则一个字都不差。缩略图 `write_thumbnail` 吃 `&[u8]`（安卓上没有可读的路径）。
 - **SAF（2026-09，安卓）**：新增 `pick_saf_tree`（弹系统目录选择器，返回 `{uri, name}` 或 `null`）。
   `create_vault` / `add_vault` / `switch_vault` / `forget_vault` / `vault_exists` 的 `path` 参数
   **接两种东西**：桌面路径、或 `content://` 树 URI（`VaultRef::from_input` 按前缀分流）——

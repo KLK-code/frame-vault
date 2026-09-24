@@ -614,7 +614,7 @@ features/scene/markdown/           渲染与输入（要用 vault 资源地址�
 | `list_entries` | `folderId?` / `includeDeleted?` | `EntryView[]` | 列记录（**手动排过的块在前按 order，没排过的按时间降序**；**墓碑默认不出现**，要看回收站才传 `includeDeleted`）。内部是**扫盘**：场景目录下的记录 + 未归类容器 + 回收站 | ✅ |
 | `reorder_entries` | `orderedIds` | `EntryView[]` | 手动排序：把当前场景的记录 id 按**新顺序**整表发来，按位置写 `order` 0..n（只认活记录，没发到的不动；order 改动不触发目录改名）。返回该场景全量 | ✅ |
 | `read_vault_meta` | — | `VaultMeta` | 读 vault.json（校验身份与布局版本；**v1 仓库在这里被拒**） | ✅ |
-| `import_media` | `sourcePath` / `entryId` / `nameTemplate?` / `addedAt` | `MediaItem` | 把一个文件**复制进记录目录**，按模板命名（算 sha256 / 探尺寸 / 生成缩略图）；`entryId` **必填**，`async` 命令，不占主线程 | ✅ |
+| `import_media` | `source`（路径或 `content://` URI） / `entryId` / `nameTemplate?` / `addedAt` | `MediaItem` | 把一个文件**复制进记录目录**，按模板命名（算 sha256 / 探尺寸 / 生成缩略图）；`entryId` **必填**，`async` 命令，不占主线程 | ✅ |
 | `list_media` | `entryId?` | `MediaItem[]` | 列媒体（新的在前）：**从各条记录的 `media[]` 汇总**（不再扫 `media/`），返回原文件与缩略图的**绝对路径** | ✅ |
 | `list_folder_tree` | — | `FolderNode[]` | 全部场景（已排序；含 `scene` / `effectiveScene` / `order` / `pinned`） | ✅ |
 | `create_folder` | `name` / `scene?` / `topic?` | `FolderNode[]` | 新建**文件夹**：起名 + 选场景（怎么记）+ 选放哪个**主题**下（`topic: null` = 直接摆根下，没有主题；主题不存在会报错，不偷偷建目录） | ✅ |

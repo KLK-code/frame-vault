@@ -5,9 +5,10 @@
 
 use framevault_lib::vault::{
     create_entry, create_folder_in, create_topic, create_vault, delete_topic, entry_json_path,
-    import_into_entry, list_entries, list_folders, media_file_stem, move_entry_to_slot, read_entry,
-    read_folder, rename_topic, restore_entry, save_folder, trash_entry, write_entry,
-    write_json_atomic, Entry, FolderMeta, NameVars, SCHEMA_VERSION, UNCATEGORIZED,
+    import_into_entry, list_entries, list_folders, media_file_stem, move_entry_to_slot,
+    plan_import, read_entry, read_folder, rename_topic, restore_entry, save_folder, trash_entry,
+    write_entry, write_json_atomic, Entry, FolderMeta, MediaSource, NameVars, SCHEMA_VERSION,
+    UNCATEGORIZED, Vault,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -88,9 +89,12 @@ fn full_lifecycle_produces_the_readable_layout() {
         n: 1,
         ..Default::default()
     };
+    let media_plan = plan_import(&Vault::at(vault.clone()), &MediaSource::Path(source.clone())).unwrap();
     let media = import_into_entry(
+        &Vault::at(vault.clone()),
         &entry_dir,
-        &source,
+        &MediaSource::Path(source.clone()),
+        &media_plan,
         Some("{date}_{scene}_{n}"),
         &vars,
         "2026-09-22T07:35:00+08:00",
@@ -313,9 +317,12 @@ fn media_naming_template_falls_back_when_variables_are_missing() {
         n: 1,
         ..Default::default()
     };
+    let plan = plan_import(&Vault::at(vault.clone()), &MediaSource::Path(source.clone())).unwrap();
     let missing = import_into_entry(
+        &Vault::at(vault.clone()),
         &dir,
-        &source,
+        &MediaSource::Path(source.clone()),
+        &plan,
         Some("{date}_{field:location}_{n}"),
         &vars,
         "2026-09-22T08:00:00+08:00",
@@ -328,8 +335,10 @@ fn media_naming_template_falls_back_when_variables_are_missing() {
     let mut with_location = vars.clone();
     with_location.fields = serde_json::json!({ "builtin.travel": { "location": "西湖" } });
     let named = import_into_entry(
+        &Vault::at(vault.clone()),
         &dir,
-        &source,
+        &MediaSource::Path(source.clone()),
+        &plan,
         Some("{date}_{field:location}_{n}"),
         &with_location,
         "2026-09-22T08:01:00+08:00",

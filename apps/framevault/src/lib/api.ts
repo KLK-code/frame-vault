@@ -310,16 +310,19 @@ export const restoreEntry = (id: string, now = new Date().toISOString()) =>
 /**
  * 导入一个文件（复制进**这条记录的目录**，原文件不动）。
  *
+ * `source` 两端形态不同、但**都原样传**：桌面是文件路径，安卓是系统选择器给的
+ * `content://` 文档 URI（Rust 按前缀分流，前端不做字符串手术）。
+ *
  * `nameTemplate` 是场景在 manifest 里声明的命名模板（纯数据），由前端解析后传进来 ——
  * 第三方场景的模板在它自己的插件包里，Rust 不该去读插件目录。不给就走核心默认模板。
  * 长任务：Rust 侧是 `#[tauri::command(async)]`，不会占住主线程。
  */
 export const importMedia = (
-  sourcePath: string,
+  source: string,
   entryId: string,
   nameTemplate: string | null = null,
   addedAt = new Date().toISOString(),
-) => invoke<MediaItem>("import_media", { sourcePath, entryId, nameTemplate, addedAt });
+) => invoke<MediaItem>("import_media", { source, entryId, nameTemplate, addedAt });
 
 /** 列出媒体（新的在前）；给了 entryId 就只看那条记录的 */
 export const listMedia = (entryId: string | null = null) =>

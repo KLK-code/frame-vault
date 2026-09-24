@@ -282,18 +282,6 @@ pub fn unique_child_name_in(vault: &Vault, dir: &Path, stem: &str, ext: Option<&
     pick_unique(&taken, stem, ext)
 }
 
-/// 过渡壳（只跑桌面）：拿裸路径的调用方走这儿，域内调用点正在往 `unique_child_name_in` 迁。
-pub fn unique_child_name(dir: &Path, stem: &str, ext: Option<&str>) -> String {
-    let mut taken: HashSet<String> = HashSet::new();
-    if let Ok(items) = std::fs::read_dir(dir) {
-        for item in items.flatten() {
-            // `to_string_lossy`：非 UTF-8 的名字也占位（宁可多让一个，也别撞上）
-            taken.insert(item.file_name().to_string_lossy().to_lowercase());
-        }
-    }
-    pick_unique(&taken, stem, ext)
-}
-
 /// 挑一个没被占用的名字：`名字.ext` → `名字 (2).ext` → `名字 (3).ext` ……（大小写不敏感）
 fn pick_unique(taken: &HashSet<String>, stem: &str, ext: Option<&str>) -> String {
     let stem = if stem.trim().is_empty() {
@@ -466,18 +454,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
-        assert_eq!(unique_child_name(&dir, "照片", Some("jpg")), "照片.jpg");
+        assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "照片", Some("jpg")), "照片.jpg");
 
         std::fs::write(dir.join("照片.jpg"), b"x").unwrap();
-        assert_eq!(unique_child_name(&dir, "照片", Some("jpg")), "照片 (2).jpg");
+        assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "照片", Some("jpg")), "照片 (2).jpg");
 
         std::fs::write(dir.join("照片 (2).jpg"), b"x").unwrap();
-        assert_eq!(unique_child_name(&dir, "照片", Some("jpg")), "照片 (3).jpg");
+        assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "照片", Some("jpg")), "照片 (3).jpg");
 
         // 目录也一样（不带扩展名）
         std::fs::create_dir_all(dir.join("2026-09-23 早跑")).unwrap();
         assert_eq!(
-            unique_child_name(&dir, "2026-09-23 早跑", None),
+            unique_child_name_in(&Vault::at(dir.clone()), &dir, "2026-09-23 早跑", None),
             "2026-09-23 早跑 (2)"
         );
     }
@@ -487,7 +475,7 @@ mod tests {
         let dir = std::env::temp_dir().join("framevault-naming-empty");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        assert_eq!(unique_child_name(&dir, "  ", None), FALLBACK_ENTRY);
+        assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "  ", None), FALLBACK_ENTRY);
     }
 
     /// 判重**按大小写不敏感**：Windows / macOS 的盘本来就不敏感（`Foo` 与 `foo` 是同一个文件），
@@ -500,18 +488,18 @@ mod tests {
 
         std::fs::write(dir.join("Photo.JPG"), b"x").unwrap();
         assert_eq!(
-            unique_child_name(&dir, "photo", Some("jpg")),
+            unique_child_name_in(&Vault::at(dir.clone()), &dir, "photo", Some("jpg")),
             "photo (2).jpg",
             "大小写不同也算撞名"
         );
         assert_eq!(
-            unique_child_name(&dir, "PHOTO", Some("JPG")),
+            unique_child_name_in(&Vault::at(dir.clone()), &dir, "PHOTO", Some("JPG")),
             "PHOTO (2).JPG"
         );
 
         // 目录同理
         std::fs::create_dir_all(dir.join("Run")).unwrap();
-        assert_eq!(unique_child_name(&dir, "run", None), "run (2)");
+        assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "run", None), "run (2)");
     }
 
     /// 列一次目录就够了：候选很多个时也不该逐个探盘。
@@ -527,6 +515,6 @@ mod tests {
             std::fs::write(dir.join(format!("图 ({index}).jpg")), b"x").unwrap();
         }
 
-        assert_eq!(unique_child_name(&dir, "图", Some("jpg")), "图 (501).jpg");
+        assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "图", Some("jpg")), "图 (501).jpg");
     }
 }

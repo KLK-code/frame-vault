@@ -52,12 +52,58 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// base64 解码（标准字母表 + padding，容忍换行）；不合法就 `None`。
+///
+/// 为什么手写：与编码同一理由（AGENTS §1 的依赖红线，二十来行就够）；
+/// 它只用在"读一张图片的字节"这条路上 —— 媒体本体走 Kotlin 的流式复制，不过 base64。
+#[cfg(any(target_os = "android", test))]
+fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    fn value(c: u8) -> Option<u32> {
+        match c {
+            b'A'..=b'Z' => Some((c - b'A') as u32),
+            b'a'..=b'z' => Some((c - b'a') as u32 + 26),
+            b'0'..=b'9' => Some((c - b'0') as u32 + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    }
+
+    let clean: Vec<u8> = text.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    let mut out = Vec::with_capacity(clean.len() / 4 * 3);
+    for chunk in clean.chunks(4) {
+        if chunk.len() < 4 {
+            return None;
+        }
+        let mut triple = 0u32;
+        let mut pad = 0;
+        for (index, &c) in chunk.iter().enumerate() {
+            let v = if c == b'=' {
+                pad += 1;
+                0
+            } else {
+                value(c)?
+            };
+            triple |= v << (18 - 6 * index);
+        }
+        out.push((triple >> 16) as u8);
+        if pad < 2 {
+            out.push((triple >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(triple as u8);
+        }
+    }
+    Some(out)
+}
+
 // ── 安卓专属 ──
 
 #[cfg(target_os = "android")]
 mod android {
     use crate::error::{AppError, AppResult};
-    use crate::vault::store::{DirEntry, Vault, VaultStore};
+    use crate::vault::store::{DirEntry, NativeFs, Vault, VaultStore};
+    use crate::vault::{CopiedFile, MediaSource, SourceInfo};
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
     use std::path::{Path, PathBuf};
@@ -169,6 +215,15 @@ mod android {
     }
 
     #[derive(Serialize)]
+    struct SourceArgs<'a> {
+        root: &'a str,
+        /// 目标（仓库里的相对路径）—— probeSource / readSource 不用它，填空串
+        path: &'a str,
+        /// 来源自己的 URI（`content://…`）
+        uri: &'a str,
+    }
+
+    #[derive(Serialize)]
     struct RenameArgs<'a> {
         root: &'a str,
         from: &'a str,
@@ -195,6 +250,26 @@ mod android {
     #[derive(Deserialize)]
     struct TextResult {
         text: String,
+    }
+
+    #[derive(Deserialize)]
+    struct ProbeResult {
+        name: String,
+        #[serde(default)]
+        size: u64,
+    }
+
+    #[derive(Deserialize)]
+    struct ReadSourceResult {
+        base64: String,
+    }
+
+    #[derive(Deserialize)]
+    struct CopiedResult {
+        #[serde(default)]
+        size: u64,
+        #[serde(default)]
+        sha256: String,
     }
 
     #[derive(Deserialize)]
@@ -294,6 +369,79 @@ mod android {
                 path: &self.rel(path),
             };
             self.bridge.call_unit("delete", args)
+        }
+
+        fn remove_file(&self, path: &Path) -> AppResult<()> {
+            let args = PathArgs {
+                root: &self.tree,
+                path: &self.rel(path),
+            };
+            self.bridge.call_unit("delete", args)
+        }
+
+        /// SAF 上的"路径"不是真路径：WebView（asset 协议）不能拿它加载东西。
+        /// 照片显示那条链因此走自定义协议（S4）。
+        fn native_paths(&self) -> bool {
+            false
+        }
+
+        fn probe_source(&self, source: &MediaSource) -> AppResult<SourceInfo> {
+            match source {
+                MediaSource::Uri(uri) => {
+                    let args = SourceArgs {
+                        root: &self.tree,
+                        path: "",
+                        uri,
+                    };
+                    let probed: ProbeResult = self.bridge.call("probeSource", args)?;
+                    Ok(SourceInfo {
+                        name: probed.name,
+                        size: probed.size,
+                    })
+                }
+                // 应用私有目录里的真文件（将来的相机临时文件）：那就是真文件系统
+                MediaSource::Path(path) => NativeFs.probe_source(source).map(|mut info| {
+                    info.name = path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or(info.name);
+                    info
+                }),
+            }
+        }
+
+        fn read_source(&self, source: &MediaSource) -> AppResult<Vec<u8>> {
+            match source {
+                MediaSource::Uri(uri) => {
+                    let args = SourceArgs {
+                        root: &self.tree,
+                        path: "",
+                        uri,
+                    };
+                    let read: ReadSourceResult = self.bridge.call("readSource", args)?;
+                    super::base64_decode(&read.base64)
+                        .ok_or_else(|| AppError::Invalid("来源的字节解不开（base64）".to_string()))
+                }
+                MediaSource::Path(_) => NativeFs.read_source(source),
+            }
+        }
+
+        fn copy_source(&self, source: &MediaSource, dest: &Path) -> AppResult<CopiedFile> {
+            match source {
+                MediaSource::Uri(uri) => {
+                    let args = SourceArgs {
+                        root: &self.tree,
+                        path: &self.rel(dest),
+                        uri,
+                    };
+                    let copied: CopiedResult = self.bridge.call("copyIn", args)?;
+                    Ok(CopiedFile {
+                        size: copied.size,
+                        hash: copied.sha256,
+                    })
+                }
+                MediaSource::Path(_) => NativeFs.copy_source(source, dest),
+            }
         }
 
         fn is_file(&self, path: &Path) -> bool {
@@ -396,7 +544,7 @@ pub fn pick_tree(_app: &tauri::AppHandle) -> crate::error::AppResult<Option<Pick
 
 #[cfg(test)]
 mod tests {
-    use super::base64_encode;
+    use super::{base64_decode, base64_encode};
 
     #[test]
     fn base64_matches_known_vectors() {
@@ -410,5 +558,24 @@ mod tests {
         assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
         // 真实负载：entry.json 里会有中文
         assert_eq!(base64_encode("未归类".as_bytes()), "5pyq5b2S57G7");
+    }
+
+    #[test]
+    fn base64_decode_round_trips_and_rejects_junk() {
+        for raw in [
+            b"".to_vec(),
+            b"f".to_vec(),
+            b"fo".to_vec(),
+            b"foo".to_vec(),
+            "未归类".as_bytes().to_vec(),
+            vec![0u8, 255, 128, 7, 9],
+        ] {
+            let encoded = base64_encode(&raw);
+            assert_eq!(base64_decode(&encoded).as_deref(), Some(raw.as_slice()));
+        }
+        // 换行（Kotlin 那边可能带）也要认
+        assert_eq!(base64_decode("Zm9v\nYmFy").as_deref(), Some(b"foobar" as &[u8]));
+        assert_eq!(base64_decode("不是 base64"), None);
+        assert_eq!(base64_decode("Zm9"), None);
     }
 }

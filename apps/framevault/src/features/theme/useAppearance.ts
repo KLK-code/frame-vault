@@ -3,14 +3,14 @@ import { DEFAULT_APPEARANCE } from "./presets";
 import { onThemeChange, publishTheme, readStoredTheme } from "./themeSync";
 
 /**
- * 外观预设（骨架用）：用户选过就听用户，没选过听当前主题的推荐。
+ * 外观预设（骨架用）：**用户选一套，没选过就是默认那套（极简白）**。
  *
- * 只有**主骨架**会重算"生效值"并广播 —— 因为只有它知道当前场景推荐哪一套。
- * 用户的选择可能是在设置窗口改的，所以这里要订阅事件把它收进来。
+ * 2026-09 起不再有"场景推荐配色"——场景只决定怎么排版，不决定配色（AGENTS §6）。
+ * 只有**主骨架**会重算"生效值"并广播；用户的选择可能是在设置窗口改的，所以这里要订阅事件。
  */
-export function useAppearance(suggested?: string) {
+export function useAppearance() {
   const [choice, setChoice] = useState(() => readStoredTheme().appearance);
-  const applied = choice || suggested || DEFAULT_APPEARANCE;
+  const applied = choice || DEFAULT_APPEARANCE;
 
   // 别处（设置窗口）改了"用户的选择" → 收进来，逼着重算生效值
   useEffect(
@@ -43,7 +43,7 @@ export function useAppearanceChoice() {
 
   const setChoiceAndPublish = useCallback((id: string) => {
     setChoice(id);
-    publishTheme({ appearance: id, applied: id || readStoredTheme().applied });
+    publishTheme({ appearance: id, applied: id || DEFAULT_APPEARANCE });
   }, []);
 
   return { choice, setChoice: setChoiceAndPublish };

@@ -198,4 +198,51 @@
     --fv-color-on-accent: #0e1626;
     --fv-scene-banner: linear-gradient(115deg, #223454, #1b1f27 75%);
   }
+
+  /* ── 极简白 preset.mono：**纯黑白灰，一点彩色都没有**（2026-09 起是默认那套）。
+     浅色是白底黑字、深色是黑底白字；强调色就是"最深的那个灰/最亮的那个白"，
+     所以按钮、选中、链接全是黑白反转，不引任何彩色。
+
+     灰的取法有讲究：**纯中性灰挨着纯白底会显脏**，所以这里的灰都比"直觉值"提亮一档、
+     并且带一丝冷调（R < G < B 那一点点），读起来才像"墨"而不是"灰"。 */
+  :root[data-appearance="preset.mono"] {
+    color-scheme: light;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #ffffff;
+    --fv-color-paper: #ffffff;
+    --fv-color-surface: #fafafa;
+    --fv-color-surface-hover: #f4f4f5;
+    --fv-color-surface-active: #e9e9ec;
+    --fv-color-text: #1b1b1f;
+    --fv-color-text-strong: #0b0b0d;
+    --fv-color-muted: #7c7c85;
+    --fv-color-border: #ececef;
+    --fv-color-border-strong: #dcdce0;
+    --fv-color-accent: #1b1b1f;
+    --fv-color-accent-soft: #f5f5f7;
+    --fv-color-accent-hover: #fafafa;
+    --fv-color-on-accent: #ffffff;
+    --fv-scene-banner: linear-gradient(115deg, #fafafa, #ffffff 80%);
+  }
+  :root[data-appearance="preset.mono"][data-theme="dark"] {
+    color-scheme: dark;
+    --fv-color-focus-ring: var(--fv-color-accent);
+    --fv-color-selection: var(--fv-color-accent-soft);
+    --fv-color-bg: #0b0b0d;
+    --fv-color-paper: #141417;
+    --fv-color-surface: #1a1a1e;
+    --fv-color-surface-hover: #232328;
+    --fv-color-surface-active: #2c2c33;
+    --fv-color-text: #ececef;
+    --fv-color-text-strong: #ffffff;
+    --fv-color-muted: #9d9da8;
+    --fv-color-border: #2a2a30;
+    --fv-color-border-strong: #41414a;
+    --fv-color-accent: #fafafa;
+    --fv-color-accent-soft: #2c2c33;
+    --fv-color-accent-hover: #232328;
+    --fv-color-on-accent: #141417;
+    --fv-scene-banner: linear-gradient(115deg, #1c1c20, #0b0b0d 80%);
+  }
 }

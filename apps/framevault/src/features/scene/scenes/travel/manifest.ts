@@ -2,7 +2,7 @@ import type { SceneManifest } from "../../manifest";
 
 const manifest: SceneManifest = {
   presentation: {
-    icon: "mountain", suggestedAppearance: "preset.tide",
+    icon: "mountain",
   },
   entryFields: [
     { key: "location", label: "地点", type: "text", placeholder: "这一站，在哪里？" },

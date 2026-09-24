@@ -11,7 +11,7 @@ import type { SceneManifest } from "../../manifest";
  */
 const manifest: SceneManifest = {
   presentation: {
-    icon: "book", suggestedAppearance: "preset.paper",
+    icon: "book",
   },
   entryFields: [
     // 刻意**没有**「地点」：写作台是坐下来写的地方，位置这类元数据属于内容侧（主题/文件夹），

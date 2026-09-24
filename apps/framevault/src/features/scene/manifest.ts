@@ -33,14 +33,22 @@ export type FieldDecl = {
    * 所以老主题、第三方主题不写这一行也不会丢数据，只是正文不是一个能直接打开的 `.md`。
    */
   note?: boolean;
+  /**
+   * 多行字段（`textarea`）**默认用哪种呈现**：
+   * - `"live"`（不写就是它）：即时渲染 —— 语法符号藏着，写的当场就是排好的样子；
+   * - `"source"`：源码模式 —— 符号全都露着（带语法高亮），适合要直接改 `**`、表格列宽的场合。
+   *
+   * 用户当场还能自己切（编辑器右上角那个按钮），这里给的只是默认值。
+   * 纯展示偏好，不影响磁盘格式：两种模式写出去的都是同一串 Markdown。
+   */
+  editor?: "live" | "source";
 };
 
 export type SceneManifest = {
   /** 纯展示声明，宿主与侧栏共享，不包含组件或业务规则。 */
   presentation?: {
     icon: "book" | "mountain" | "bolt";
-    /** 推荐的**外观预设** id（如 preset.tide）。只是推荐：用户选过外观就听用户的 */
-    suggestedAppearance?: string;
+    // 这里**没有**"推荐外观"了（2026-09 拆掉）：场景只决定怎么排版，配色归用户自己选
   };
   /** 这个主题的记录上有什么字段（核心据此生成录入与展示） */
   entryFields?: FieldDecl[];

@@ -3,7 +3,6 @@ import TitleBar from "./app/TitleBar";
 import SceneHost from "./features/scene/SceneHost";
 import SceneMedia from "./features/scene/SceneMedia";
 import SceneTree from "./features/scene/SceneTree";
-import { suggestedAppearanceOf } from "./features/scene/registry";
 import { useActiveFolder, useFolders, type SceneShellProps } from "./features/scene/useFolders";
 import VaultSwitcher from "./features/vault/VaultSwitcher";
 import { confirm, openSettings } from "./lib/api";
@@ -284,8 +283,8 @@ export default function App() {
     ? (tree.scenes.find((item) => item.id === selected.active?.effectiveScene) ?? null)
     : null;
 
-  // 外观 = 用户选过 / 当前主题推荐 / 默认。生效值只有一个 owner（主骨架），就在这里算并广播
-  useAppearance(suggestedAppearanceOf(selected.active?.effectiveScene));
+  // 外观 = 用户选的那套（没选过就是默认的极简白）。**场景不再影响配色**（2026-09）
+  useAppearance();
 
   const shell: SceneShellProps = { tree, selected, scene };
   return isMobileOS || compact ? <MobileShell {...shell} /> : <DesktopShell {...shell} />;

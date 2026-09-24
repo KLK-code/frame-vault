@@ -61,8 +61,8 @@ export default function ThemeEditor() {
               value={choice}
               onChange={(e) => setChoice(e.target.value)}
             >
-              {/* 选项里只放名字 —— 说明在下拉里排一长串反而看不清 */}
-              <option value="">跟随主题</option>
+              {/* 选项里只放名字 —— 说明在下拉里排一长串反而看不清。
+                  2026-09 起没有"跟随主题"那一项了：场景不再推荐配色 */}
               {PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

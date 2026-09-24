@@ -179,26 +179,54 @@ pub fn save_folder(
     Ok(dir.to_path_buf())
 }
 
-/// 删除文件夹。**里面还有记录时拒绝** —— 宁可让用户先处理，也不要出现"文件夹没了、记录跟着没了"。
+/// 删除文件夹。**里面有东西时拒绝** —— 宁可让用户先处理，也不要出现"文件夹没了、别的东西跟着没了"。
 ///
-/// 判据是**物理位置**（这个目录下有没有记录目录），不是 `entry.json` 里的归属字段：
-/// 用户可能把记录目录手动拖进来了，那时字段还写着别的场景 —— 按字段数会漏，漏掉就是删数据。
+/// 判据是**把目录里全部实际子项列出来看一遍**，只允许留下我们自己写的 `folder.json`：
+/// 用户可能往里面放了 PDF、别人的笔记、一张图 —— 那些既不是记录也不是文件夹，
+/// 按"有没有记录"去数就会漏，漏掉就是把它们一起删了（执行计划 P4）。
 pub fn delete_folder(vault: impl AsVault, id: &str) -> AppResult<()> {
     let vault = vault.as_vault();
     let dir = storage::find_folder_dir(&vault, id)?;
-    let inside = super::storage::entry_dirs_in(&vault, &dir);
-    if !inside.is_empty() {
-        let name = dir
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| id.to_string());
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| id.to_string());
+
+    // 连里面有什么都读不出来，就不敢删 —— 宁可让用户自己去看一眼
+    let items = match vault.list_dir(&dir) {
+        Ok(items) => items,
+        Err(err) => {
+            return Err(AppError::Unavailable(format!(
+                "读不出「{name}」里有什么，为安全起见没有删除：{err}"
+            )));
+        }
+    };
+
+    let others: Vec<String> = items
+        .iter()
+        .filter(|item| item.name != FOLDER_FILE)
+        .map(|item| item.name.clone())
+        .collect();
+    if !others.is_empty() {
         return Err(AppError::Invalid(format!(
-            "「{name}」里还有 {} 条记录，请先把它们删掉或挪走",
-            inside.len()
+            "「{name}」里还有 {} 项内容（{}），请先把它们挪走或删掉",
+            others.len(),
+            sample_names(&others)
         )));
     }
+
     vault.remove_dir_all(&dir)?;
     Ok(())
+}
+
+/// 报错时给用户看几个名字，别只说"还有 7 项"
+pub(crate) fn sample_names(names: &[String]) -> String {
+    let shown: Vec<&str> = names.iter().take(3).map(|n| n.as_str()).collect();
+    if names.len() > shown.len() {
+        format!("{} 等", shown.join("、"))
+    } else {
+        shown.join("、")
+    }
 }
 
 // ── 排序 ──
@@ -355,13 +383,37 @@ mod tests {
         .unwrap();
 
         let err = delete_folder(&vault, "f-1").unwrap_err().to_string();
-        assert!(err.contains("还有 1 条记录"), "要说人话：{err}");
+        // 报错要说清"里面还有几项、都是什么"（记录目录在这条判定里就是一个子项）
+        assert!(err.contains("还有 1 项内容"), "要说人话：{err}");
+        assert!(err.contains("2026-09-22 早跑"), "最好带上名字：{err}");
         assert!(dir.is_dir(), "拒绝之后目录必须原样还在");
 
         // 记录挪走之后才允许删
         fs::remove_dir_all(&record).unwrap();
         delete_folder(&vault, "f-1").unwrap();
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn delete_folder_refuses_when_foreign_files_are_inside() {
+        // 用户往文件夹里放了别的东西（PDF、别人的笔记……）——
+        // 删文件夹**不许**把它一起带走（执行计划 P4）
+        let vault = temp_vault("folder-foreign");
+        let dir = add(&vault, FolderMeta::new("f-1", "论文笔记", 0, None));
+        fs::write(dir.join("参考文献.pdf"), b"%PDF").unwrap();
+        fs::write(dir.join("别人的笔记.txt"), "别删我").unwrap();
+
+        let err = delete_folder(&vault, "f-1").unwrap_err().to_string();
+        assert!(err.contains("还有 2 项内容"), "报错要说清里面有几项：{err}");
+        assert!(dir.join("参考文献.pdf").is_file(), "普通文件必须原样还在");
+        assert!(dir.join("别人的笔记.txt").is_file());
+        assert!(dir.is_dir(), "目录本身不能被删掉");
+
+        // 只剩我们自己的 folder.json 时才允许删
+        fs::remove_file(dir.join("参考文献.pdf")).unwrap();
+        fs::remove_file(dir.join("别人的笔记.txt")).unwrap();
+        delete_folder(&vault, "f-1").unwrap();
+        assert!(!dir.exists(), "空文件夹（只剩 folder.json）才能删掉");
     }
 
     #[test]

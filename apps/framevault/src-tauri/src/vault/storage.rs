@@ -286,16 +286,22 @@ pub fn delete_topic(vault: impl AsVault, name: &str) -> AppResult<()> {
     let dir =
         topic_dir(&vault, name).ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
 
-    let inside: Vec<PathBuf> = child_dirs(&vault, &dir)
-        .into_iter()
-        .filter(|child| {
-            vault.is_file(&folder_json_path(child)) || vault.is_file(&entry_json_path(child))
-        })
-        .collect();
-    if !inside.is_empty() {
+    // 与删文件夹同一条规矩：**把全部实际子项列出来看一遍**，里面有东西就拒绝。
+    // 主题自己没有元数据（不像文件夹有 folder.json），所以任何子项都算"有东西"。
+    let items = match vault.list_dir(&dir) {
+        Ok(items) => items,
+        Err(err) => {
+            return Err(AppError::Unavailable(format!(
+                "读不出「{name}」里有什么，为安全起见没有删除：{err}"
+            )));
+        }
+    };
+    let others: Vec<String> = items.iter().map(|item| item.name.clone()).collect();
+    if !others.is_empty() {
         return Err(AppError::Invalid(format!(
-            "「{name}」里还有 {} 项内容，请先把它们挪走或删掉",
-            inside.len()
+            "「{name}」里还有 {} 项内容（{}），请先把它们挪走或删掉",
+            others.len(),
+            super::folder::sample_names(&others)
         )));
     }
 

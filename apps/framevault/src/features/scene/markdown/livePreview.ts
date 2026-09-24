@@ -197,16 +197,21 @@ function collect(state: EditorState, ranges: readonly { from: number; to: number
   const inner: Range<Decoration>[] = [];
   const out = inner;
 
+  // 读态（不可编辑）没有"光标"这回事：什么都不该露出来。
+  // 否则只读时选区仍停在位置 0，**第一个块会一直露着它的 `#`**（实测如此）。
+  const editable = state.facet(EditorView.editable);
+
   // 光标 / 选区碰到的行（块级记号按这个露）
   const touchedLines = new Set<number>();
   for (const range of state.selection.ranges) {
     touchedLines.add(state.doc.lineAt(range.from).number);
     touchedLines.add(state.doc.lineAt(range.to).number);
   }
-  const lineTouched = (pos: number) => touchedLines.has(state.doc.lineAt(pos).number);
+  const lineTouched = (pos: number) =>
+    editable && touchedLines.has(state.doc.lineAt(pos).number);
   // 选区有没有伸进某段范围（行内记号按这个露）
   const rangeTouched = (from: number, to: number) =>
-    state.selection.ranges.some((range) => range.from <= to && range.to >= from);
+    editable && state.selection.ranges.some((range) => range.from <= to && range.to >= from);
 
   for (const range of ranges) {
     syntaxTree(state).iterate({
@@ -383,7 +388,9 @@ function collect(state: EditorState, ranges: readonly { from: number; to: number
 const outerDecorations = StateField.define<DecorationSet>({
   create: (state) => Decoration.set(collect(state, [{ from: 0, to: state.doc.length }]).outer, true),
   update: (value, tr) =>
-    tr.docChanged || tr.selection
+    // `reconfigured` 也要重算：读态 ↔ 编辑态是重配（不是 doc / 选区变化），
+    // 不重算的话切回顾只会留着"编辑时露出来的那些记号"
+    tr.docChanged || tr.selection || tr.reconfigured
       ? Decoration.set(collect(tr.state, [{ from: 0, to: tr.state.doc.length }]).outer, true)
       : value,
   provide: (field) => EditorView.decorations.from(field),
@@ -410,7 +417,12 @@ const innerDecorations = ViewPlugin.fromClass(
         this.decorations = Decoration.set(collect(update.state, update.view.visibleRanges).inner, true);
         return;
       }
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.viewportChanged ||
+        update.transactions.some((tr) => tr.reconfigured)
+      ) {
         this.decorations = Decoration.set(collect(update.state, update.view.visibleRanges).inner, true);
       }
     }

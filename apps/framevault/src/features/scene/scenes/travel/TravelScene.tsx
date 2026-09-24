@@ -14,7 +14,7 @@ export default function TravelScene({ folder, scene }: SceneViewProps) {
       <SceneNotice message={data.notice} onUndo={data.undo} onDismiss={data.dismissNotice} />
       {data.error && <p className="travel-scene__error" role="alert">{data.error}</p>}
       <EntryTimeline data={data} sceneId={scene.id} fields={manifest.entryFields ?? []}
-        emptyText="每一段旅程，都从第一条记录开始。写下此刻的心情，或导入沿途的照片；点「改文字」补上地点与见闻。" />
+        emptyText="每一段旅程，都从第一条记录开始。写下此刻的心情，或导入沿途的照片；点标题或正文就能补上地点与见闻。" />
       <p className="travel-scene__footer">走过的路，遇见的风景，都值得收藏。</p>
     </div>
   );

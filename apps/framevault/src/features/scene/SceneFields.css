@@ -36,4 +36,12 @@
   outline: 2px solid var(--fv-color-focus-ring);
   outline-offset: 1px;
 }
+
+/* 重编辑器按需加载时的一行占位（正常一眨眼就过去了） */
+.field__loading {
+  margin: 0;
+  padding: var(--fv-space-3);
+  color: var(--fv-color-muted);
+  font-size: var(--fv-text-sm);
+}
 }

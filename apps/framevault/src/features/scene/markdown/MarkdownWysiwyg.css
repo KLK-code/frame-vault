@@ -1,8 +1,9 @@
 @layer components {
-  /* 所见即所得正文（CodeMirror 6）：只吃 --fv-* token，排版跟 MarkdownView 尽量一致。
-     注意：**结构性那几条（滚动容器 / 字号 / 内边距 / 光标）不在这个文件里** ——
+  /* 全项目唯一的 Markdown 编辑器与渲染器（CodeMirror 6）：只吃 --fv-* token。
+     注意：**结构性那几条（滚动容器 / 高度 / 内边距 / 光标）不在这个文件里** ——
      CM6 往 document 注入的是未分层样式，压不过它，所以那几条走 `MarkdownWysiwyg.tsx` 的
-     `EditorView.theme`（值同样是 --fv-*）。这里只管装饰出来的样式。 */
+     `EditorView.theme`（值同样是 --fv-*，其中内边距读 `--md-wysiwyg-pad` 这个组件内变量，
+     好让下面几个变体能按类名给不同的值）。这里只管装饰出来的样式。 */
   .md-wysiwyg {
     border: 1px solid var(--fv-color-border);
     border-radius: var(--fv-radius-md);
@@ -16,6 +17,60 @@
   }
   .md-wysiwyg:focus-within { border-color: var(--fv-color-accent); }
   .md-wysiwyg__host { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  /* ── 工具条：只出现在编辑态。左边是源码模式的语法按钮（即时渲染下符号藏着，
+     写 `##` 直接就是标题的样子，不需要先插入记号），右边是即时渲染 ↔ 源码的切换。
+     手机上没有 Ctrl+B 这类快捷键，所以这一排按钮是"移动端能不能排版"的关键。── */
+  .md-wysiwyg__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--fv-space-1);
+    padding: var(--fv-space-1) var(--fv-space-2);
+    border-bottom: 1px solid var(--fv-color-border);
+    background: var(--fv-color-surface);
+  }
+  .md-wysiwyg__tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fv-space-1);
+    min-width: 0;
+  }
+  .md-wysiwyg__btn,
+  .md-wysiwyg__mode {
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--fv-radius-sm);
+    background: transparent;
+    color: var(--fv-color-muted);
+    font-family: inherit;
+    font-size: var(--fv-text-xs);
+    line-height: 1.7;
+  }
+  .md-wysiwyg__btn:hover,
+  .md-wysiwyg__mode:hover {
+    border-color: var(--fv-color-border-strong);
+    color: var(--fv-color-text);
+  }
+  /* 模式切换靠右，跟语法按钮拉开距离（它不是"插入"，是"换个看法"） */
+  .md-wysiwyg__mode { margin-left: auto; }
+
+  /* ── 时间线里的变体：读态是"排好版的文字"，编辑态才亮出框与底色 ──
+     高度跟着内容长、绝不内部滚动（那几条在 inlineTheme 里）；这里只管外观。
+     边框用"透明"而不是 none：进编辑态时边框变实，整行不会跳 2px。 */
+  .md-wysiwyg.is-inline {
+    flex: 0 0 auto;
+    min-height: 3em;
+    border-color: transparent;
+    background: transparent;
+    --md-wysiwyg-pad: 0;
+  }
+  .md-wysiwyg.is-inline.is-editing {
+    min-height: 5em;
+    border-color: var(--fv-color-border-strong);
+    background: var(--fv-color-paper);
+    --md-wysiwyg-pad: var(--fv-space-3);
+  }
 
   /* ── 标题：行级样式（装饰给整行挂类名）── */
   .md-wysiwyg .cm-fv-h1,

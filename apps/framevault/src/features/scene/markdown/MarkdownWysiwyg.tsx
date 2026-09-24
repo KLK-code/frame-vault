@@ -1,7 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { EditorSelection, EditorState, type StateCommand } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { Compartment, EditorSelection, EditorState, type StateCommand } from "@codemirror/state";
+import {
+  defaultHighlightStyle,
+  syntaxHighlighting,
+} from "@codemirror/language";
+import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import {
   commonmarkLanguage,
@@ -15,28 +19,63 @@ import { livePreview } from "./livePreview";
 import "./MarkdownWysiwyg.css";
 
 /**
- * 正文输入控件（所见即所得）：一整块区域，**文档本身就是 Markdown 文本**，边写边渲染。
+ * 正文控件：**全项目唯一的 Markdown 编辑器与渲染器**，一个引擎提供三种模式。
  *
- * 跟 MarkdownField 的关系：**对外接口一模一样**（value 进、markdown 字符串出），
- * 区别只在"编辑引擎"——MarkdownField 是 textarea + 工具栏，这个是 CodeMirror 6。
- * 两者都**只产出 Markdown**，所以磁盘格式、渲染器、主题都不用知道用的是哪个。
+ * | 模式 | 怎么来 | 用在哪 |
+ * |---|---|---|
+ * | `live`（默认） | 挂上 `livePreview`：语法符号藏起来、光标碰到才露 | 正文默认；写作台 |
+ * | `source` | 把那套装饰换成语法高亮 —— 就是源码本身 | 想直接改 `**` / 表格列宽这类场合 |
+ * | 只读 | `readOnly` | 时间线的读态：排好版的文字，点一下才变可写 |
  *
- * 为什么换掉 ProseMirror：我们要的是 Obsidian 那种手感 —— 源码即真值、语法符号用装饰藏/显、
- * 选区永远贯穿全篇。ProseMirror 的文档是节点树，`**` 根本不在文档里，"藏/显"只能靠
- * 序列化来回翻译，于是必然出现"两份表示"以及随之而来的盒子、层切换、选区被困。
- * 装饰规则见 `livePreview.ts`。
+ * 三种模式都是**同一个实例**：`mode` 与 `readOnly` 各由一个 `Compartment` 装，
+ * 切换只是重配扩展集 —— 不重建编辑器、不重解析文档、**不丢光标与撤销栈**，
+ * 而且因为文档没变（`docChanged` 为假），**切换模式不会被当成一次改动**。
+ * 这也是"点一下就改不闪"的原因：读态与编辑态从来就是同一个编辑器。
  *
- * 它重（带进 CM6 家族），所以**只在写作台里按需加载**（React.lazy）。
+ * 宿主决定它长什么样：`variant="fill"` 是写作台那种"吃掉剩余高度"，
+ * `variant="inline"` 是时间线/表单里的小块（跟着内容长、**不内部滚动** ——
+ * 时间线本身就是滚动容器，里面再套一层滚动区在手机上极难用）。
+ * 将来若要改成"点开一屏编辑"，换的只是宿主，这个组件不用动。
+ *
+ * 它重（带进 CM6 家族），所以**由核心组件按需加载**（`React.lazy`），别静态 import。
  *
  * 粘贴是纯文本插入 —— 文档就是 Markdown，粘一整篇 `.md` 进来当场就是排好版的样子。
  */
+type Mode = "live" | "source";
+
 type Props = {
   value: string;
   onChange: (markdown: string) => void;
+  /** 读态：不落光标、不接受输入；文本仍可选中复制。切换不重建实例 */
+  readOnly?: boolean;
+  /** 默认模式（用户当场切换后以他选的为准；重新挂载会回到这个值） */
+  mode?: Mode;
+  /** 声明式"现在该获得焦点"：由 false 变 true 时聚焦并把光标落到文末 */
+  focus?: boolean;
+  placeholder?: string;
+  /** CM6 里没有可 `htmlFor` 的元素，无障碍标签走这里 */
+  ariaLabel?: string;
+  variant?: "fill" | "inline";
 };
 
 /** 每次按键都重渲染没必要；攒一小会儿再报上去（与旧实现的 200ms 体感一致） */
 const EMIT_DELAY = 220;
+
+/**
+ * 三个 Compartment：编辑权限、呈现模式，都靠重配切换（不重建实例）。
+ * 一个 Compartment 可以被多个实例共用 —— 它只是 state 里的一把钥匙。
+ */
+const editCompartment = new Compartment();
+const modeCompartment = new Compartment();
+const readOnlyExtensions = [EditorState.readOnly.of(true), EditorView.editable.of(false)];
+const editableExtensions = [EditorState.readOnly.of(false), EditorView.editable.of(true)];
+
+/** 呈现模式：即时渲染 = livePreview 那套装饰；源码模式 = 语法高亮，符号全都露着 */
+function modeExtensions(mode: Mode) {
+  return mode === "source"
+    ? syntaxHighlighting(defaultHighlightStyle, { fallback: true })
+    : livePreview;
+}
 
 /** `**粗体**` / `*斜体*` / `` `行内码` `` 的开关：包上、脱掉、空选区插一对并把光标放中间 */
 function toggleWrap(marker: string): StateCommand {
@@ -81,6 +120,62 @@ function toggleWrap(marker: string): StateCommand {
   };
 }
 
+/** 行首记号（`## ` / `- ` / `1. ` / `> ` / `- [ ] `）的开关：选中的每一行一起加、一起去掉 */
+function toggleLinePrefix(marker: string): StateCommand {
+  return ({ state, dispatch }) => {
+    const range = state.selection.main;
+    const first = state.doc.lineAt(range.from).number;
+    const last = state.doc.lineAt(range.to).number;
+    const lines = [];
+    for (let n = first; n <= last; n++) lines.push(state.doc.line(n));
+    const allHave = lines.every((line) => line.text.startsWith(marker));
+    const changes = lines.map((line) =>
+      allHave
+        ? { from: line.from, to: line.from + marker.length }
+        : { from: line.from, insert: marker },
+    );
+    dispatch(state.update({ changes, userEvent: "input" }));
+    return true;
+  };
+}
+
+/** 围栏代码块：选中的内容包进 ``` 里；再按一次（选中的就是围栏块）脱掉 */
+function toggleFence(): StateCommand {
+  return ({ state, dispatch }) => {
+    const range = state.selection.main;
+    const text = state.doc.sliceString(range.from, range.to);
+    const fenced = /^```[^\n]*\n[\s\S]*\n?```$/.test(text.trim());
+    const insert = fenced
+      ? text.trim().replace(/^```[^\n]*\n/, "").replace(/\n?```$/, "")
+      : "```\n" + text + "\n```";
+    dispatch(
+      state.update({
+        changes: { from: range.from, to: range.to, insert },
+        selection: EditorSelection.range(range.from, range.from + insert.length),
+        userEvent: "input",
+      }),
+    );
+    return true;
+  };
+}
+
+/**
+ * 源码模式的一排按钮。手机上没有 Ctrl+B 这种快捷键，可点的按钮是真有用。
+ * 插入一律走 CM6 的命令（dispatch 事务），不是自己拼字符串塞 DOM ——
+ * 这样**撤销栈、输入法、选区都由内核负责**（旧的自研工具栏在这三件事上都踩过坑）。
+ */
+const TOOLS: { label: string; title: string; run: StateCommand }[] = [
+  { label: "H2", title: "标题", run: toggleLinePrefix("## ") },
+  { label: "B", title: "加粗（Ctrl/⌘+B）", run: toggleWrap("**") },
+  { label: "I", title: "斜体（Ctrl/⌘+I）", run: toggleWrap("*") },
+  { label: "•", title: "无序列表", run: toggleLinePrefix("- ") },
+  { label: "1.", title: "有序列表", run: toggleLinePrefix("1. ") },
+  { label: "”", title: "引用", run: toggleLinePrefix("> ") },
+  { label: "☐", title: "待办", run: toggleLinePrefix("- [ ] ") },
+  { label: "‹›", title: "行内代码（Ctrl/⌘+E）", run: toggleWrap("`") },
+  { label: "```", title: "代码块", run: toggleFence() },
+];
+
 /**
  * 结构性那几条（滚动容器、字号、内边距、光标）走 CM6 的 theme API，**不放进 CSS 文件**。
  *
@@ -114,7 +209,6 @@ const editorTheme = EditorView.theme({
   },
   ".cm-content": {
     minHeight: "100%",
-    padding: "var(--fv-space-4)",
     fontFamily: "inherit",
     caretColor: "var(--fv-color-accent)",
   },
@@ -125,7 +219,65 @@ const editorTheme = EditorView.theme({
   },
 });
 
-function Surface({ value, onChange }: Props) {
+/**
+ * 内边距单独一条规则，而且**多套了一层 `.cm-editor`**。
+ *
+ * 为什么：CM6 自己的基础样式也写了 `.cm-content { padding: 4px 0 }`，与我们的选择器**同特异性**，
+ * 于是"谁后注入谁赢"——实测它赢，我们按变体给的内边距（读态 0、编辑态 12px）全被盖成 4px。
+ * 多一层把特异性抬到 (0,3,0)，就跟注入顺序无关，总能盖住基础样式。
+ * 值仍是 `--md-wysiwyg-pad`（组件内变量，由 CSS 按变体给），没设时退回 `--fv-space-4`。
+ */
+const contentPaddingTheme = EditorView.theme({
+  "&.cm-editor .cm-content": {
+    padding: "var(--md-wysiwyg-pad, var(--fv-space-4))",
+  },
+});
+
+/**
+ * 时间线/表单里的小块：**跟着内容长，绝不内部滚动**。
+ *
+ * 高度交给内容（`height: auto`），滚动条那条也要关掉 —— 只 `overflow-y: hidden` 不够，
+ * `scrollbar-gutter: stable` 照样会在每条记录右侧留一道空槽。外层的滚动由宿主负责。
+ * 空笔记靠 CSS 里的 `min-height` 兜底（不然没内容时高度是 0，点不着）。
+ */
+const inlineTheme = EditorView.theme({
+  "&": { height: "auto" },
+  ".cm-scroller": {
+    height: "auto",
+    overflowY: "hidden",
+    scrollbarGutter: "auto",
+    alignItems: "stretch",
+  },
+  ".cm-content": { minHeight: "auto" },
+});
+
+/** 坐标底下那个链接的 URL（Ctrl/Cmd+点击与读态点击共用） */
+function urlAt(instance: EditorView, x: number, y: number): string | null {
+  const pos = instance.posAtCoords({ x, y });
+  if (pos == null) return null;
+  let node = syntaxTree(instance.state).resolveInner(pos, 0);
+  for (; node; node = node.parent!) {
+    if (node.name === "URL") return instance.state.doc.sliceString(node.from, node.to);
+    if (node.name === "Link") {
+      for (let child = node.firstChild; child; child = child.nextSibling) {
+        if (child.name === "URL") return instance.state.doc.sliceString(child.from, child.to);
+      }
+    }
+    if (!node.parent) break;
+  }
+  return null;
+}
+
+function Surface({
+  value,
+  onChange,
+  readOnly = false,
+  mode: initialMode = "live",
+  focus = false,
+  placeholder: placeholderText,
+  ariaLabel,
+  variant = "fill",
+}: Props) {
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -133,6 +285,8 @@ function Surface({ value, onChange }: Props) {
   // 记住"我们自己刚发出去的那份"，用来分辨 value 的变化是外部换篇还是自己回显
   const emitted = useRef(value);
   const timer = useRef<number | null>(null);
+  /** 当场切换以用户为准：宿主给的只是**默认值**（重新挂载会回到它） */
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   useEffect(() => {
     const parent = host.current;
@@ -157,7 +311,12 @@ function Surface({ value, onChange }: Props) {
           // 把 URL 粘到选中的文字上 → 直接变成链接（Obsidian 同款；它是个 Extension，不能进 keymap）
           pasteURLAsLink,
           EditorView.lineWrapping,
-          livePreview,
+          editCompartment.of(readOnly ? readOnlyExtensions : editableExtensions),
+          modeCompartment.of(modeExtensions(initialMode)),
+          ...(placeholderText ? [placeholder(placeholderText)] : []),
+          ...(ariaLabel ? [EditorView.contentAttributes.of({ "aria-label": ariaLabel })] : []),
+          variant === "inline" ? inlineTheme : editorTheme,
+          contentPaddingTheme,
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
             const markdownText = update.state.doc.toString();
@@ -169,32 +328,25 @@ function Surface({ value, onChange }: Props) {
               onChangeRef.current(markdownText);
             }, EMIT_DELAY);
           }),
-          editorTheme,
-          // Ctrl/Cmd + 点击链接 → 交给系统浏览器，别让 WebView 自己跳走
           EditorView.domEventHandlers({
+            // Ctrl/Cmd + 点击链接 → 交给系统浏览器，别让 WebView 自己跳走
             mousedown(event, instance) {
               if (!event.metaKey && !event.ctrlKey) return false;
-              const pos = instance.posAtCoords({ x: event.clientX, y: event.clientY });
-              if (pos == null) return false;
-              let node = syntaxTree(instance.state).resolveInner(pos, 0);
-              for (; node; node = node.parent!) {
-                if (node.name === "URL") {
-                  const url = instance.state.doc.sliceString(node.from, node.to);
-                  void openExternal(url).catch(() => undefined);
-                  return true;
-                }
-                if (node.name === "Link") {
-                  for (let child = node.firstChild; child; child = child.nextSibling) {
-                    if (child.name === "URL") {
-                      const url = instance.state.doc.sliceString(child.from, child.to);
-                      void openExternal(url).catch(() => undefined);
-                      return true;
-                    }
-                  }
-                }
-                if (!node.parent) break;
-              }
-              return false;
+              const url = urlAt(instance, event.clientX, event.clientY);
+              if (!url) return false;
+              void openExternal(url).catch(() => undefined);
+              return true;
+            },
+            click(event, instance) {
+              // 读态下点链接直接打开（原先那个只读渲染器就是这个行为，别丢）；
+              // `stopPropagation` 是必需的：宿主把"点正文"当成"进入编辑"，点链接不该连带触发。
+              if (!instance.state.facet(EditorState.readOnly)) return false;
+              const url = urlAt(instance, event.clientX, event.clientY);
+              if (!url) return false;
+              event.preventDefault();
+              event.stopPropagation();
+              void openExternal(url).catch(() => undefined);
+              return true;
             },
           }),
         ],
@@ -208,6 +360,33 @@ function Surface({ value, onChange }: Props) {
     };
     // 只建一次 —— 编辑器实例只在挂载时创建（AGENTS §9：HMR 不会重建它，验行为必须整页刷新）
   }, []);
+
+  // 读态 ↔ 可编辑：只重配，不重建（点一下就改才不会闪一下）
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance) return;
+    instance.dispatch({
+      effects: editCompartment.reconfigure(readOnly ? readOnlyExtensions : editableExtensions),
+    });
+  }, [readOnly]);
+
+  // 即时渲染 ↔ 源码：同样只重配。文档没动，所以不会被当成一次改动去触发保存
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance) return;
+    instance.dispatch({ effects: modeCompartment.reconfigure(modeExtensions(mode)) });
+  }, [mode]);
+
+  // 该聚焦了就聚焦，并把光标落到文末（"点一下接着写"比"改某个字"更常见）
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance || !focus) return;
+    instance.focus();
+    instance.dispatch({
+      selection: { anchor: instance.state.doc.length },
+      scrollIntoView: true,
+    });
+  }, [focus]);
 
   // 外部换了内容（切换了另一篇）→ 整篇换掉并回到开头；不能每次都换，否则跟打字打架
   useEffect(() => {
@@ -228,6 +407,14 @@ function Surface({ value, onChange }: Props) {
     instance.scrollDOM.scrollTop = 0;
   }, [value]);
 
+  /** 点工具条：跑 CM6 命令，焦点留在编辑器里（焦点跑了手机上键盘就收起） */
+  function runTool(command: StateCommand) {
+    const instance = view.current;
+    if (!instance) return;
+    command({ state: instance.state, dispatch: (tr) => instance.dispatch(tr) });
+    instance.focus();
+  }
+
   /**
    * 点在**内容以外**的地方（空白笔记下面那一大片、或卡片的内边距）也要能开始写。
    *
@@ -244,13 +431,56 @@ function Surface({ value, onChange }: Props) {
     instance.dispatch({ selection: { anchor: instance.state.doc.length } });
   }
 
-  return <div className="md-wysiwyg__host" ref={host} onMouseDown={onHostMouseDown} />;
+  return (
+    <>
+      {/* 工具条只在编辑态出现；那一排语法按钮只在源码模式 —— 即时渲染下符号是藏着的，
+          写 `##` 直接就是标题的样子，不需要先插入记号 */}
+      {!readOnly && (
+        <div className="md-wysiwyg__bar">
+          {mode === "source" && (
+            <div className="md-wysiwyg__tools" role="toolbar" aria-label="Markdown 语法">
+              {TOOLS.map((tool) => (
+                <button
+                  key={tool.label}
+                  type="button"
+                  className="md-wysiwyg__btn"
+                  title={tool.title}
+                  // 不加这句，点按钮时编辑器失焦，**手机上键盘当场收起**（AGENTS §9）
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => runTool(tool.run)}
+                >
+                  {tool.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            className="md-wysiwyg__mode"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setMode(mode === "live" ? "source" : "live")}
+          >
+            {mode === "live" ? "源码" : "渲染"}
+          </button>
+        </div>
+      )}
+      <div className="md-wysiwyg__host" ref={host} onMouseDown={onHostMouseDown} />
+    </>
+  );
 }
 
-export default function MarkdownWysiwyg(props: Props) {
+export default function MarkdownWysiwyg({ variant = "fill", readOnly = false, ...props }: Props) {
+  const className = [
+    "md-wysiwyg",
+    variant === "inline" ? "is-inline" : "",
+    // 编辑态才亮边框：读态是"排好版的文字"，不该给每条记录套一个方框
+    readOnly ? "" : "is-editing",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <div className="md-wysiwyg">
-      <Surface {...props} />
+    <div className={className}>
+      <Surface variant={variant} readOnly={readOnly} {...props} />
     </div>
   );
 }

@@ -20,6 +20,7 @@
 use super::id::new_id;
 use super::model::SCHEMA_VERSION;
 use super::naming::{self, NameVars};
+use super::store::Vault;
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -254,23 +255,23 @@ pub fn import_into_entry(
 /// 只记我们真知道的事实（文件名 / 大小 / 扩展名 / MIME）—— **不算哈希、不解码尺寸**：
 /// 用户在资源管理器里丢进来的照片，扫描时不该让我们去读一遍几百兆的视频。
 /// 返回新收养的文件名（给调用方判断要不要写盘）。
-pub fn adopt_loose_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Vec<String> {
+pub fn adopt_loose_files_in(
+    vault: &Vault,
+    entry_dir: &Path,
+    media: &mut Vec<MediaMeta>,
+) -> Vec<String> {
     let known: Vec<String> = media.iter().map(|m| m.file.clone()).collect();
     let mut adopted = Vec::new();
 
-    let Ok(items) = fs::read_dir(entry_dir) else {
+    let Ok(items) = vault.list_dir(entry_dir) else {
         return adopted;
     };
 
-    for item in items.flatten() {
-        let path = item.path();
-        if !path.is_file() {
+    for item in items {
+        if item.is_dir {
             continue;
         }
-        let file = match path.file_name() {
-            Some(name) => name.to_string_lossy().to_string(),
-            None => continue,
-        };
+        let file = item.name;
         // 标记文件与正文不算媒体；已经收过的跳过
         if file == naming::ENTRY_FILE
             || file == naming::NOTE_FILE
@@ -280,7 +281,7 @@ pub fn adopt_loose_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Vec<St
             continue;
         }
 
-        let ext = normalize_ext(&path);
+        let ext = normalize_ext(Path::new(&file));
         if !is_media_ext(&ext) {
             continue; // 别的文件一律不动（宽容条款）
         }
@@ -291,7 +292,7 @@ pub fn adopt_loose_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Vec<St
             file: file.clone(),
             ext: ext.clone(),
             mime: guess_mime(&ext).to_string(),
-            bytes: fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+            bytes: item.size, // 列目录时一起拿到的，不用再 stat 一次
             width: None,
             height: None,
             taken_at: None,
@@ -305,9 +306,9 @@ pub fn adopt_loose_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> Vec<St
 }
 
 /// 对账的另一半：`media[]` 里有、磁盘上却没有的 → 剔除（返回被剔除的个数）
-pub fn drop_missing_files(entry_dir: &Path, media: &mut Vec<MediaMeta>) -> usize {
+pub fn drop_missing_files_in(vault: &Vault, entry_dir: &Path, media: &mut Vec<MediaMeta>) -> usize {
     let before = media.len();
-    media.retain(|m| !m.file.is_empty() && entry_dir.join(&m.file).is_file());
+    media.retain(|m| !m.file.is_empty() && vault.is_file(&entry_dir.join(&m.file)));
     before - media.len()
 }
 
@@ -466,7 +467,7 @@ mod tests {
         fs::write(entry_dir.join("读书笔记.txt"), "别人的笔记").unwrap();
 
         let mut media = Vec::new();
-        let adopted = adopt_loose_files(&entry_dir, &mut media);
+        let adopted = adopt_loose_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media);
 
         assert_eq!(adopted, vec!["随手丢进来的照片.JPG".to_string()]);
         assert_eq!(media.len(), 1);
@@ -475,7 +476,7 @@ mod tests {
         assert!(media[0].hash.is_empty(), "收养不假装算过哈希");
 
         // 再扫一次不该重复收养
-        let again = adopt_loose_files(&entry_dir, &mut media);
+        let again = adopt_loose_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media);
         assert!(again.is_empty());
         assert_eq!(media.len(), 1);
     }
@@ -493,10 +494,10 @@ mod tests {
             mime: "image/jpeg".into(),
             ..Default::default()
         }];
-        assert_eq!(drop_missing_files(&entry_dir, &mut media), 0);
+        assert_eq!(drop_missing_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media), 0);
 
         fs::remove_file(entry_dir.join("gone.jpg")).unwrap();
-        assert_eq!(drop_missing_files(&entry_dir, &mut media), 1);
+        assert_eq!(drop_missing_files_in(&Vault::at(entry_dir.clone()), &entry_dir, &mut media), 1);
         assert!(media.is_empty());
     }
 

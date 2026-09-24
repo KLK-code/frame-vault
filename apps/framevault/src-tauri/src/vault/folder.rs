@@ -3,6 +3,7 @@ use super::naming::{self, FOLDER_FILE};
 use super::storage;
 use super::scene::PLAIN_SCENE;
 use super::storage::{folder_dirs, folder_json_path, read_json, write_json_atomic};
+use super::store::AsVault;
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -176,9 +177,10 @@ pub fn save_folder(
 ///
 /// 判据是**物理位置**（这个目录下有没有记录目录），不是 `entry.json` 里的归属字段：
 /// 用户可能把记录目录手动拖进来了，那时字段还写着别的场景 —— 按字段数会漏，漏掉就是删数据。
-pub fn delete_folder(vault: &Path, id: &str) -> AppResult<()> {
-    let dir = storage::find_folder_dir(vault, id)?;
-    let inside = super::storage::entry_dirs_in(&dir);
+pub fn delete_folder(vault: impl AsVault, id: &str) -> AppResult<()> {
+    let vault = vault.as_vault();
+    let dir = storage::find_folder_dir(&vault, id)?;
+    let inside = super::storage::entry_dirs_in(&vault, &dir);
     if !inside.is_empty() {
         let name = dir
             .file_name()
@@ -189,7 +191,7 @@ pub fn delete_folder(vault: &Path, id: &str) -> AppResult<()> {
             inside.len()
         )));
     }
-    fs::remove_dir_all(dir)?;
+    vault.remove_dir_all(&dir)?;
     Ok(())
 }
 

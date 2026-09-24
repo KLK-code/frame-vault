@@ -28,9 +28,10 @@
 
 use super::folder::FolderMeta;
 use super::id::new_id;
-use super::media::{adopt_loose_files, drop_missing_files, sort_media};
+use super::media::{adopt_loose_files_in, drop_missing_files_in, sort_media};
 use super::model::{is_supported, Entry, VaultMeta, SCHEMA_VERSION};
 use super::naming::{self, ENTRY_FILE, FOLDER_FILE, NOTE_FILE, UNCATEGORIZED};
+use super::store::{AsVault, Vault};
 use crate::error::{AppError, AppResult};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -81,21 +82,19 @@ fn tmp_path(path: &Path) -> PathBuf {
 }
 
 /// Vault 根下的一级子目录（跳过 `.framevault` 与其它点开头的内部目录）
-pub fn root_dirs(vault: &Path) -> Vec<PathBuf> {
+///
+/// **列目录走 store、只列一次**：SAF 上没有「逐个 stat」这条路，两件事必须一起做对。
+pub fn root_dirs(vault: impl AsVault) -> Vec<PathBuf> {
+    let vault = vault.as_vault();
     let mut out = Vec::new();
-    let Ok(items) = fs::read_dir(vault) else {
+    let Ok(items) = vault.list_dir(vault.root()) else {
         return out;
     };
-    for item in items.flatten() {
-        let path = item.path();
-        if !path.is_dir() {
-            continue;
-        }
-        let name = item.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') {
+    for item in items {
+        if !item.is_dir || item.name.starts_with('.') {
             continue; // .framevault 以及用户自己的隐藏目录
         }
-        out.push(path);
+        out.push(vault.join(&item.name));
     }
     out.sort();
     out
@@ -136,6 +135,26 @@ pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> AppResult<T> {
 /// 读文本；文件不在就返回空串（正文可以为空，缺文件与空文件是一回事）
 pub fn read_text(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_default()
+}
+
+// ── store 版原语（正路）──
+//
+// 调用方把自己手里的根句柄传进来，**字节怎么落盘由 store 决定** —— 桌面上是文件系统，
+// 安卓上是 SAF。上面那几个吃裸路径的是**过渡壳**（只跑桌面），全仓迁完就删。
+
+pub(crate) fn read_json_in<T: DeserializeOwned>(vault: &Vault, path: &Path) -> AppResult<T> {
+    let text = vault.read_text(path)?;
+    Ok(serde_json::from_str(&text)?)
+}
+
+pub(crate) fn read_text_in(vault: &Vault, path: &Path) -> String {
+    vault.read_text_or_empty(path)
+}
+
+/// 原子写 JSON（store 版：tmp + rename 在 store 里）
+pub fn write_json_atomic_in<T: Serialize>(vault: &Vault, path: &Path, value: &T) -> AppResult<()> {
+    let json = serde_json::to_string_pretty(value)?;
+    vault.write_bytes(path, json.as_bytes())
 }
 
 // ── Vault 身份 ──
@@ -195,27 +214,29 @@ pub fn read_vault_meta(dir: &Path) -> AppResult<VaultMeta> {
 // ── 场景目录 ──
 
 /// 根下**没有** `folder.json` 的一级目录 = **主题容器**（「未归类」也是其中之一）
-pub fn topic_dirs(vault: &Path) -> Vec<PathBuf> {
-    root_dirs(vault)
+pub fn topic_dirs(vault: impl AsVault) -> Vec<PathBuf> {
+    let vault = vault.as_vault();
+    root_dirs(&vault)
         .into_iter()
-        .filter(|dir| !folder_json_path(dir).is_file())
+        .filter(|dir| !vault.is_file(&folder_json_path(dir)))
         .collect()
 }
 
 /// 所有文件夹：`(目录, 它在哪个主题下)`。根下直接摆的文件夹没有主题（`None`）。
 ///
 /// 这是"主题 = 磁盘上的位置"这条规矩的唯一落点：**不存字段，只认目录**。
-pub fn folder_dirs(vault: &Path) -> Vec<(PathBuf, Option<String>)> {
+pub fn folder_dirs(vault: impl AsVault) -> Vec<(PathBuf, Option<String>)> {
+    let vault = vault.as_vault();
     let mut out = Vec::new();
 
-    for dir in root_dirs(vault) {
-        if folder_json_path(&dir).is_file() {
+    for dir in root_dirs(&vault) {
+        if vault.is_file(&folder_json_path(&dir)) {
             out.push((dir, None)); // 根下直接摆 = 没有主题
             continue;
         }
         let topic = dir.file_name().map(|n| n.to_string_lossy().to_string());
-        for child in child_dirs(&dir) {
-            if folder_json_path(&child).is_file() {
+        for child in child_dirs(&vault, &dir) {
+            if vault.is_file(&folder_json_path(&child)) {
                 out.push((child, topic.clone()));
             }
         }
@@ -225,9 +246,10 @@ pub fn folder_dirs(vault: &Path) -> Vec<(PathBuf, Option<String>)> {
 }
 
 /// 按名字找主题容器
-pub fn topic_dir(vault: &Path, name: &str) -> Option<PathBuf> {
+pub fn topic_dir(vault: impl AsVault, name: &str) -> Option<PathBuf> {
+    let vault = vault.as_vault();
     let wanted = naming::sanitize(name);
-    topic_dirs(vault)
+    topic_dirs(&vault)
         .into_iter()
         .find(|dir| dir.file_name().map(|n| n.to_string_lossy().to_string()) == Some(wanted.clone()))
 }
@@ -266,13 +288,16 @@ pub fn rename_topic(vault: &Path, name: &str, new_name: &str) -> AppResult<PathB
 }
 
 /// 删除主题：**里面还有东西就拒绝**（跟删文件夹同一条规矩 —— 宁可让用户先处理）
-pub fn delete_topic(vault: &Path, name: &str) -> AppResult<()> {
+pub fn delete_topic(vault: impl AsVault, name: &str) -> AppResult<()> {
+    let vault = vault.as_vault();
     let dir =
-        topic_dir(vault, name).ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
+        topic_dir(&vault, name).ok_or_else(|| AppError::NotFound(format!("主题不存在：{name}")))?;
 
-    let inside: Vec<PathBuf> = child_dirs(&dir)
+    let inside: Vec<PathBuf> = child_dirs(&vault, &dir)
         .into_iter()
-        .filter(|child| folder_json_path(child).is_file() || entry_json_path(child).is_file())
+        .filter(|child| {
+            vault.is_file(&folder_json_path(child)) || vault.is_file(&entry_json_path(child))
+        })
         .collect();
     if !inside.is_empty() {
         return Err(AppError::Invalid(format!(
@@ -281,7 +306,7 @@ pub fn delete_topic(vault: &Path, name: &str) -> AppResult<()> {
         )));
     }
 
-    fs::remove_dir_all(&dir)?;
+    vault.remove_dir_all(&dir)?;
     Ok(())
 }
 
@@ -297,9 +322,10 @@ pub fn ensure_uncategorized(vault: &Path) -> AppResult<PathBuf> {
 }
 
 /// 按 id 找文件夹目录（根下 + 每个主题容器下的一级）
-pub fn find_folder_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
-    for (dir, _) in folder_dirs(vault) {
-        if let Ok(folder) = read_json::<FolderMeta>(&folder_json_path(&dir)) {
+pub fn find_folder_dir(vault: impl AsVault, id: &str) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    for (dir, _) in folder_dirs(&vault) {
+        if let Ok(folder) = read_json_in::<FolderMeta>(&vault, &folder_json_path(&dir)) {
             if folder.id == id {
                 return Ok(dir);
             }
@@ -312,31 +338,34 @@ pub fn find_folder_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
 
 /// 某个目录下的直接子目录里，哪些是记录目录（带 `entry.json`）。
 /// 删场景前的"非空判定"靠它 —— 判据是**物理位置**，不管 `entry.json` 里的归属字段写了谁。
-pub fn entry_dirs_in(parent: &Path) -> Vec<PathBuf> {
-    child_entry_dirs(parent)
+pub fn entry_dirs_in(vault: impl AsVault, parent: &Path) -> Vec<PathBuf> {
+    child_entry_dirs(&vault.as_vault(), parent)
 }
 
-fn child_dirs(parent: &Path) -> Vec<PathBuf> {
-    let Ok(items) = fs::read_dir(parent) else {
+fn child_dirs(vault: &Vault, parent: &Path) -> Vec<PathBuf> {
+    let Ok(items) = vault.list_dir(parent) else {
         return Vec::new();
     };
     let mut out: Vec<PathBuf> = items
-        .flatten()
-        .map(|item| item.path())
-        .filter(|path| path.is_dir())
+        .iter()
+        .filter(|item| item.is_dir)
+        .map(|item| parent.join(&item.name))
         .collect();
     out.sort();
     out
 }
 
-fn child_entry_dirs(parent: &Path) -> Vec<PathBuf> {
-    let Ok(items) = fs::read_dir(parent) else {
+fn child_entry_dirs(vault: &Vault, parent: &Path) -> Vec<PathBuf> {
+    let Ok(items) = vault.list_dir(parent) else {
         return Vec::new();
     };
     let mut out = Vec::new();
-    for item in items.flatten() {
-        let path = item.path();
-        if path.is_dir() && entry_json_path(&path).is_file() {
+    for item in items {
+        if !item.is_dir {
+            continue;
+        }
+        let path = parent.join(&item.name);
+        if vault.is_file(&entry_json_path(&path)) {
             out.push(path);
         }
     }
@@ -346,23 +375,24 @@ fn child_entry_dirs(parent: &Path) -> Vec<PathBuf> {
 /// 仓库里**活着的**记录目录，这四种位置都算：
 /// ① 根下文件夹里的记录；② 主题容器 → 文件夹 → 记录；③ 容器里直接摆的记录（未归类）；
 /// ④ 根下直接摆的记录（没有文件夹、也没有主题）。
-pub fn list_entry_dirs(vault: &Path) -> Vec<PathBuf> {
+pub fn list_entry_dirs(vault: impl AsVault) -> Vec<PathBuf> {
+    let vault = vault.as_vault();
     let mut out = Vec::new();
 
-    for dir in root_dirs(vault) {
-        if folder_json_path(&dir).is_file() {
-            out.extend(child_entry_dirs(&dir)); // ① 根下的文件夹
+    for dir in root_dirs(&vault) {
+        if vault.is_file(&folder_json_path(&dir)) {
+            out.extend(child_entry_dirs(&vault, &dir)); // ① 根下的文件夹
             continue;
         }
 
         // 容器（主题），或"未归类"
-        if entry_json_path(&dir).is_file() {
+        if vault.is_file(&entry_json_path(&dir)) {
             out.push(dir.clone()); // ④ 直接摆在根下的一条记录
         }
-        for child in child_dirs(&dir) {
-            if folder_json_path(&child).is_file() {
-                out.extend(child_entry_dirs(&child)); // ② 主题下的文件夹
-            } else if entry_json_path(&child).is_file() {
+        for child in child_dirs(&vault, &dir) {
+            if vault.is_file(&folder_json_path(&child)) {
+                out.extend(child_entry_dirs(&vault, &child)); // ② 主题下的文件夹
+            } else if vault.is_file(&entry_json_path(&child)) {
                 out.push(child); // ③ 容器里直接摆的记录
             }
         }
@@ -372,22 +402,24 @@ pub fn list_entry_dirs(vault: &Path) -> Vec<PathBuf> {
 }
 
 /// 回收站里的记录目录
-pub fn list_trash_dirs(vault: &Path) -> Vec<PathBuf> {
-    let dir = trash_dir(vault);
-    if !dir.is_dir() {
+pub fn list_trash_dirs(vault: impl AsVault) -> Vec<PathBuf> {
+    let vault = vault.as_vault();
+    let dir = trash_dir(vault.root());
+    if !vault.is_dir(&dir) {
         return Vec::new();
     }
-    child_entry_dirs(&dir)
+    child_entry_dirs(&vault, &dir)
 }
 
 /// 按 id 找记录目录（**活着的与回收站里的都找**）
-pub fn find_entry_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
-    let candidates = list_entry_dirs(vault)
+pub fn find_entry_dir(vault: impl AsVault, id: &str) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
+    let candidates = list_entry_dirs(&vault)
         .into_iter()
-        .chain(list_trash_dirs(vault));
+        .chain(list_trash_dirs(&vault));
 
     for dir in candidates {
-        if let Ok(entry) = read_json::<Entry>(&entry_json_path(&dir)) {
+        if let Ok(entry) = read_json_in::<Entry>(&vault, &entry_json_path(&dir)) {
             if entry.id == id {
                 return Ok(dir);
             }
@@ -397,10 +429,11 @@ pub fn find_entry_dir(vault: &Path, id: &str) -> AppResult<PathBuf> {
 }
 
 /// 一条记录该放哪个目录下：有场景 → 那个场景目录；没有 → 「未归类」
-pub fn entry_slot(vault: &Path, folder_id: Option<&str>) -> AppResult<PathBuf> {
+pub fn entry_slot(vault: impl AsVault, folder_id: Option<&str>) -> AppResult<PathBuf> {
+    let vault = vault.as_vault();
     match folder_id {
-        Some(id) => find_folder_dir(vault, id),
-        None => ensure_uncategorized(vault),
+        Some(id) => find_folder_dir(&vault, id),
+        None => ensure_uncategorized(vault.root()),
     }
 }
 
@@ -408,13 +441,13 @@ pub fn entry_slot(vault: &Path, folder_id: Option<&str>) -> AppResult<PathBuf> {
 ///
 /// 对账就是"磁盘为准"：用户往记录目录里丢的照片被收养进 `media[]`，
 /// 被删掉的照片从 `media[]` 里剔除。两件事都不摧毁任何文件。
-fn load_entry_dir(dir: &Path) -> Option<Entry> {
+fn load_entry_dir(vault: &Vault, dir: &Path) -> Option<Entry> {
     let file = entry_json_path(dir);
-    if !file.is_file() {
+    if !vault.is_file(&file) {
         return None;
     }
 
-    let mut entry = match read_json::<Entry>(&file) {
+    let mut entry = match read_json_in::<Entry>(vault, &file) {
         Ok(entry) => entry,
         Err(err) => {
             eprintln!("[vault] 跳过损坏的记录 {}：{err}", file.display());
@@ -422,11 +455,20 @@ fn load_entry_dir(dir: &Path) -> Option<Entry> {
         }
     };
 
-    entry.note = read_text(&note_path(dir));
+    entry.note = read_text_in(vault, &note_path(dir));
 
     let mut media = std::mem::take(&mut entry.media);
-    let adopted = adopt_loose_files(dir, &mut media);
-    let dropped = drop_missing_files(dir, &mut media);
+    // **对账只在"目录真的在、也列得出来"时做**：SAF 下落目录会失败，
+    // 一次失败若被当成"文件全没了"，就会把所有记录的 `media[]` 清空写回 —— 那是数据破坏，
+    // 不是"磁盘为准"（AGENTS §9 有这一行）。
+    let (adopted, dropped) = if vault.is_dir(dir) {
+        (
+            adopt_loose_files_in(vault, dir, &mut media),
+            drop_missing_files_in(vault, dir, &mut media),
+        )
+    } else {
+        (Vec::new(), 0)
+    };
     if !adopted.is_empty() || dropped > 0 {
         sort_media(&mut media);
         if !adopted.is_empty() {
@@ -437,7 +479,7 @@ fn load_entry_dir(dir: &Path) -> Option<Entry> {
             );
         }
         entry.media = media;
-        if let Err(err) = write_json_atomic(&file, &entry) {
+        if let Err(err) = write_json_atomic_in(vault, &file, &entry) {
             eprintln!("[vault] 对账结果写不回去（{}）：{err}", file.display());
         }
     } else {
@@ -447,14 +489,20 @@ fn load_entry_dir(dir: &Path) -> Option<Entry> {
     Some(entry)
 }
 
-pub fn read_entry_from(dir: &Path) -> AppResult<Entry> {
-    load_entry_dir(dir).ok_or_else(|| {
-        AppError::NotFound(format!("记录目录不完整（缺 entry.json）：{}", dir.display()))
+pub fn read_entry_from(dir: impl AsVault) -> AppResult<Entry> {
+    let vault = dir.as_vault();
+    load_entry_dir(&vault, vault.root()).ok_or_else(|| {
+        AppError::NotFound(format!(
+            "记录目录不完整（缺 entry.json）：{}",
+            vault.root().display()
+        ))
     })
 }
 
-pub fn read_entry(vault: &Path, id: &str) -> AppResult<Entry> {
-    read_entry_from(&find_entry_dir(vault, id)?)
+pub fn read_entry(vault: impl AsVault, id: &str) -> AppResult<Entry> {
+    let vault = vault.as_vault();
+    let dir = find_entry_dir(&vault, id)?;
+    read_entry_from(dir)
 }
 
 /// 新建一条记录：按「创建日 + 标题」算出目录名（撞名加后缀），建目录、写正文、写元数据。
@@ -605,15 +653,16 @@ fn sort_entries(out: &mut [Entry]) {
 
 /// 扫描 Vault 下所有记录（含回收站里的 —— 它们的 `deletedAt` 有值）。
 /// 原则：**一条坏数据不该毁掉整次扫描** —— 单独跳过并打日志。
-pub fn list_entries(vault: &Path) -> AppResult<Vec<Entry>> {
-    let mut out: Vec<Entry> = list_entry_dirs(vault)
+pub fn list_entries(vault: impl AsVault) -> AppResult<Vec<Entry>> {
+    let vault = vault.as_vault();
+    let mut out: Vec<Entry> = list_entry_dirs(&vault)
         .into_iter()
-        .filter_map(|dir| load_entry_dir(&dir))
+        .filter_map(|dir| load_entry_dir(&vault, &dir))
         .collect();
 
     // 回收站里的也读出来：撤销 / 回收站视图都要用（命令层按 deletedAt 过滤）
-    for dir in list_trash_dirs(vault) {
-        if let Some(entry) = load_entry_dir(&dir) {
+    for dir in list_trash_dirs(&vault) {
+        if let Some(entry) = load_entry_dir(&vault, &dir) {
             out.push(entry);
         }
     }
@@ -626,10 +675,11 @@ pub fn list_entries(vault: &Path) -> AppResult<Vec<Entry>> {
 ///
 /// 只认**活着的**记录；没发到的记录一个字节都不动（它们的 order 保留原值）。
 /// 只在 order 真的要变时写盘 —— 一次拖动通常只动两三条。返回全部活记录（新序）。
-pub fn reorder_entries(vault: &Path, ordered_ids: &[String]) -> AppResult<Vec<Entry>> {
-    let mut loaded: Vec<(PathBuf, Entry)> = list_entry_dirs(vault)
+pub fn reorder_entries(vault: impl AsVault, ordered_ids: &[String]) -> AppResult<Vec<Entry>> {
+    let vault = vault.as_vault();
+    let mut loaded: Vec<(PathBuf, Entry)> = list_entry_dirs(&vault)
         .into_iter()
-        .filter_map(|dir| load_entry_dir(&dir).map(|entry| (dir, entry)))
+        .filter_map(|dir| load_entry_dir(&vault, &dir).map(|entry| (dir, entry)))
         .collect();
 
     let mut dirty: Vec<PathBuf> = Vec::new();

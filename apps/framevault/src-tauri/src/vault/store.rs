@@ -14,11 +14,15 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-/// 目录里的一项：领域层只需要"叫什么"和"是不是目录"。
+/// 目录里的一项：领域层只需要"叫什么"、"是不是目录"、还有**多大**。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirEntry {
     pub name: String,
     pub is_dir: bool,
+    /// 文件字节数（目录填 0）。**列目录时一起给出**：SAF 上"再 stat 一次"是额外一次跨进程查询，
+    /// 几十张照片就是几十次；`DocumentsContract` 一次查询就能连 `COLUMN_SIZE` 一起拿到，
+    /// 桌面这边 `read_dir` 顺手取 metadata 也不比原来贵（原来也是逐个 stat）。
+    pub size: u64,
 }
 
 /// 一个仓库的读写后端。**只做原语**，不做业务判断（不判重名、不认识 note.md）。
@@ -85,7 +89,12 @@ impl VaultStore for NativeFs {
             let item = item?;
             let name = item.file_name().to_string_lossy().to_string();
             let is_dir = item.file_type().map(|t| t.is_dir()).unwrap_or(false);
-            out.push(DirEntry { name, is_dir });
+            let size = if is_dir {
+                0
+            } else {
+                item.metadata().map(|m| m.len()).unwrap_or(0)
+            };
+            out.push(DirEntry { name, is_dir, size });
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(out)
@@ -175,16 +184,18 @@ impl VaultStore for MemStore {
                     out.push(DirEntry {
                         name: rest.to_string(),
                         is_dir: true,
+                        size: 0,
                     });
                 }
             }
         }
-        for name in self.files.lock().unwrap().keys() {
+        for (name, bytes) in self.files.lock().unwrap().iter() {
             if let Some(rest) = name.strip_prefix(&base) {
                 if !rest.is_empty() && !rest.contains('/') {
                     out.push(DirEntry {
                         name: rest.to_string(),
                         is_dir: false,
+                        size: bytes.len() as u64,
                     });
                 }
             }
@@ -353,6 +364,44 @@ impl Vault {
     }
 }
 
+/// **迁移期的过渡写法**：领域函数的第一个参数要"一个仓库句柄"。
+///
+/// 两种调用都合法：
+/// - 给 `&Vault`（**带 store** —— 安卓 SAF 走这条，桌面也走这条）；
+/// - 给 `&Path` / `PathBuf`（老写法，等价于 `Vault::at(那个路径)`，即桌面文件系统）。
+///
+/// 为什么要有它：`storage.rs` 有 21 个单测、几百处调用点，直接换类型会让它们一起挂、
+/// 中途必然编译不过。有了它就能**一个模块一个模块地迁**，每一步都全绿。
+/// **等所有调用点都改成 `&Vault` 之后，这个 trait 删掉、参数收窄成 `&Vault`**（见 SAF 提案 S1b）。
+pub trait AsVault {
+    fn as_vault(&self) -> Vault;
+}
+
+impl AsVault for Vault {
+    fn as_vault(&self) -> Vault {
+        self.clone()
+    }
+}
+
+impl AsVault for Path {
+    fn as_vault(&self) -> Vault {
+        Vault::at(self.to_path_buf())
+    }
+}
+
+impl AsVault for PathBuf {
+    fn as_vault(&self) -> Vault {
+        Vault::at(self.clone())
+    }
+}
+
+/// 引用透传：`&Vault` / `&PathBuf` 都能直接当参数用
+impl<T: AsVault + ?Sized> AsVault for &T {
+    fn as_vault(&self) -> Vault {
+        (**self).as_vault()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,7 +450,8 @@ mod tests {
             entries,
             vec![DirEntry {
                 name: "2026-09-24 周报".to_string(),
-                is_dir: true
+                is_dir: true,
+                size: 0
             }]
         );
 

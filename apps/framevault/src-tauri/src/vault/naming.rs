@@ -299,13 +299,14 @@ fn pick_unique(taken: &HashSet<String>, stem: &str, ext: Option<&str>) -> String
         return candidate;
     }
 
-    for index in 2..10_000 {
+    let mut index = 2u64;
+    loop {
         let candidate = format!("{stem} ({index}){suffix}");
         if !taken.contains(&candidate.to_lowercase()) {
             return candidate;
         }
+        index += 1;
     }
-    candidate
 }
 
 #[cfg(test)]
@@ -516,5 +517,15 @@ mod tests {
         }
 
         assert_eq!(unique_child_name_in(&Vault::at(dir.clone()), &dir, "图", Some("jpg")), "图 (501).jpg");
+    }
+
+    #[test]
+    fn unique_child_name_finds_free_slot_after_9999_names_are_taken() {
+        let mut taken = HashSet::from(["图.jpg".to_string()]);
+        for index in 2..10_000 {
+            taken.insert(format!("图 ({index}).jpg"));
+        }
+
+        assert_eq!(pick_unique(&taken, "图", Some("jpg")), "图 (10000).jpg");
     }
 }

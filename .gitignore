@@ -11,3 +11,4 @@ dist/
 # ZCode 会话产物
 /.zcode
 /target-auto/
+/图片测试集

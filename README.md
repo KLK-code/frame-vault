@@ -167,7 +167,7 @@ apps/framevault/
 | `tauri-plugin-stronghold` | M4 | 凭证安全存储（OAuth token、WebDAV 应用密码） | `pnpm tauri add stronghold` |
 | `crates/storage-core` + `reqwest`、`quick-xml` | M4 | Local / WebDAV / 网盘 Provider | `cargo add` |
 | `crates/sync-engine` | M4 | 增量同步、冲突副本、tombstone 传播 | 自研，`cargo new --lib` |
-| `LICENSE`（Apache-2.0）、`rust-toolchain.toml` | 择机 | 开源许可、工具链版本锁定 | 手写 |
+| `LICENSE`（Apache-2.0）✅、`rust-toolchain.toml` | LICENSE 已落地，工具链锁定择机 | 开源许可、工具链版本锁定 | 手写 |
 
 **认名字的三个规则**（以后看到陌生目录先套一下）：
 
@@ -310,3 +310,9 @@ pnpm tauri dev
 - 重活（扫描、哈希、缩略图、上传）放 Rust，UI 主线程不阻塞；
 - SQLite 永远只是缓存：先有文件读写，后有索引。
 - 功能主题绑定、用户排序、置顶与主题业务进度保存为开放元数据；当前选择、视图和面板开关分别管理，不混成单一 `page` 状态。
+
+---
+
+## 许可
+
+本项目以 **Apache-2.0** 许可发布，全文见 [LICENSE](./LICENSE)。

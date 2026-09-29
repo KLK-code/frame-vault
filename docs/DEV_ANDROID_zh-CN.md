@@ -155,7 +155,7 @@ keyPassword=...
 "/e/Game Client/MuMuPlayer/nx_main/MuMuManager.exe" control -v 0 launch
 
 # 2) 接 adb（用 SDK 的 platform-tools，别用 MuMu 自带那个，版本容易打架）
-export PATH="$PATH:/c/Users/Rei82/AppData/Local/Android/Sdk/platform-tools"
+export PATH="$PATH:$HOME/AppData/Local/Android/Sdk/platform-tools"
 adb connect 127.0.0.1:16384
 adb devices            # 会同时看到 127.0.0.1:16384 与 emulator-5554，是同一台
 

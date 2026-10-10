@@ -214,7 +214,8 @@ fn scalar_text(value: &serde_json::Value) -> Option<String> {
     }
 }
 
-/// 媒体文件名的词干（不含扩展名）：渲染模板 → 净化 → 收拾掉空变量留下的多余分隔符。
+/// 媒体文件名的词干（不含扩展名）：渲染模板 → 净化 → 收拾分隔符 → 再净化。
+/// 收拾分隔符可能去掉保留名的保护前缀，最终名字必须重新校验。
 ///
 /// 回退链（VISION §3.5）：模板里取不到的变量自己消失；整条渲染出来为空时，
 /// 退到「日期_序号」，再退到「媒体」——**名字始终可读，绝不空**。
@@ -225,7 +226,7 @@ pub fn media_file_stem(template: Option<&str>, vars: &NameVars) -> String {
         .unwrap_or(DEFAULT_MEDIA_TEMPLATE);
 
     let rendered = render_template(template, vars);
-    let cleaned = tidy_separators(&sanitize_with(&rendered, MAX_NAME));
+    let cleaned = sanitize(&tidy_separators(&sanitize_with(&rendered, MAX_NAME)));
     if !cleaned.is_empty() {
         return cleaned;
     }
@@ -423,6 +424,22 @@ mod tests {
             "全空也不能是空名字"
         );
         assert_eq!(media_file_stem(Some("{没这个变量}"), &empty), "01");
+    }
+
+    #[test]
+    fn media_template_avoids_reserved_names_after_separator_cleanup() {
+        for name in RESERVED {
+            for template in [name.to_string(), format!("_{name}_"), format!("{name}.")] {
+                assert_eq!(media_file_stem(Some(&template), &vars()), format!("_{name}"));
+            }
+        }
+        assert_eq!(media_file_stem(Some("com1.txt"), &vars()), "_com1.txt");
+
+        let mut v = vars();
+        v.title = "nul".into();
+        v.scene.clear();
+        assert_eq!(media_file_stem(Some("{scene}_{title}"), &v), "_nul");
+        assert_eq!(media_file_stem(Some("CONSOLE"), &v), "CONSOLE");
     }
 
     #[test]
